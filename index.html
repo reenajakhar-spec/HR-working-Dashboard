@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <title>Euronics HR Command Centre</title>
+
+
+  <!-- =====================================================
+       CHART.JS
+  ====================================================== -->
+
+  <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js">
+  </script>
+
+
+  <!-- =====================================================
+       MAIN CSS
+  ====================================================== -->
+
+  <link
+    rel="stylesheet"
+    href="css/styles.css?v=20260917-2"
+  >
+
+</head>
+
+
+
+<body class="sidebar-collapsed">
+
+
+<div class="app-shell">
+
+
+<!-- =====================================================
+     SIDEBAR
+====================================================== -->
+
+<aside class="sidebar">
+
+
+  <div class="sidebar-toggle-row">
+
+    <button
+      id="sidebarToggle"
+      class="sidebar-toggle"
+      type="button"
+      onclick="toggleSidebar()"
+      aria-label="Toggle navigation"
+      title="Menu"
+    >
+
+      <span></span>
+      <span></span>
+      <span></span>
+
+    </button>
+
+  </div>
+
+
+
+  <div class="brand">
+
+
+    <div class="brand-mark">
+      E
+    </div>
+
+
+    <div class="brand-text">
+
+      <div class="brand-name">
+        EURONICS
+      </div>
+
+      <div class="brand-sub">
+        HR Command Centre
+      </div>
+
+    </div>
+
+
+  </div>
+
+
+
+  <nav class="nav">
+
+
+    <button
+      class="nav-item active"
+      data-page="overview"
+    >
+      Overview
+    </button>
+
+
+    <button
+      class="nav-item"
+      data-page="employees"
+    >
+      Employee CRM
+    </button>
+
+
+    <button
+      class="nav-item"
+      data-page="recruitment"
+    >
+      Recruitment
+    </button>
+
+
+    <button
+      class="nav-item"
+      data-page="attendance"
+    >
+      Attendance
+    </button>
+
+
+    <button
+      class="nav-item"
+      data-page="performance"
+    >
+      Performance
+    </button>
+
+
+    <button
+      class="nav-item"
+      data-page="payroll"
+    >
+      Payroll
+    </button>
+
+
+    <button
+      class="nav-item"
+      data-page="learning"
+    >
+      L&D / EuroVersity
+    </button>
+
+
+    <button
+      class="nav-item"
+      data-page="engagement"
+    >
+      Engagement
+    </button>
+
+
+    <button
+      class="nav-item"
+      data-page="compliance"
+    >
+      Compliance
+    </button>
+
+
+    <button
+      class="nav-item"
+      data-page="alerts"
+    >
+      Alerts & Actions
+    </button>
+
+
+  </nav>
+
+
+
+  <div class="sidebar-footer">
+
+    <div class="live-dot"></div>
+
+    HR Command Centre
+
+  </div>
+
+
+</aside>
+
+
+
+<!-- =====================================================
+     MAIN CONTENT
+====================================================== -->
+
+<main class="main">
+
+
+<!-- =====================================================
+     TOP BAR
+====================================================== -->
+
+<header class="topbar">
+
+
+  <div>
+
+    <h1 id="pageTitle">
+      Executive Overview
+    </h1>
+
+    <p id="pageSub">
+      CEO & CHRO command view
+    </p>
+
+  </div>
+
+
+  <div class="top-actions">
+
+    <div class="date-chip">
+      FY 2026-27
+    </div>
+
+  </div>
+
+
+</header>
+
+
+
+<!-- =====================================================
+     OVERVIEW
+====================================================== -->
+
+<section
+  id="overview"
+  class="page active"
+>
+
+
+  <div class="section-toolbar">
+
+
+    <div>
+
+      <h2>
+        Executive Overview
+      </h2>
+
+      <p>
+        Euronics HR Command Centre
+      </p>
+
+    </div>
+
+
+  </div>
+
+
+
+  <div
+    id="overviewKpis"
+    class="kpi-grid"
+  ></div>
+
+
+
+  <div class="panel">
+
+    <div class="empty-state">
+
+      Recruitment is connected live.
+
+      Other HR modules can be connected one by one.
+
+    </div>
+
+  </div>
+
+
+</section>
+
+
+
+<!-- =====================================================
+     EMPLOYEE CRM
+====================================================== -->
+
+<section
+  id="employees"
+  class="page"
+>
+
+
+  <div class="section-toolbar">
+
+
+    <div>
+
+      <h2>
+        Employee CRM
+      </h2>
+
+      <p>
+        Employee module
+      </p>
+
+    </div>
+
+
+  </div>
+
+
+
+  <div class="panel">
+
+    <div class="empty-state">
+
+      Employee data will be connected in the next phase.
+
+    </div>
+
+  </div>
+
+
+</section>
+
+
+
+<!-- =====================================================
+     RECRUITMENT
+====================================================== -->
+
+<section
+  id="recruitment"
+  class="page recruitment-page"
+>
+
+
+  <div class="recruitment-embed-card">
+
+
+    <iframe
+      id="recruitmentFrame"
+      src="https://script.google.com/a/macros/euronics.co.in/s/AKfycbxA8vc8YBnpl1u3lbi8L-K_jHOKVXJPc3j1h1Ggs7c_M2MhpUFxFSGZFDyy88zMLTPg/exec"
+      class="recruitment-iframe"
+      title="Euronics TA Panel"
+      loading="eager"
+      allowfullscreen
+      onload="recruitmentFrameLoaded()"
+    >
+    </iframe>
+
+
+  </div>
+
+
+</section>
+
+
+
+<!-- =====================================================
+     ATTENDANCE
+====================================================== -->
+
+<section
+  id="attendance"
+  class="page"
+>
+
+
+  <div class="panel">
+
+    <div class="empty-state">
+
+      Attendance module will be connected later.
+
+    </div>
+
+  </div>
+
+
+</section>
+
+
+
+<!-- =====================================================
+     PERFORMANCE
+====================================================== -->
+
+<section
+  id="performance"
+  class="page"
+>
+
+
+  <div class="panel">
+
+    <div class="empty-state">
+
+      Performance module will be connected later.
+
+    </div>
+
+  </div>
+
+
+</section>
+
+
+
+<!-- =====================================================
+     PAYROLL
+====================================================== -->
+
+<section
+  id="payroll"
+  class="page"
+>
+
+
+  <div class="panel">
+
+    <div class="empty-state">
+
+      Payroll module will be connected later.
+
+    </div>
+
+  </div>
+
+
+</section>
+
+
+
+<!-- =====================================================
+     L&D / EUROVERSITY - LIVE
+====================================================== -->
+
+<!-- =====================================================
+     L&D / EUROVERSITY - LIVE PROFESSIONAL DASHBOARD
+====================================================== -->
+
+<section
+  id="learning"
+  class="page lnd-page"
+>
+
+  <!-- BRAND HEADER -->
+
+  <div class="lnd-brand-header">
+
+    <div class="lnd-brand">
+
+      <div class="lnd-brand-mark">
+        E
+      </div>
+
+      <div>
+
+        <h2>
+          Learning & Development Dashboard
+        </h2>
+
+        <p>
+          EURONICS · Elevating Hygiene Everyday
+        </p>
+
+      </div>
+
+    </div>
+
+
+    <div class="lnd-brand-meta">
+
+      <div>
+        <span>Reporting Period</span>
+        <strong>FY 2026-27</strong>
+      </div>
+
+      <div>
+        <span>Live Records</span>
+        <strong id="lndHeaderRecordCount">
+          -
+        </strong>
+      </div>
+
+      <div>
+        <span>Status</span>
+
+        <strong
+          id="learningLiveStatus"
+          class="lnd-header-live"
+        >
+          Connecting...
+        </strong>
+
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <!-- FILTER BAR -->
+
+  <div class="lnd-filter-strip">
+
+    <button
+      class="lnd-chip active"
+      data-lnd-group="all"
+      onclick="setLndGroupFilter('all', this)"
+    >
+      All Groups
+    </button>
+
+    <button
+      class="lnd-chip"
+      data-lnd-group="Projects"
+      onclick="setLndGroupFilter('Projects', this)"
+    >
+      Projects
+    </button>
+
+    <button
+      class="lnd-chip"
+      data-lnd-group="Specifiers"
+      onclick="setLndGroupFilter('Specifiers', this)"
+    >
+      Specifiers
+    </button>
+
+    <button
+      class="lnd-chip"
+      data-lnd-group="Inside Sales"
+      onclick="setLndGroupFilter('Inside Sales', this)"
+    >
+      Inside Sales
+    </button>
+
+    <button
+      class="lnd-chip"
+      data-lnd-group="Govt"
+      onclick="setLndGroupFilter('Govt', this)"
+    >
+      Govt
+    </button>
+
+    <select id="lndRegion">
+      <option value="all">
+        Region: All
+      </option>
+    </select>
+
+    <select id="lndBranch">
+      <option value="all">
+        Branch: All
+      </option>
+    </select>
+
+    <select id="lndMode">
+      <option value="all">
+        Mode: All
+      </option>
+    </select>
+
+    <button
+      class="lnd-refresh-btn"
+      onclick="loadLndLive(true)"
+    >
+      Refresh Live Data
+    </button>
+
+  </div>
+
+
+  <div class="lnd-dashboard-wrap">
+
+    <!-- KPI HEADING -->
+
+    <div class="lnd-section-head">
+
+      <h3>
+        Overview KPIs
+      </h3>
+
+      <span>
+        Live from Master File - L&D
+      </span>
+
+    </div>
+
+
+    <!-- KPI GRID -->
+
+    <div
+      id="learningKpis"
+      class="lnd-kpi-grid"
+    ></div>
+
+
+    <!-- TRAINING TRENDS -->
+
+    <div class="lnd-section-head">
+
+      <h3>
+        Training Trends
+      </h3>
+
+      <span>
+        Monthly learning performance
+      </span>
+
+    </div>
+
+
+    <div class="lnd-charts-row">
+
+      <!-- HOURS + PROGRAMS -->
+
+      <div class="lnd-panel">
+
+        <h4>
+          Learning Hours & Programs Conducted
+        </h4>
+
+        <p>
+          Aggregate learning hours against sessions conducted
+        </p>
+
+        <div class="lnd-chart-box">
+
+          <canvas
+            id="lndHoursProgramsChart"
+          ></canvas>
+
+        </div>
+
+      </div>
+
+
+      <!-- COVERAGE -->
+
+      <div class="lnd-panel">
+
+        <h4>
+          Training Coverage %
+        </h4>
+
+        <p>
+          Unique trained employees against active L&D population
+        </p>
+
+        <div class="lnd-chart-box">
+
+          <canvas
+            id="lndCoverageChart"
+          ></canvas>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- SECOND CHART ROW -->
+
+    <div class="lnd-charts-row-3">
+
+      <!-- COMPLETION -->
+
+      <div class="lnd-panel">
+
+        <h4>
+          Completion Rate %
+        </h4>
+
+        <p>
+          Present vs absent attendance
+        </p>
+
+        <div class="lnd-chart-box small">
+
+          <canvas
+            id="lndCompletionChart"
+          ></canvas>
+
+        </div>
+
+      </div>
+
+
+      <!-- TRAINING RATING -->
+
+      <div class="lnd-panel">
+
+        <h4>
+          Avg. Training Rating
+        </h4>
+
+        <p>
+          Feedback score by training topic
+        </p>
+
+        <div class="lnd-chart-box small">
+
+          <canvas
+            id="lndRatingChart"
+          ></canvas>
+
+        </div>
+
+      </div>
+
+
+      <!-- ASSESSMENT -->
+
+      <div class="lnd-panel">
+
+        <h4>
+          Assessment Score
+        </h4>
+
+        <p>
+          Average assessment performance by month
+        </p>
+
+        <div class="lnd-chart-box small">
+
+          <canvas
+            id="lndAssessmentChart"
+          ></canvas>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- REGION BREAKDOWN -->
+
+    <div class="lnd-section-head">
+
+      <h3>
+        Region-wise Breakdown
+      </h3>
+
+      <span>
+        Current live training performance
+      </span>
+
+    </div>
+
+
+    <div class="lnd-panel">
+
+      <div class="lnd-table-scroll">
+
+        <table class="lnd-table">
+
+          <thead>
+
+            <tr>
+
+              <th>
+                Region
+              </th>
+
+              <th>
+                Employees Trained
+              </th>
+
+              <th>
+                Learning Hours
+              </th>
+
+              <th>
+                Attendance %
+              </th>
+
+              <th>
+                Avg. Assessment
+              </th>
+
+              <th>
+                Avg. Feedback
+              </th>
+
+              <th>
+                Status
+              </th>
+
+            </tr>
+
+          </thead>
+
+          <tbody
+            id="lndRegionTableBody"
+          ></tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+
+    <!-- TRAINING REGISTER -->
+
+    <div class="lnd-section-head">
+
+      <h3>
+        Training Attendance Register
+      </h3>
+
+      <span>
+        <strong id="lndVisibleCount">
+          0
+        </strong>
+        live records
+      </span>
+
+    </div>
+
+
+    <div class="lnd-panel">
+
+
+      <div class="lnd-register-tools">
+
+        <input
+          id="lndSearch"
+          type="text"
+          placeholder="Search employee, training topic, branch..."
+        >
+
+        <select id="lndTopic">
+
+          <option value="all">
+            All Training Topics
+          </option>
+
+        </select>
+
+        <select id="lndAttendance">
+
+          <option value="all">
+            All Attendance
+          </option>
+
+          <option value="Present">
+            Present
+          </option>
+
+          <option value="Absent">
+            Absent
+          </option>
+
+        </select>
+
+      </div>
+
+
+      <div class="lnd-table-scroll">
+
+        <table class="lnd-table register">
+
+          <thead>
+
+            <tr>
+
+              <th>Date</th>
+              <th>Employee</th>
+              <th>Region</th>
+              <th>Branch</th>
+              <th>Training Topic</th>
+              <th>Mode</th>
+              <th>Hours</th>
+              <th>Attendance</th>
+              <th>Assessment</th>
+              <th>Feedback</th>
+              <th>L1</th>
+
+            </tr>
+
+          </thead>
+
+          <tbody
+            id="lndAttendanceBody"
+          ></tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+
+  </div>
+
+</section>
+
+
+
+<!-- =====================================================
+     COMPLIANCE
+====================================================== -->
+
+<section
+  id="compliance"
+  class="page"
+>
+
+
+  <div class="panel">
+
+    <div class="empty-state">
+
+      Compliance module will be connected later.
+
+    </div>
+
+  </div>
+
+
+</section>
+
+
+
+<!-- =====================================================
+     ALERTS
+====================================================== -->
+
+<section
+  id="alerts"
+  class="page"
+>
+
+
+  <div class="panel">
+
+    <div class="empty-state">
+
+      Alerts module will be connected later.
+
+    </div>
+
+  </div>
+
+
+</section>
+
+
+
+</main>
+
+
+</div>
+
+
+
+<!-- =====================================================
+     JAVASCRIPT FILES
+====================================================== -->
+
+<script
+  src="js/data.js?v=20260917-2">
+</script>
+
+
+<script
+  src="js/charts.js?v=20260917-2">
+</script>
+
+
+<script
+  src="js/app.js?v=20260917-2">
+</script>
+
+
+</body>
+
+</html>
