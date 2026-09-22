@@ -3366,3 +3366,777 @@ document.getElementById('alertTableBody').innerHTML =
     </tr>
 
   `).join('');
+  /* =========================================================
+   EMPLOYEE CRM + ATTENDANCE
+   UI STRUCTURE ONLY
+========================================================= */
+
+const HR_STRUCTURE_CHARTS = {};
+
+
+function createStructureChart(
+  id,
+  config
+){
+
+  const el =
+    document.getElementById(id);
+
+  if(
+    !el ||
+    typeof Chart === 'undefined'
+  ){
+    return;
+  }
+
+  if(
+    HR_STRUCTURE_CHARTS[id]
+  ){
+    HR_STRUCTURE_CHARTS[id]
+      .destroy();
+  }
+
+  HR_STRUCTURE_CHARTS[id] =
+    new Chart(
+      el,
+      config
+    );
+
+}
+
+
+/* EMPLOYEE CRM */
+
+function renderEmployeeStructureCharts(){
+
+  createStructureChart(
+    'employeeDeptChart',
+    {
+
+      type:'bar',
+
+      data:{
+
+        labels:[
+          'Sales',
+          'Service',
+          'Admin',
+          'Assembly',
+          'Warehouse',
+          'Others'
+        ],
+
+        datasets:[{
+
+          data:[
+            148,
+            99,
+            31,
+            23,
+            18,
+            139
+          ],
+
+          backgroundColor:
+            '#17616e',
+
+          borderRadius:5
+
+        }]
+
+      },
+
+      options:{
+
+        responsive:true,
+        maintainAspectRatio:false,
+
+        plugins:{
+          legend:{
+            display:false
+          }
+        },
+
+        scales:{
+
+          x:{
+            grid:{
+              display:false
+            }
+          },
+
+          y:{
+            beginAtZero:true,
+            grid:{
+              color:'#eef2f3'
+            }
+          }
+
+        }
+
+      }
+
+    }
+  );
+
+
+  createStructureChart(
+    'employeeLocationChart',
+    {
+
+      type:'bar',
+
+      data:{
+
+        labels:[
+          'Gurgaon',
+          'Delhi',
+          'Mumbai',
+          'Bangalore',
+          'Ahmedabad'
+        ],
+
+        datasets:[{
+
+          data:[
+            210,
+            74,
+            68,
+            59,
+            47
+          ],
+
+          backgroundColor:
+            '#2a8a9e',
+
+          borderRadius:5
+
+        }]
+
+      },
+
+      options:{
+
+        responsive:true,
+        maintainAspectRatio:false,
+
+        plugins:{
+          legend:{
+            display:false
+          }
+        },
+
+        scales:{
+
+          x:{
+            grid:{
+              display:false
+            }
+          },
+
+          y:{
+            beginAtZero:true,
+            grid:{
+              color:'#eef2f3'
+            }
+          }
+
+        }
+
+      }
+
+    }
+  );
+
+
+  createStructureChart(
+    'employeeTenureChart',
+    {
+
+      type:'bar',
+
+      data:{
+
+        labels:[
+          '<1 Yr',
+          '1-3 Yrs',
+          '3-5 Yrs',
+          '5-8 Yrs',
+          '8+ Yrs'
+        ],
+
+        datasets:[{
+
+          data:[
+            63,
+            174,
+            116,
+            72,
+            33
+          ],
+
+          backgroundColor:
+            '#3875b7',
+
+          borderRadius:5
+
+        }]
+
+      },
+
+      options:{
+
+        responsive:true,
+        maintainAspectRatio:false,
+
+        plugins:{
+          legend:{
+            display:false
+          }
+        },
+
+        scales:{
+
+          x:{
+            grid:{
+              display:false
+            }
+          },
+
+          y:{
+            beginAtZero:true,
+            grid:{
+              color:'#eef2f3'
+            }
+          }
+
+        }
+
+      }
+
+    }
+  );
+
+
+  createStructureChart(
+    'employeeGenderChart',
+    {
+
+      type:'doughnut',
+
+      data:{
+
+        labels:[
+          'Male',
+          'Female'
+        ],
+
+        datasets:[{
+
+          data:[
+            72,
+            28
+          ],
+
+          backgroundColor:[
+            '#17616e',
+            '#ca477b'
+          ],
+
+          borderWidth:0
+
+        }]
+
+      },
+
+      options:{
+
+        responsive:true,
+        maintainAspectRatio:false,
+
+        cutout:'70%',
+
+        plugins:{
+
+          legend:{
+            position:'bottom'
+          }
+
+        }
+
+      }
+
+    }
+  );
+
+}
+
+
+/* ATTENDANCE */
+
+function renderAttendanceStructureCharts(){
+
+  createStructureChart(
+    'attendanceTrendChart',
+    {
+
+      type:'line',
+
+      data:{
+
+        labels:[
+          'Mon',
+          'Tue',
+          'Wed',
+          'Thu',
+          'Fri',
+          'Sat'
+        ],
+
+        datasets:[{
+
+          label:'Attendance %',
+
+          data:[
+            91.8,
+            93.1,
+            94.2,
+            93.8,
+            92.5,
+            95.0
+          ],
+
+          borderColor:
+            '#17616e',
+
+          backgroundColor:
+            'rgba(23,97,110,.08)',
+
+          fill:true,
+
+          tension:.4,
+
+          pointRadius:3
+
+        }]
+
+      },
+
+      options:{
+
+        responsive:true,
+        maintainAspectRatio:false,
+
+        plugins:{
+          legend:{
+            display:false
+          }
+        },
+
+        scales:{
+
+          x:{
+            grid:{
+              display:false
+            }
+          },
+
+          y:{
+            min:80,
+            max:100,
+            grid:{
+              color:'#eef2f3'
+            },
+
+            ticks:{
+              callback:
+                value =>
+                  value + '%'
+            }
+          }
+
+        }
+
+      }
+
+    }
+  );
+
+
+  createStructureChart(
+    'attendanceMixChart',
+    {
+
+      type:'doughnut',
+
+      data:{
+
+        labels:[
+          'Present',
+          'Absent',
+          'Leave'
+        ],
+
+        datasets:[{
+
+          data:[
+            421,
+            18,
+            19
+          ],
+
+          backgroundColor:[
+            '#70ad47',
+            '#c22a4d',
+            '#3875b7'
+          ],
+
+          borderWidth:0
+
+        }]
+
+      },
+
+      options:{
+
+        responsive:true,
+        maintainAspectRatio:false,
+
+        cutout:'68%',
+
+        plugins:{
+
+          legend:{
+            position:'bottom'
+          }
+
+        }
+
+      }
+
+    }
+  );
+
+
+  createStructureChart(
+    'attendanceDeptChart',
+    {
+
+      type:'bar',
+
+      data:{
+
+        labels:[
+          'Sales',
+          'Service',
+          'Admin',
+          'Assembly',
+          'Warehouse'
+        ],
+
+        datasets:[{
+
+          data:[
+            92.4,
+            88.1,
+            95.2,
+            91.5,
+            90.8
+          ],
+
+          backgroundColor:
+            '#17616e',
+
+          borderRadius:5
+
+        }]
+
+      },
+
+      options:{
+
+        responsive:true,
+        maintainAspectRatio:false,
+
+        plugins:{
+          legend:{
+            display:false
+          }
+        },
+
+        scales:{
+
+          x:{
+            grid:{
+              display:false
+            }
+          },
+
+          y:{
+            beginAtZero:true,
+            max:100,
+
+            ticks:{
+              callback:
+                value =>
+                  value + '%'
+            },
+
+            grid:{
+              color:'#eef2f3'
+            }
+          }
+
+        }
+
+      }
+
+    }
+  );
+
+
+  createStructureChart(
+    'attendanceLeaveMixChart',
+    {
+
+      type:'doughnut',
+
+      data:{
+
+        labels:[
+          'Earned Leave',
+          'Sick Leave',
+          'Casual Leave',
+          'Other'
+        ],
+
+        datasets:[{
+
+          data:[
+            36.9,
+            22.5,
+            20.1,
+            20.5
+          ],
+
+          backgroundColor:[
+            '#17616e',
+            '#3875b7',
+            '#ffc000',
+            '#ca477b'
+          ],
+
+          borderWidth:0
+
+        }]
+
+      },
+
+      options:{
+
+        responsive:true,
+        maintainAspectRatio:false,
+
+        cutout:'62%',
+
+        plugins:{
+          legend:{
+            position:'bottom'
+          }
+        }
+
+      }
+
+    }
+  );
+
+
+  createStructureChart(
+    'leaveUsageChart',
+    {
+
+      type:'bar',
+
+      data:{
+
+        labels:[
+          'Apr',
+          'May',
+          'Jun',
+          'Jul',
+          'Aug',
+          'Sep'
+        ],
+
+        datasets:[{
+
+          data:[
+            920,
+            1015,
+            1108,
+            1190,
+            1050,
+            980
+          ],
+
+          backgroundColor:
+            '#3875b7',
+
+          borderRadius:5
+
+        }]
+
+      },
+
+      options:{
+
+        responsive:true,
+        maintainAspectRatio:false,
+
+        plugins:{
+          legend:{
+            display:false
+          }
+        },
+
+        scales:{
+
+          x:{
+            grid:{
+              display:false
+            }
+          },
+
+          y:{
+            beginAtZero:true,
+            grid:{
+              color:'#eef2f3'
+            }
+          }
+
+        }
+
+      }
+
+    }
+  );
+
+
+  createStructureChart(
+    'regularisationTrendChart',
+    {
+
+      type:'line',
+
+      data:{
+
+        labels:[
+          'Apr',
+          'May',
+          'Jun',
+          'Jul',
+          'Aug',
+          'Sep'
+        ],
+
+        datasets:[{
+
+          data:[
+            72,
+            81,
+            76,
+            94,
+            98,
+            86
+          ],
+
+          borderColor:
+            '#7a5cb8',
+
+          backgroundColor:
+            'rgba(122,92,184,.08)',
+
+          fill:true,
+
+          tension:.4,
+
+          pointRadius:3
+
+        }]
+
+      },
+
+      options:{
+
+        responsive:true,
+        maintainAspectRatio:false,
+
+        plugins:{
+          legend:{
+            display:false
+          }
+        },
+
+        scales:{
+
+          x:{
+            grid:{
+              display:false
+            }
+          },
+
+          y:{
+            beginAtZero:true,
+            grid:{
+              color:'#eef2f3'
+            }
+          }
+
+        }
+
+      }
+
+    }
+  );
+
+}
+
+
+/* PLACEHOLDER POPUPS */
+
+function openEmployeeCrmProfile(
+  employeeId
+){
+
+  console.log(
+    'Employee 360:',
+    employeeId
+  );
+
+}
+
+
+function openAttendanceEmployee(
+  employeeId
+){
+
+  console.log(
+    'Attendance employee:',
+    employeeId
+  );
+
+}
+
+
+/* INITIALISE STRUCTURE */
+
+window.addEventListener(
+  'DOMContentLoaded',
+  function(){
+
+    renderEmployeeStructureCharts();
+
+    renderAttendanceStructureCharts();
+
+  }
+);
