@@ -575,12 +575,19 @@
 
     <div class="module-header-actions">
 
-      <div class="module-live-pill">
-        ● Structure Ready
+      <div
+        id="attendanceLiveStatus"
+        class="module-live-pill"
+      >
+        Connecting...
       </div>
 
-      <button class="module-refresh-btn">
-        Refresh Data
+      <button
+        class="module-refresh-btn"
+        type="button"
+        onclick="loadAttendanceLive(true)"
+      >
+        Refresh Live Data
       </button>
 
     </div>
@@ -690,7 +697,7 @@
     <div class="attendance-kpi-card green">
 
       <div class="attendance-kpi-label">
-        Present Today
+        Present Records
       </div>
 
       <div
@@ -701,7 +708,7 @@
       </div>
 
       <div class="attendance-kpi-sub">
-        Employees marked present
+        Present attendance records
       </div>
 
     </div>
@@ -710,7 +717,7 @@
     <div class="attendance-kpi-card red">
 
       <div class="attendance-kpi-label">
-        Absent Today
+        Absent Records
       </div>
 
       <div
@@ -721,7 +728,7 @@
       </div>
 
       <div class="attendance-kpi-sub">
-        Unplanned absence
+        Absent attendance records
       </div>
 
     </div>
@@ -730,7 +737,7 @@
     <div class="attendance-kpi-card blue">
 
       <div class="attendance-kpi-label">
-        On Leave Today
+        Other Records
       </div>
 
       <div
@@ -741,7 +748,7 @@
       </div>
 
       <div class="attendance-kpi-sub">
-        Approved leave
+        Non-working / other records
       </div>
 
     </div>
@@ -750,7 +757,7 @@
     <div class="attendance-kpi-card amber">
 
       <div class="attendance-kpi-label">
-        Leave Requests
+        Late Instances
       </div>
 
       <div
@@ -761,7 +768,7 @@
       </div>
 
       <div class="attendance-kpi-sub">
-        Pending / recent requests
+        Late attendance instances
       </div>
 
     </div>
@@ -770,18 +777,18 @@
     <div class="attendance-kpi-card violet">
 
       <div class="attendance-kpi-label">
-        Regularisation
+        Avg. Effective Hours
       </div>
 
       <div
-        id="attKpiRegularisation"
+        id="attKpiAvg. Effective Hours"
         class="attendance-kpi-value"
       >
         98
       </div>
 
       <div class="attendance-kpi-sub">
-        Current period requests
+        Average effective working hours
       </div>
 
     </div>
@@ -790,7 +797,7 @@
     <div class="attendance-kpi-card pink">
 
       <div class="attendance-kpi-label">
-        Leave Liability
+        Total Employees
       </div>
 
       <div
@@ -802,7 +809,7 @@
       </div>
 
       <div class="attendance-kpi-sub">
-        Accumulated leave balance
+        Employees in Keka master
       </div>
 
     </div>
@@ -811,7 +818,7 @@
     <div class="attendance-kpi-card grey">
 
       <div class="attendance-kpi-label">
-        Attendance Exceptions
+        Attendance Records
       </div>
 
       <div
@@ -822,7 +829,7 @@
       </div>
 
       <div class="attendance-kpi-sub">
-        Needs review
+        Total attendance records
       </div>
 
     </div>
@@ -877,7 +884,7 @@
         <div>
 
           <h4>
-            Present / Absent / Leave
+            Present / Absent / Other
           </h4>
 
           <p>
@@ -933,11 +940,11 @@
         <div>
 
           <h4>
-            Leave Type Mix
+            Branch-wise Attendance
           </h4>
 
           <p>
-            Earned, casual, sick and other leave
+            Attendance percentage across branches
           </p>
 
         </div>
@@ -997,7 +1004,7 @@
             </th>
 
             <th>
-              Leave
+              Other
             </th>
 
             <th>
@@ -1098,7 +1105,7 @@
   <div class="module-section-head">
 
     <div>
-      <h3>Leave & Regularisation</h3>
+      <h3>Leave & Avg. Effective Hours</h3>
       <span>Utilisation, balances and request patterns</span>
     </div>
 
@@ -1140,7 +1147,7 @@
         <div>
 
           <h4>
-            Regularisation Trend
+            Avg. Effective Hours Trend
           </h4>
 
           <p>
@@ -1166,7 +1173,7 @@
   <div class="module-section-head">
 
     <div>
-      <h3>Attendance Exceptions</h3>
+      <h3>Attendance Records</h3>
       <span>Employees requiring manager attention</span>
     </div>
 
@@ -1198,7 +1205,7 @@
             <th>Manager</th>
             <th>Attendance %</th>
             <th>Absent Days</th>
-            <th>Leave Days</th>
+            <th>Other Records</th>
             <th>Issue</th>
             <th>Action</th>
 
