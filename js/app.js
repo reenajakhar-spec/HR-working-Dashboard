@@ -3359,8 +3359,12 @@ function loadEmployeeCrmLive(forceRefresh) {
   const oldScript = employeeGet('employeeCrmJsonpScript');
   if (oldScript && oldScript.parentNode) oldScript.parentNode.removeChild(oldScript);
 
+  /* JSONP callback must be globally accessible on GitHub Pages. */
+  window.receiveEmployeeCrmData = receiveEmployeeCrmData;
+
   const script = document.createElement('script');
   script.id = 'employeeCrmJsonpScript';
+  script.async = true;
   script.src =
     EMPLOYEE_CRM_API_URL +
     '?module=employees' +
@@ -3377,6 +3381,16 @@ function loadEmployeeCrmLive(forceRefresh) {
   };
 
   document.body.appendChild(script);
+
+  setTimeout(function() {
+    if (EMPLOYEE_CRM_LOADING) {
+      EMPLOYEE_CRM_LOADING = false;
+      setEmployeeLiveStatus('Connection Timeout', 'error');
+      if (master) {
+        master.innerHTML = '<tr><td colspan="10">Employee API timeout. Please refresh once.</td></tr>';
+      }
+    }
+  }, 25000);
 }
 
 function receiveEmployeeCrmData(data) {
@@ -4122,7 +4136,9 @@ function loadAttendanceLive(
 
   script.src =
     ATTENDANCE_API_URL +
-    '?callback=receiveAttendanceData&_=' +
+    '?module=attendance' +
+    '&callback=receiveAttendanceData' +
+    '&_=' +
     Date.now();
 
 
