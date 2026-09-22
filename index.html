@@ -26,7 +26,10 @@
        MAIN CSS
   ====================================================== -->
 
-<link rel="stylesheet" href="./styles.css?v=20260917-20">
+  <link
+    rel="stylesheet"
+    href="css/styles.css?v=20260917-2"
+  >
 
 </head>
 
@@ -289,42 +292,461 @@
      EMPLOYEE CRM
 ====================================================== -->
 
-<section
-  id="employees"
-  class="page"
->
+<section id="employees" class="page employee-crm-page">
 
-
-  <div class="section-toolbar">
-
+  <div class="module-header">
 
     <div>
+      <div class="module-eyebrow">
+        WORKFORCE MANAGEMENT
+      </div>
 
       <h2>
-        Employee CRM
+        Employee CRM Command Centre
       </h2>
 
       <p>
-        Employee module
+        Workforce profile, organisation structure and employee-level visibility
       </p>
-
     </div>
 
+    <div class="module-header-actions">
+
+      <div class="module-live-pill">
+        ● Structure Ready
+      </div>
+
+      <button class="module-refresh-btn">
+        Refresh Data
+      </button>
+
+    </div>
 
   </div>
 
 
+  <!-- FILTERS -->
 
-  <div class="panel">
+  <div class="module-filter-bar">
 
-    <div class="empty-state">
+    <input
+      type="text"
+      id="employeeCrmSearch"
+      class="module-search"
+      placeholder="Search employee, ID, designation..."
+    >
 
-      Employee data will be connected in the next phase.
+    <select id="employeeDeptFilter">
+      <option value="all">All Departments</option>
+    </select>
+
+    <select id="employeeLocationFilter">
+      <option value="all">All Locations</option>
+    </select>
+
+    <select id="employeeManagerFilter">
+      <option value="all">All Managers</option>
+    </select>
+
+    <select id="employeeStatusFilter">
+      <option value="all">All Status</option>
+      <option value="Active">Active</option>
+      <option value="Probation">Probation</option>
+      <option value="Inactive">Inactive</option>
+    </select>
+
+  </div>
+
+
+  <!-- KPI GRID -->
+
+  <div class="module-section-head">
+    <div>
+      <h3>Workforce Overview</h3>
+      <span>Employee population and organisation health</span>
+    </div>
+  </div>
+
+
+  <div class="employee-kpi-grid">
+
+    <div class="employee-kpi-card teal">
+      <div class="employee-kpi-label">
+        Total Employees
+      </div>
+
+      <div
+        id="empKpiTotal"
+        class="employee-kpi-value"
+      >
+        458
+      </div>
+
+      <div class="employee-kpi-sub">
+        Overall workforce
+      </div>
+    </div>
+
+
+    <div class="employee-kpi-card green">
+      <div class="employee-kpi-label">
+        Active Employees
+      </div>
+
+      <div
+        id="empKpiActive"
+        class="employee-kpi-value"
+      >
+        409
+      </div>
+
+      <div class="employee-kpi-sub">
+        Active workforce
+      </div>
+    </div>
+
+
+    <div class="employee-kpi-card blue">
+      <div class="employee-kpi-label">
+        New Joiners MTD
+      </div>
+
+      <div
+        id="empKpiJoiners"
+        class="employee-kpi-value"
+      >
+        4
+      </div>
+
+      <div class="employee-kpi-sub">
+        Current month
+      </div>
+    </div>
+
+
+    <div class="employee-kpi-card amber">
+      <div class="employee-kpi-label">
+        On Probation
+      </div>
+
+      <div
+        id="empKpiProbation"
+        class="employee-kpi-value"
+      >
+        49
+      </div>
+
+      <div class="employee-kpi-sub">
+        Under probation period
+      </div>
+    </div>
+
+
+    <div class="employee-kpi-card violet">
+      <div class="employee-kpi-label">
+        Avg. Tenure
+      </div>
+
+      <div
+        id="empKpiTenure"
+        class="employee-kpi-value"
+      >
+        3.9
+        <span>yrs</span>
+      </div>
+
+      <div class="employee-kpi-sub">
+        Company-wide average
+      </div>
+    </div>
+
+
+    <div class="employee-kpi-card pink">
+      <div class="employee-kpi-label">
+        Gender Mix
+      </div>
+
+      <div
+        id="empKpiGender"
+        class="employee-kpi-value small-value"
+      >
+        72% / 28%
+      </div>
+
+      <div class="employee-kpi-sub">
+        Male / Female
+      </div>
+    </div>
+
+  </div>
+
+
+  <!-- CHARTS -->
+
+  <div class="module-section-head">
+    <div>
+      <h3>Workforce Distribution</h3>
+      <span>Department, location and tenure analytics</span>
+    </div>
+  </div>
+
+
+  <div class="employee-chart-grid">
+
+    <div class="module-card">
+
+      <div class="module-card-header">
+        <div>
+          <h4>
+            Department-wise Headcount
+          </h4>
+
+          <p>
+            Employee distribution across departments
+          </p>
+        </div>
+      </div>
+
+      <div class="module-chart">
+        <canvas id="employeeDeptChart"></canvas>
+      </div>
+
+    </div>
+
+
+    <div class="module-card">
+
+      <div class="module-card-header">
+        <div>
+          <h4>
+            Location-wise Headcount
+          </h4>
+
+          <p>
+            Employee distribution by location
+          </p>
+        </div>
+      </div>
+
+      <div class="module-chart">
+        <canvas id="employeeLocationChart"></canvas>
+      </div>
+
+    </div>
+
+
+    <div class="module-card">
+
+      <div class="module-card-header">
+        <div>
+          <h4>
+            Tenure Distribution
+          </h4>
+
+          <p>
+            Employee tenure buckets
+          </p>
+        </div>
+      </div>
+
+      <div class="module-chart">
+        <canvas id="employeeTenureChart"></canvas>
+      </div>
+
+    </div>
+
+
+    <div class="module-card">
+
+      <div class="module-card-header">
+        <div>
+          <h4>
+            Gender Distribution
+          </h4>
+
+          <p>
+            Workforce gender mix
+          </p>
+        </div>
+      </div>
+
+      <div class="module-chart small-chart">
+        <canvas id="employeeGenderChart"></canvas>
+      </div>
 
     </div>
 
   </div>
 
+
+  <!-- SPAN OF CONTROL -->
+
+  <div class="module-section-head">
+    <div>
+      <h3>Organisation Structure</h3>
+      <span>Reporting hierarchy and management load</span>
+    </div>
+  </div>
+
+
+  <div class="module-card">
+
+    <div class="module-card-header">
+
+      <div>
+        <h4>
+          Span of Control
+        </h4>
+
+        <p>
+          Managers with the highest number of direct reports
+        </p>
+      </div>
+
+      <span class="module-tag">
+        Headcount
+      </span>
+
+    </div>
+
+
+    <div class="module-table-wrap">
+
+      <table class="module-table">
+
+        <thead>
+          <tr>
+            <th>Manager</th>
+            <th>Department</th>
+            <th>Direct Reports</th>
+            <th>Share of Workforce</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+
+        <tbody id="employeeSpanBody">
+
+          <tr>
+            <td>Manager A</td>
+            <td>Sales</td>
+            <td>32</td>
+            <td>7.0%</td>
+            <td>
+              <span class="module-status amber">
+                Watch
+              </span>
+            </td>
+          </tr>
+
+          <tr>
+            <td>Manager B</td>
+            <td>Service</td>
+            <td>24</td>
+            <td>5.2%</td>
+            <td>
+              <span class="module-status green">
+                Normal
+              </span>
+            </td>
+          </tr>
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  </div>
+
+
+  <!-- EMPLOYEE MASTER -->
+
+  <div class="module-section-head">
+
+    <div>
+      <h3>Employee Master</h3>
+      <span>
+        Searchable employee-level workforce view
+      </span>
+    </div>
+
+    <div class="module-count">
+      <strong id="employeeMasterCount">458</strong>
+      employees
+    </div>
+
+  </div>
+
+
+  <div class="module-card">
+
+    <div class="module-table-wrap">
+
+      <table class="module-table employee-master-table">
+
+        <thead>
+          <tr>
+            <th>Employee ID</th>
+            <th>Employee</th>
+            <th>Designation</th>
+            <th>Department</th>
+            <th>Manager</th>
+            <th>Location</th>
+            <th>DOJ</th>
+            <th>Tenure</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+
+
+        <tbody id="employeeMasterBody">
+
+          <tr>
+
+            <td>EI-0001</td>
+
+            <td>
+              <div class="employee-cell-name">
+                Sample Employee
+              </div>
+
+              <div class="employee-cell-sub">
+                employee@euronics.co.in
+              </div>
+            </td>
+
+            <td>Manager</td>
+            <td>Sales</td>
+            <td>Reporting Manager</td>
+            <td>Gurgaon</td>
+            <td>01 Apr 2024</td>
+            <td>2.4 yrs</td>
+
+            <td>
+              <span class="module-status green">
+                Active
+              </span>
+            </td>
+
+            <td>
+              <button
+                class="module-action-btn"
+                onclick="openEmployeeCrmProfile('EI-0001')"
+              >
+                View 360°
+              </button>
+            </td>
+
+          </tr>
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  </div>
 
 </section>
 
@@ -363,25 +785,720 @@
 
 
 <!-- =====================================================
-     ATTENDANCE
+     ATTENDANCE & LEAVE
 ====================================================== -->
 
-<section
-  id="attendance"
-  class="page"
->
+<section id="attendance" class="page attendance-command-page">
+
+  <div class="module-header">
+
+    <div>
+
+      <div class="module-eyebrow">
+        ATTENDANCE MANAGEMENT
+      </div>
+
+      <h2>
+        Attendance & Leave Command Centre
+      </h2>
+
+      <p>
+        Attendance health, leave utilisation, regularisation and exception monitoring
+      </p>
+
+    </div>
 
 
-  <div class="panel">
+    <div class="module-header-actions">
 
-    <div class="empty-state">
+      <div class="module-live-pill">
+        ● Structure Ready
+      </div>
 
-      Attendance module will be connected later.
+      <button class="module-refresh-btn">
+        Refresh Data
+      </button>
 
     </div>
 
   </div>
 
+
+  <!-- FILTER BAR -->
+
+  <div class="module-filter-bar">
+
+    <select id="attendancePeriodFilter">
+      <option value="today">
+        Today
+      </option>
+
+      <option value="7">
+        Last 7 Days
+      </option>
+
+      <option value="30" selected>
+        Last 30 Days
+      </option>
+
+      <option value="month">
+        Current Month
+      </option>
+    </select>
+
+
+    <select id="attendanceDeptFilter">
+      <option value="all">
+        All Departments
+      </option>
+    </select>
+
+
+    <select id="attendanceLocationFilter">
+      <option value="all">
+        All Locations
+      </option>
+    </select>
+
+
+    <select id="attendanceManagerFilter">
+      <option value="all">
+        All Managers
+      </option>
+    </select>
+
+
+    <select id="attendanceStatusFilter">
+
+      <option value="all">
+        All Status
+      </option>
+
+      <option value="Present">
+        Present
+      </option>
+
+      <option value="Absent">
+        Absent
+      </option>
+
+      <option value="Leave">
+        On Leave
+      </option>
+
+    </select>
+
+  </div>
+
+
+  <!-- KPI GRID -->
+
+  <div class="module-section-head">
+    <div>
+      <h3>Attendance Overview</h3>
+      <span>Current workforce attendance health</span>
+    </div>
+  </div>
+
+
+  <div class="attendance-kpi-grid">
+
+    <div class="attendance-kpi-card teal">
+
+      <div class="attendance-kpi-label">
+        Overall Attendance
+      </div>
+
+      <div
+        id="attKpiOverall"
+        class="attendance-kpi-value"
+      >
+        93.4%
+      </div>
+
+      <div class="attendance-kpi-sub">
+        Last 30 days
+      </div>
+
+    </div>
+
+
+    <div class="attendance-kpi-card green">
+
+      <div class="attendance-kpi-label">
+        Present Today
+      </div>
+
+      <div
+        id="attKpiPresent"
+        class="attendance-kpi-value"
+      >
+        421
+      </div>
+
+      <div class="attendance-kpi-sub">
+        Employees marked present
+      </div>
+
+    </div>
+
+
+    <div class="attendance-kpi-card red">
+
+      <div class="attendance-kpi-label">
+        Absent Today
+      </div>
+
+      <div
+        id="attKpiAbsent"
+        class="attendance-kpi-value"
+      >
+        18
+      </div>
+
+      <div class="attendance-kpi-sub">
+        Unplanned absence
+      </div>
+
+    </div>
+
+
+    <div class="attendance-kpi-card blue">
+
+      <div class="attendance-kpi-label">
+        On Leave Today
+      </div>
+
+      <div
+        id="attKpiLeave"
+        class="attendance-kpi-value"
+      >
+        19
+      </div>
+
+      <div class="attendance-kpi-sub">
+        Approved leave
+      </div>
+
+    </div>
+
+
+    <div class="attendance-kpi-card amber">
+
+      <div class="attendance-kpi-label">
+        Leave Requests
+      </div>
+
+      <div
+        id="attKpiLeaveRequests"
+        class="attendance-kpi-value"
+      >
+        24
+      </div>
+
+      <div class="attendance-kpi-sub">
+        Pending / recent requests
+      </div>
+
+    </div>
+
+
+    <div class="attendance-kpi-card violet">
+
+      <div class="attendance-kpi-label">
+        Regularisation
+      </div>
+
+      <div
+        id="attKpiRegularisation"
+        class="attendance-kpi-value"
+      >
+        98
+      </div>
+
+      <div class="attendance-kpi-sub">
+        Current period requests
+      </div>
+
+    </div>
+
+
+    <div class="attendance-kpi-card pink">
+
+      <div class="attendance-kpi-label">
+        Leave Liability
+      </div>
+
+      <div
+        id="attKpiLiability"
+        class="attendance-kpi-value"
+      >
+        4,892
+        <span>days</span>
+      </div>
+
+      <div class="attendance-kpi-sub">
+        Accumulated leave balance
+      </div>
+
+    </div>
+
+
+    <div class="attendance-kpi-card grey">
+
+      <div class="attendance-kpi-label">
+        Attendance Exceptions
+      </div>
+
+      <div
+        id="attKpiExceptions"
+        class="attendance-kpi-value"
+      >
+        34
+      </div>
+
+      <div class="attendance-kpi-sub">
+        Needs review
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <!-- TREND CHARTS -->
+
+  <div class="module-section-head">
+
+    <div>
+      <h3>Attendance Trends</h3>
+      <span>Daily, department and attendance-status trends</span>
+    </div>
+
+  </div>
+
+
+  <div class="attendance-chart-grid">
+
+    <div class="module-card wide">
+
+      <div class="module-card-header">
+
+        <div>
+
+          <h4>
+            Attendance Trend
+          </h4>
+
+          <p>
+            Daily attendance percentage
+          </p>
+
+        </div>
+
+      </div>
+
+
+      <div class="module-chart">
+        <canvas id="attendanceTrendChart"></canvas>
+      </div>
+
+    </div>
+
+
+    <div class="module-card">
+
+      <div class="module-card-header">
+
+        <div>
+
+          <h4>
+            Present / Absent / Leave
+          </h4>
+
+          <p>
+            Current workforce attendance mix
+          </p>
+
+        </div>
+
+      </div>
+
+
+      <div class="module-chart small-chart">
+        <canvas id="attendanceMixChart"></canvas>
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <div class="attendance-chart-grid">
+
+    <div class="module-card">
+
+      <div class="module-card-header">
+
+        <div>
+
+          <h4>
+            Department-wise Attendance
+          </h4>
+
+          <p>
+            Attendance % across departments
+          </p>
+
+        </div>
+
+      </div>
+
+
+      <div class="module-chart">
+        <canvas id="attendanceDeptChart"></canvas>
+      </div>
+
+    </div>
+
+
+    <div class="module-card">
+
+      <div class="module-card-header">
+
+        <div>
+
+          <h4>
+            Leave Type Mix
+          </h4>
+
+          <p>
+            Earned, casual, sick and other leave
+          </p>
+
+        </div>
+
+      </div>
+
+
+      <div class="module-chart small-chart">
+        <canvas id="attendanceLeaveMixChart"></canvas>
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <!-- DEPARTMENT TABLE -->
+
+  <div class="module-section-head">
+
+    <div>
+      <h3>Department Attendance</h3>
+      <span>Department-level attendance health</span>
+    </div>
+
+  </div>
+
+
+  <div class="module-card">
+
+    <div class="module-table-wrap">
+
+      <table class="module-table">
+
+        <thead>
+
+          <tr>
+
+            <th>
+              Department
+            </th>
+
+            <th>
+              Headcount
+            </th>
+
+            <th>
+              Attendance %
+            </th>
+
+            <th>
+              Present
+            </th>
+
+            <th>
+              Absent
+            </th>
+
+            <th>
+              Leave
+            </th>
+
+            <th>
+              Status
+            </th>
+
+          </tr>
+
+        </thead>
+
+
+        <tbody id="attendanceDeptBody">
+
+          <tr>
+
+            <td>
+              Sales & Marketing
+            </td>
+
+            <td>
+              148
+            </td>
+
+            <td>
+              92.4%
+            </td>
+
+            <td>
+              133
+            </td>
+
+            <td>
+              8
+            </td>
+
+            <td>
+              7
+            </td>
+
+            <td>
+
+              <span class="module-status green">
+                Healthy
+              </span>
+
+            </td>
+
+          </tr>
+
+
+          <tr>
+
+            <td>
+              Service
+            </td>
+
+            <td>
+              99
+            </td>
+
+            <td>
+              88.1%
+            </td>
+
+            <td>
+              86
+            </td>
+
+            <td>
+              8
+            </td>
+
+            <td>
+              5
+            </td>
+
+            <td>
+
+              <span class="module-status amber">
+                Watch
+              </span>
+
+            </td>
+
+          </tr>
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  </div>
+
+
+  <!-- LEAVE + REGULARISATION -->
+
+  <div class="module-section-head">
+
+    <div>
+      <h3>Leave & Regularisation</h3>
+      <span>Utilisation, balances and request patterns</span>
+    </div>
+
+  </div>
+
+
+  <div class="attendance-chart-grid">
+
+    <div class="module-card">
+
+      <div class="module-card-header">
+
+        <div>
+
+          <h4>
+            Leave Usage Trend
+          </h4>
+
+          <p>
+            Monthly leave-days consumed
+          </p>
+
+        </div>
+
+      </div>
+
+
+      <div class="module-chart">
+        <canvas id="leaveUsageChart"></canvas>
+      </div>
+
+    </div>
+
+
+    <div class="module-card">
+
+      <div class="module-card-header">
+
+        <div>
+
+          <h4>
+            Regularisation Trend
+          </h4>
+
+          <p>
+            Monthly attendance regularisation requests
+          </p>
+
+        </div>
+
+      </div>
+
+
+      <div class="module-chart">
+        <canvas id="regularisationTrendChart"></canvas>
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <!-- ATTENDANCE EXCEPTIONS -->
+
+  <div class="module-section-head">
+
+    <div>
+      <h3>Attendance Exceptions</h3>
+      <span>Employees requiring manager attention</span>
+    </div>
+
+    <div class="module-count">
+
+      <strong id="attendanceExceptionCount">
+        34
+      </strong>
+
+      exceptions
+
+    </div>
+
+  </div>
+
+
+  <div class="module-card">
+
+    <div class="module-table-wrap">
+
+      <table class="module-table employee-master-table">
+
+        <thead>
+
+          <tr>
+
+            <th>Employee</th>
+            <th>Department</th>
+            <th>Manager</th>
+            <th>Attendance %</th>
+            <th>Absent Days</th>
+            <th>Leave Days</th>
+            <th>Issue</th>
+            <th>Action</th>
+
+          </tr>
+
+        </thead>
+
+
+        <tbody id="attendanceExceptionBody">
+
+          <tr>
+
+            <td>
+              Sample Employee
+            </td>
+
+            <td>
+              Sales
+            </td>
+
+            <td>
+              Manager A
+            </td>
+
+            <td>
+              68%
+            </td>
+
+            <td>
+              5
+            </td>
+
+            <td>
+              2
+            </td>
+
+            <td>
+
+              <span class="module-status red">
+                Low Attendance
+              </span>
+
+            </td>
+
+            <td>
+
+              <button
+                class="module-action-btn"
+                onclick="openAttendanceEmployee('EI-0001')"
+              >
+                View
+              </button>
+
+            </td>
+
+          </tr>
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  </div>
 
 </section>
 
@@ -983,11 +2100,6 @@
   src="js/app.js?v=20260917-2">
 </script>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
-
-<script src="./js/data.js?v=20260917-20"></script>
-<script src="./js/charts.js?v=20260917-20"></script>
-<script src="./js/app.js?v=20260917-20"></script>
 
 </body>
 
