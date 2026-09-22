@@ -82,6 +82,22 @@ function navigate(page) {
       loadLndLive(false);
     }, 50);
   }
+
+  if (
+  page === 'employees' &&
+  typeof loadEmployeeCrmLive === 'function'
+) {
+
+  setTimeout(
+    function() {
+
+      loadEmployeeCrmLive(false);
+
+    },
+    50
+  );
+
+}
 }
 
 document.querySelectorAll('.nav-item').forEach(btn => {
@@ -5533,3 +5549,1585 @@ window.addEventListener(
 
   }
 );
+/* =========================================================
+   EMPLOYEE CRM LIVE DATA
+========================================================= */
+
+const EMPLOYEE_CRM_API_URL =
+  'https://script.google.com/macros/s/AKfycbxWzFltc06j3OmPFG62gtuvbj_SumQe3dvbPCcc5BurhqyXeeqRTXJjutzNKStXSJl-/exec';
+
+let EMPLOYEE_CRM_DATA = null;
+let EMPLOYEE_CRM_FILTERED = [];
+let EMPLOYEE_CRM_LOADED = false;
+
+const EMPLOYEE_CHARTS = {};
+
+
+/* =========================================================
+   LOAD LIVE EMPLOYEE CRM
+========================================================= */
+
+function loadEmployeeCrmLive(forceRefresh) {
+
+  if (
+    EMPLOYEE_CRM_LOADED &&
+    !forceRefresh
+  ) {
+
+    renderEmployeeCrmDashboard(
+      EMPLOYEE_CRM_DATA
+    );
+
+    return;
+
+  }
+
+
+  setEmployeeLiveStatus(
+    'Connecting...',
+    'loading'
+  );
+
+
+  const oldScript =
+    document.getElementById(
+      'employeeCrmJsonpScript'
+    );
+
+
+  if (oldScript) {
+    oldScript.remove();
+  }
+
+
+  const script =
+    document.createElement(
+      'script'
+    );
+
+
+  script.id =
+    'employeeCrmJsonpScript';
+
+
+  script.src =
+    EMPLOYEE_CRM_API_URL +
+    '?module=employees' +
+    '&callback=receiveEmployeeCrmData' +
+    '&_=' +
+    Date.now();
+
+
+  script.onerror =
+    function() {
+
+      setEmployeeLiveStatus(
+        'Connection Failed',
+        'error'
+      );
+
+      console.error(
+        'Employee CRM API could not be loaded.'
+      );
+
+    };
+
+
+  document.body.appendChild(
+    script
+  );
+
+}
+
+
+/* =========================================================
+   JSONP CALLBACK
+========================================================= */
+
+function receiveEmployeeCrmData(
+  data
+) {
+
+  if (
+    !data ||
+    data.ok !== true
+  ) {
+
+    console.error(
+      'Employee CRM API Error:',
+      data
+    );
+
+    setEmployeeLiveStatus(
+      'Data Error',
+      'error'
+    );
+
+    return;
+
+  }
+
+
+  EMPLOYEE_CRM_DATA =
+    data;
+
+  EMPLOYEE_CRM_LOADED =
+    true;
+
+
+  setEmployeeLiveStatus(
+    'Live',
+    'success'
+  );
+
+
+  renderEmployeeCrmDashboard(
+    data
+  );
+
+
+  initialiseEmployeeCrmFilters(
+    data
+  );
+
+}
+
+
+/* =========================================================
+   STATUS
+========================================================= */
+
+function setEmployeeLiveStatus(
+  text,
+  state
+) {
+
+  const el =
+    document.getElementById(
+      'employeeLiveStatus'
+    );
+
+
+  if (!el) {
+    return;
+  }
+
+
+  el.textContent =
+    state === 'success'
+      ? '● ' + text
+      : text;
+
+
+  el.classList.remove(
+    'green',
+    'amber',
+    'red'
+  );
+
+
+  if (state === 'success') {
+
+    el.classList.add(
+      'green'
+    );
+
+  }
+
+  else if (
+    state === 'error'
+  ) {
+
+    el.classList.add(
+      'red'
+    );
+
+  }
+
+  else {
+
+    el.classList.add(
+      'amber'
+    );
+
+  }
+
+}
+
+
+/* =========================================================
+   MAIN RENDER
+========================================================= */
+
+function renderEmployeeCrmDashboard(
+  data
+) {
+
+  if (
+    !data ||
+    !data.summary
+  ) {
+    return;
+  }
+
+
+  renderEmployeeCrmKpis(
+    data.summary
+  );
+
+
+  renderEmployeeDepartmentChart(
+    data.departments || []
+  );
+
+
+  renderEmployeeBranchChart(
+    data.branches || []
+  );
+
+
+  renderEmployeeTenureChart(
+    data.tenureBuckets || {}
+  );
+
+
+  renderEmployeeSpanOfControl(
+    data.managers || []
+  );
+
+
+  EMPLOYEE_CRM_FILTERED =
+    (
+      data.employees ||
+      []
+    ).slice();
+
+
+  renderEmployeeMaster(
+    EMPLOYEE_CRM_FILTERED
+  );
+
+}
+
+
+/* =========================================================
+   KPI CARDS
+========================================================= */
+
+function renderEmployeeCrmKpis(
+  summary
+) {
+
+  setEmployeeText(
+    'empKpiTotal',
+    summary.totalEmployees || 0
+  );
+
+
+  setEmployeeText(
+    'empKpiActive',
+    summary.activeEmployees || 0
+  );
+
+
+  setEmployeeText(
+    'empKpiJoiners',
+    summary.newJoinersMtd || 0
+  );
+
+
+  /*
+    Current HTML ID retained,
+    but KPI now means Under 3 Months.
+  */
+
+  setEmployeeText(
+    'empKpiProbation',
+    summary.under3Months || 0
+  );
+
+
+  const tenure =
+    Number(
+      summary.avgTenure || 0
+    );
+
+
+  const tenureEl =
+    document.getElementById(
+      'empKpiTenure'
+    );
+
+
+  if (tenureEl) {
+
+    tenureEl.innerHTML =
+      tenure.toFixed(2) +
+      ' <span>yrs</span>';
+
+  }
+
+
+  /*
+    Existing Gender card reused for
+    Net Change MTD until gender data exists.
+  */
+
+  const net =
+    Number(
+      summary.netChangeMtd || 0
+    );
+
+
+  setEmployeeText(
+    'empKpiGender',
+    net > 0
+      ? '+' + net
+      : String(net)
+  );
+
+
+  const countEl =
+    document.getElementById(
+      'employeeMasterCount'
+    );
+
+
+  if (countEl) {
+
+    countEl.textContent =
+      summary.totalEmployees || 0;
+
+  }
+
+}
+
+
+/* =========================================================
+   SAFE TEXT
+========================================================= */
+
+function setEmployeeText(
+  id,
+  value
+) {
+
+  const el =
+    document.getElementById(
+      id
+    );
+
+
+  if (el) {
+
+    el.textContent =
+      value;
+
+  }
+
+}
+
+
+/* =========================================================
+   CHART - DEPARTMENT
+========================================================= */
+
+function renderEmployeeDepartmentChart(
+  rows
+) {
+
+  const canvas =
+    document.getElementById(
+      'employeeDeptChart'
+    );
+
+
+  if (
+    !canvas ||
+    typeof Chart === 'undefined'
+  ) {
+    return;
+  }
+
+
+  if (
+    EMPLOYEE_CHARTS.department
+  ) {
+
+    EMPLOYEE_CHARTS
+      .department
+      .destroy();
+
+  }
+
+
+  const cleanRows =
+    rows
+      .filter(
+        function(row) {
+          return (
+            row.department &&
+            row.headcount > 0
+          );
+        }
+      )
+      .slice(
+        0,
+        20
+      );
+
+
+  EMPLOYEE_CHARTS.department =
+    new Chart(
+      canvas,
+      {
+
+        type:
+          'bar',
+
+        data: {
+
+          labels:
+            cleanRows.map(
+              function(row) {
+                return row.department;
+              }
+            ),
+
+          datasets: [
+            {
+
+              label:
+                'Headcount',
+
+              data:
+                cleanRows.map(
+                  function(row) {
+                    return row.headcount;
+                  }
+                ),
+
+              borderWidth:
+                1
+
+            }
+          ]
+
+        },
+
+        options: {
+
+          responsive:
+            true,
+
+          maintainAspectRatio:
+            false,
+
+          indexAxis:
+            'y',
+
+          plugins: {
+
+            legend: {
+              display:
+                false
+            }
+
+          },
+
+          scales: {
+
+            x: {
+
+              beginAtZero:
+                true,
+
+              ticks: {
+
+                precision:
+                  0
+
+              }
+
+            }
+
+          }
+
+        }
+
+      }
+    );
+
+}
+
+
+/* =========================================================
+   CHART - BRANCH
+========================================================= */
+
+function renderEmployeeBranchChart(
+  rows
+) {
+
+  const canvas =
+    document.getElementById(
+      'employeeLocationChart'
+    );
+
+
+  if (
+    !canvas ||
+    typeof Chart === 'undefined'
+  ) {
+    return;
+  }
+
+
+  if (
+    EMPLOYEE_CHARTS.branch
+  ) {
+
+    EMPLOYEE_CHARTS
+      .branch
+      .destroy();
+
+  }
+
+
+  const cleanRows =
+    rows
+      .filter(
+        function(row) {
+          return (
+            row.branch &&
+            row.headcount > 0
+          );
+        }
+      );
+
+
+  EMPLOYEE_CHARTS.branch =
+    new Chart(
+      canvas,
+      {
+
+        type:
+          'bar',
+
+        data: {
+
+          labels:
+            cleanRows.map(
+              function(row) {
+                return row.branch;
+              }
+            ),
+
+          datasets: [
+            {
+
+              label:
+                'Headcount',
+
+              data:
+                cleanRows.map(
+                  function(row) {
+                    return row.headcount;
+                  }
+                ),
+
+              borderWidth:
+                1
+
+            }
+          ]
+
+        },
+
+        options: {
+
+          responsive:
+            true,
+
+          maintainAspectRatio:
+            false,
+
+          indexAxis:
+            'y',
+
+          plugins: {
+
+            legend: {
+              display:
+                false
+            }
+
+          },
+
+          scales: {
+
+            x: {
+
+              beginAtZero:
+                true,
+
+              ticks: {
+
+                precision:
+                  0
+
+              }
+
+            }
+
+          }
+
+        }
+
+      }
+    );
+
+}
+
+
+/* =========================================================
+   CHART - TENURE
+========================================================= */
+
+function renderEmployeeTenureChart(
+  buckets
+) {
+
+  const canvas =
+    document.getElementById(
+      'employeeTenureChart'
+    );
+
+
+  if (
+    !canvas ||
+    typeof Chart === 'undefined'
+  ) {
+    return;
+  }
+
+
+  if (
+    EMPLOYEE_CHARTS.tenure
+  ) {
+
+    EMPLOYEE_CHARTS
+      .tenure
+      .destroy();
+
+  }
+
+
+  const labels = [
+    '<1 Yr',
+    '1-3 Yrs',
+    '3-5 Yrs',
+    '5-8 Yrs',
+    '8+ Yrs'
+  ];
+
+
+  EMPLOYEE_CHARTS.tenure =
+    new Chart(
+      canvas,
+      {
+
+        type:
+          'bar',
+
+        data: {
+
+          labels:
+            labels,
+
+          datasets: [
+            {
+
+              label:
+                'Employees',
+
+              data:
+                labels.map(
+                  function(label) {
+
+                    return Number(
+                      buckets[
+                        label
+                      ] || 0
+                    );
+
+                  }
+                ),
+
+              borderWidth:
+                1
+
+            }
+          ]
+
+        },
+
+        options: {
+
+          responsive:
+            true,
+
+          maintainAspectRatio:
+            false,
+
+          plugins: {
+
+            legend: {
+              display:
+                false
+            }
+
+          },
+
+          scales: {
+
+            y: {
+
+              beginAtZero:
+                true,
+
+              ticks: {
+
+                precision:
+                  0
+
+              }
+
+            }
+
+          }
+
+        }
+
+      }
+    );
+
+}
+
+
+/* =========================================================
+   SPAN OF CONTROL
+========================================================= */
+
+function renderEmployeeSpanOfControl(
+  rows
+) {
+
+  const body =
+    document.getElementById(
+      'employeeSpanBody'
+    );
+
+
+  if (!body) {
+    return;
+  }
+
+
+  const topManagers =
+    rows
+      .filter(
+        function(row) {
+
+          return (
+            row.manager &&
+            row.manager !==
+              'Unassigned'
+          );
+
+        }
+      )
+      .slice(
+        0,
+        20
+      );
+
+
+  if (
+    !topManagers.length
+  ) {
+
+    body.innerHTML =
+      '<tr><td colspan="5">No manager data available.</td></tr>';
+
+    return;
+
+  }
+
+
+  body.innerHTML =
+    topManagers
+      .map(
+        function(row) {
+
+
+          const reports =
+            Number(
+              row.directReports || 0
+            );
+
+
+          let status =
+            'Normal';
+
+          let cls =
+            'green';
+
+
+          if (
+            reports >= 25
+          ) {
+
+            status =
+              'High';
+
+            cls =
+              'red';
+
+          }
+
+          else if (
+            reports >= 15
+          ) {
+
+            status =
+              'Watch';
+
+            cls =
+              'amber';
+
+          }
+
+
+          return `
+            <tr>
+              <td>${escapeEmployeeHtml(row.manager)}</td>
+
+              <td>${escapeEmployeeHtml(row.department || '-')}</td>
+
+              <td>${reports}</td>
+
+              <td>${Number(row.share || 0).toFixed(1)}%</td>
+
+              <td>
+                <span class="module-status ${cls}">
+                  ${status}
+                </span>
+              </td>
+            </tr>
+          `;
+
+        }
+      )
+      .join('');
+
+}
+
+
+/* =========================================================
+   EMPLOYEE MASTER
+========================================================= */
+
+function renderEmployeeMaster(
+  employees
+) {
+
+  const body =
+    document.getElementById(
+      'employeeMasterBody'
+    );
+
+
+  if (!body) {
+    return;
+  }
+
+
+  const count =
+    document.getElementById(
+      'employeeMasterCount'
+    );
+
+
+  if (count) {
+
+    count.textContent =
+      employees.length;
+
+  }
+
+
+  if (
+    !employees.length
+  ) {
+
+    body.innerHTML =
+      '<tr><td colspan="10">No employees found.</td></tr>';
+
+    return;
+
+  }
+
+
+  body.innerHTML =
+    employees
+      .map(
+        function(emp) {
+
+
+          return `
+            <tr>
+
+              <td>
+                ${escapeEmployeeHtml(emp.employeeId)}
+              </td>
+
+              <td>
+
+                <div class="employee-cell-name">
+                  ${escapeEmployeeHtml(emp.name)}
+                </div>
+
+                <div class="employee-cell-sub">
+                  ${escapeEmployeeHtml(emp.email || '')}
+                </div>
+
+              </td>
+
+              <td>
+                ${escapeEmployeeHtml(emp.designation || '-')}
+              </td>
+
+              <td>
+                ${escapeEmployeeHtml(emp.department || '-')}
+              </td>
+
+              <td>
+                ${escapeEmployeeHtml(emp.manager || '-')}
+              </td>
+
+              <td>
+                ${escapeEmployeeHtml(emp.branch || '-')}
+              </td>
+
+              <td>
+                ${escapeEmployeeHtml(emp.doj || '-')}
+              </td>
+
+              <td>
+                ${escapeEmployeeHtml(emp.tenureLabel || '-')}
+              </td>
+
+              <td>
+
+                <span class="module-status ${
+                  emp.active
+                    ? 'green'
+                    : 'red'
+                }">
+
+                  ${
+                    emp.active
+                      ? 'Active'
+                      : 'Inactive'
+                  }
+
+                </span>
+
+              </td>
+
+              <td>
+
+                <button
+                  class="module-action-btn"
+                  onclick="openEmployeeCrmProfile('${escapeEmployeeAttr(emp.employeeId)}')"
+                >
+                  View 360°
+                </button>
+
+              </td>
+
+            </tr>
+          `;
+
+        }
+      )
+      .join('');
+
+}
+
+
+/* =========================================================
+   FILTER INITIALISATION
+========================================================= */
+
+function initialiseEmployeeCrmFilters(
+  data
+) {
+
+  populateEmployeeSelect(
+    'employeeDeptFilter',
+    'All Departments',
+    (
+      data.departments ||
+      []
+    ).map(
+      function(row) {
+        return row.department;
+      }
+    )
+  );
+
+
+  populateEmployeeSelect(
+    'employeeLocationFilter',
+    'All Locations',
+    (
+      data.branches ||
+      []
+    ).map(
+      function(row) {
+        return row.branch;
+      }
+    )
+  );
+
+
+  populateEmployeeSelect(
+    'employeeManagerFilter',
+    'All Managers',
+    (
+      data.managers ||
+      []
+    )
+      .map(
+        function(row) {
+          return row.manager;
+        }
+      )
+      .filter(
+        function(name) {
+          return (
+            name &&
+            name !==
+              'Unassigned'
+          );
+        }
+      )
+  );
+
+
+  const search =
+    document.getElementById(
+      'employeeCrmSearch'
+    );
+
+
+  const dept =
+    document.getElementById(
+      'employeeDeptFilter'
+    );
+
+
+  const branch =
+    document.getElementById(
+      'employeeLocationFilter'
+    );
+
+
+  const manager =
+    document.getElementById(
+      'employeeManagerFilter'
+    );
+
+
+  const status =
+    document.getElementById(
+      'employeeStatusFilter'
+    );
+
+
+  [
+    search,
+    dept,
+    branch,
+    manager,
+    status
+  ].forEach(
+    function(el) {
+
+      if (
+        el &&
+        !el.dataset.employeeFilterBound
+      ) {
+
+        el.dataset.employeeFilterBound =
+          '1';
+
+
+        el.addEventListener(
+          el.tagName === 'INPUT'
+            ? 'input'
+            : 'change',
+          applyEmployeeCrmFilters
+        );
+
+      }
+
+    }
+  );
+
+}
+
+
+/* =========================================================
+   POPULATE SELECT
+========================================================= */
+
+function populateEmployeeSelect(
+  id,
+  firstLabel,
+  values
+) {
+
+  const select =
+    document.getElementById(
+      id
+    );
+
+
+  if (!select) {
+    return;
+  }
+
+
+  const current =
+    select.value;
+
+
+  const unique =
+    Array.from(
+      new Set(
+        values
+          .filter(Boolean)
+          .sort(
+            function(a, b) {
+              return a.localeCompare(b);
+            }
+          )
+      )
+    );
+
+
+  select.innerHTML =
+    '<option value="all">' +
+    escapeEmployeeHtml(
+      firstLabel
+    ) +
+    '</option>' +
+    unique
+      .map(
+        function(value) {
+
+          return (
+            '<option value="' +
+            escapeEmployeeAttr(value) +
+            '">' +
+            escapeEmployeeHtml(value) +
+            '</option>'
+          );
+
+        }
+      )
+      .join('');
+
+
+  if (
+    Array.from(
+      select.options
+    ).some(
+      function(option) {
+        return (
+          option.value ===
+          current
+        );
+      }
+    )
+  ) {
+
+    select.value =
+      current;
+
+  }
+
+}
+
+
+/* =========================================================
+   APPLY FILTERS
+========================================================= */
+
+function applyEmployeeCrmFilters() {
+
+  if (
+    !EMPLOYEE_CRM_DATA
+  ) {
+    return;
+  }
+
+
+  const search =
+    (
+      document.getElementById(
+        'employeeCrmSearch'
+      )?.value ||
+      ''
+    )
+      .trim()
+      .toLowerCase();
+
+
+  const department =
+    document.getElementById(
+      'employeeDeptFilter'
+    )?.value ||
+    'all';
+
+
+  const branch =
+    document.getElementById(
+      'employeeLocationFilter'
+    )?.value ||
+    'all';
+
+
+  const manager =
+    document.getElementById(
+      'employeeManagerFilter'
+    )?.value ||
+    'all';
+
+
+  const status =
+    document.getElementById(
+      'employeeStatusFilter'
+    )?.value ||
+    'all';
+
+
+  EMPLOYEE_CRM_FILTERED =
+    (
+      EMPLOYEE_CRM_DATA
+        .employees ||
+      []
+    )
+      .filter(
+        function(emp) {
+
+
+          if (
+            search
+          ) {
+
+            const haystack =
+              [
+                emp.employeeId,
+                emp.name,
+                emp.email,
+                emp.designation,
+                emp.department,
+                emp.branch,
+                emp.manager
+              ]
+                .join(' ')
+                .toLowerCase();
+
+
+            if (
+              !haystack.includes(
+                search
+              )
+            ) {
+
+              return false;
+
+            }
+
+          }
+
+
+          if (
+            department !==
+              'all' &&
+            emp.department !==
+              department
+          ) {
+
+            return false;
+
+          }
+
+
+          if (
+            branch !==
+              'all' &&
+            emp.branch !==
+              branch
+          ) {
+
+            return false;
+
+          }
+
+
+          if (
+            manager !==
+              'all' &&
+            emp.manager !==
+              manager
+          ) {
+
+            return false;
+
+          }
+
+
+          if (
+            status ===
+              'Active' &&
+            !emp.active
+          ) {
+
+            return false;
+
+          }
+
+
+          if (
+            status ===
+              'Inactive' &&
+            emp.active
+          ) {
+
+            return false;
+
+          }
+
+
+          /*
+            We don't yet have true probation status.
+            So ignore Probation rather than invent data.
+          */
+
+          if (
+            status ===
+            'Probation'
+          ) {
+
+            return false;
+
+          }
+
+
+          return true;
+
+        }
+      );
+
+
+  renderEmployeeMaster(
+    EMPLOYEE_CRM_FILTERED
+  );
+
+}
+
+
+/* =========================================================
+   EMPLOYEE 360 POPUP
+========================================================= */
+
+function openEmployeeCrmProfile(
+  employeeId
+) {
+
+  if (
+    !EMPLOYEE_CRM_DATA
+  ) {
+    return;
+  }
+
+
+  const emp =
+    (
+      EMPLOYEE_CRM_DATA
+        .employees ||
+      []
+    )
+      .find(
+        function(row) {
+
+          return (
+            row.employeeId ===
+            employeeId
+          );
+
+        }
+      );
+
+
+  if (!emp) {
+    return;
+  }
+
+
+  alert(
+    emp.name +
+    '\n\nEmployee ID: ' +
+    emp.employeeId +
+
+    '\nDesignation: ' +
+    (
+      emp.designation ||
+      '-'
+    ) +
+
+    '\nDepartment: ' +
+    (
+      emp.department ||
+      '-'
+    ) +
+
+    '\nLocation: ' +
+    (
+      emp.branch ||
+      '-'
+    ) +
+
+    '\nManager: ' +
+    (
+      emp.manager ||
+      '-'
+    ) +
+
+    '\nDOJ: ' +
+    (
+      emp.doj ||
+      '-'
+    ) +
+
+    '\nTenure: ' +
+    (
+      emp.tenureLabel ||
+      '-'
+    ) +
+
+    '\nStatus: ' +
+    (
+      emp.active
+        ? 'Active'
+        : 'Inactive'
+    )
+  );
+
+}
+
+
+/* =========================================================
+   HTML ESCAPE
+========================================================= */
+
+function escapeEmployeeHtml(
+  value
+) {
+
+  return String(
+    value ?? ''
+  )
+    .replace(
+      /&/g,
+      '&amp;'
+    )
+    .replace(
+      /</g,
+      '&lt;'
+    )
+    .replace(
+      />/g,
+      '&gt;'
+    )
+    .replace(
+      /"/g,
+      '&quot;'
+    )
+    .replace(
+      /'/g,
+      '&#039;'
+    );
+
+}
+
+
+function escapeEmployeeAttr(
+  value
+) {
+
+  return escapeEmployeeHtml(
+    value
+  );
+
+}
+
+
+/* =========================================================
+   INITIAL LOAD
+========================================================= */
+
+function initialiseEmployeeCrmLive() {
+
+  const page =
+    document.getElementById(
+      'employees'
+    );
+
+
+  if (
+    page &&
+    page.classList.contains(
+      'active'
+    )
+  ) {
+
+    loadEmployeeCrmLive(
+      false
+    );
+
+  }
+
+}
+
+
+if (
+  document.readyState ===
+  'loading'
+) {
+
+  document.addEventListener(
+    'DOMContentLoaded',
+    initialiseEmployeeCrmLive
+  );
+
+} else {
+
+  initialiseEmployeeCrmLive();
+
+}
