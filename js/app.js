@@ -64,6 +64,24 @@ function navigate(page) {
     top: 0,
     behavior: 'smooth'
   });
+
+  if (
+    page === 'attendance' &&
+    typeof loadAttendanceLive === 'function'
+  ) {
+    setTimeout(function() {
+      loadAttendanceLive(false);
+    }, 50);
+  }
+
+  if (
+    page === 'learning' &&
+    typeof loadLndLive === 'function'
+  ) {
+    setTimeout(function() {
+      loadLndLive(false);
+    }, 50);
+  }
 }
 
 document.querySelectorAll('.nav-item').forEach(btn => {
@@ -610,105 +628,6 @@ function refreshRecruitmentDashboard() {
 if (window.innerWidth > 760) {
   document.body.classList.add('sidebar-collapsed');
 }
-
-/* =========================
-   ATTENDANCE
-========================= */
-
-document.getElementById('attendanceKpis').innerHTML = [
-
-  kpi(
-    'Overall Attendance',
-    '93.4%',
-    'Jul MTD'
-  ),
-
-  kpi(
-    'Plant Absenteeism',
-    '11.2%',
-    'Mon/Fri pattern',
-    'warn'
-  ),
-
-  kpi(
-    'Pending Leave Approvals',
-    '18',
-    'Awaiting manager action'
-  ),
-
-  kpi(
-    'Regularisation',
-    '98',
-    '▼ 14.8% MoM'
-  )
-
-].join('');
-
-
-makeLineChart(
-  'attendanceChart',
-  ['Apr', 'May', 'Jun', 'Jul', 'Aug'],
-  [93.0, 93.1, 93.2, 93.4, 93.6],
-  'Attendance %'
-);
-
-
-document.getElementById('attendanceIssues').innerHTML = [
-
-  [
-    'Plant absenteeism',
-    '11.2%',
-    'red'
-  ],
-
-  [
-    'Late arrivals',
-    '142 MTD',
-    'amber'
-  ],
-
-  [
-    'Regularisation requests',
-    '98',
-    'amber'
-  ],
-
-  [
-    'Pending leave approvals',
-    '18',
-    'amber'
-  ]
-
-].map(i => `
-
-  <div class="issue-row">
-
-    <div>
-
-      <div class="health-name">
-        ${i[0]}
-      </div>
-
-      <div class="health-meta">
-        ${i[1]}
-      </div>
-
-    </div>
-
-
-    <span
-      class="status-pill
-      status-${i[2] === 'red' ? 'red' : 'yellow'}"
-    >
-
-      ${i[2] === 'red' ? 'Critical' : 'Watch'}
-
-    </span>
-
-  </div>
-
-`).join('');
-
 
 /* =========================
    PERFORMANCE
@@ -3672,432 +3591,1906 @@ function renderEmployeeStructureCharts(){
 }
 
 
-/* ATTENDANCE */
+/* =========================================================
+   KEKA ATTENDANCE - LIVE DASHBOARD
+========================================================= */
 
-function renderAttendanceStructureCharts(){
+const ATTENDANCE_API_URL =
+  'https://script.google.com/macros/s/AKfycbxWzFltc06j3OmPFG62gtuvbj_SumQe3dvbPCcc5BurhqyXeeqRTXJjutzNKStXSJl-/exec';
 
-  createStructureChart(
-    'attendanceTrendChart',
-    {
 
-      type:'line',
+let attendancePayload = null;
+let attendanceLoaded = false;
+let attendanceRequestTimer = null;
 
-      data:{
+const ATTENDANCE_CHARTS = {};
 
-        labels:[
-          'Mon',
-          'Tue',
-          'Wed',
-          'Thu',
-          'Fri',
-          'Sat'
-        ],
 
-        datasets:[{
+/* =========================================================
+   HELPERS
+========================================================= */
 
-          label:'Attendance %',
+function attendanceNumber(value) {
 
-          data:[
-            91.8,
-            93.1,
-            94.2,
-            93.8,
-            92.5,
-            95.0
-          ],
+  const num = Number(value);
 
-          borderColor:
-            '#17616e',
+  return Number.isFinite(num)
+    ? num
+    : 0;
 
-          backgroundColor:
-            'rgba(23,97,110,.08)',
+}
 
-          fill:true,
 
-          tension:.4,
+function attendanceFormatNumber(value) {
 
-          pointRadius:3
+  return attendanceNumber(value)
+    .toLocaleString('en-IN');
 
-        }]
+}
+
+
+function attendanceEscape(value) {
+
+  return String(
+    value === undefined ||
+    value === null
+      ? ''
+      : value
+  )
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+
+}
+
+
+function setAttendanceStatus(
+  text,
+  type = ''
+) {
+
+  const el =
+    document.getElementById(
+      'attendanceLiveStatus'
+    );
+
+  if (!el) return;
+
+  el.textContent = text;
+
+  el.classList.remove(
+    'live',
+    'error'
+  );
+
+  if (type) {
+    el.classList.add(type);
+  }
+
+}
+
+
+function destroyAttendanceChart(id) {
+
+  /*
+    Destroy our stored chart
+  */
+
+  if (ATTENDANCE_CHARTS[id]) {
+
+    ATTENDANCE_CHARTS[id]
+      .destroy();
+
+    delete ATTENDANCE_CHARTS[id];
+
+  }
+
+
+  /*
+    Also destroy any old placeholder Chart.js
+    instance already attached to this canvas.
+  */
+
+  if (
+    typeof Chart !== 'undefined' &&
+    typeof Chart.getChart === 'function'
+  ) {
+
+    const existing =
+      Chart.getChart(id);
+
+    if (existing) {
+      existing.destroy();
+    }
+
+  }
+
+}
+
+
+/* =========================================================
+   LOAD LIVE DATA
+========================================================= */
+
+function loadAttendanceLive(
+  force = false
+) {
+
+  if (
+    attendanceLoaded &&
+    !force
+  ) {
+
+    renderLiveAttendanceDashboard();
+    return;
+
+  }
+
+
+  setAttendanceStatus(
+    'Connecting...'
+  );
+
+
+  const oldScript =
+    document.getElementById(
+      'attendanceJsonpScript'
+    );
+
+  if (oldScript) {
+    oldScript.remove();
+  }
+
+
+  if (attendanceRequestTimer) {
+
+    clearTimeout(
+      attendanceRequestTimer
+    );
+
+  }
+
+
+  window.receiveAttendanceData =
+    function(payload) {
+
+      if (attendanceRequestTimer) {
+
+        clearTimeout(
+          attendanceRequestTimer
+        );
+
+      }
+
+
+      try {
+
+        console.log(
+          'Attendance API response:',
+          payload
+        );
+
+
+        if (
+          !payload ||
+          payload.ok !== true
+        ) {
+
+          throw new Error(
+            payload?.error ||
+            'Invalid attendance response'
+          );
+
+        }
+
+
+        if (
+          !payload.summary ||
+          !Array.isArray(
+            payload.departments
+          ) ||
+          !Array.isArray(
+            payload.daily
+          )
+        ) {
+
+          throw new Error(
+            'Attendance response structure is incomplete'
+          );
+
+        }
+
+
+        attendancePayload =
+          payload;
+
+        attendanceLoaded =
+          true;
+
+
+        setAttendanceStatus(
+          '● Live',
+          'live'
+        );
+
+
+        initialiseAttendanceFilters();
+
+        renderLiveAttendanceDashboard();
+
+
+        console.log(
+          'Attendance dashboard loaded:',
+          payload.attendanceRecordCount,
+          'records'
+        );
+
+
+      } catch (error) {
+
+        console.error(
+          'Attendance processing error:',
+          error
+        );
+
+
+        setAttendanceStatus(
+          'Data Error',
+          'error'
+        );
+
+      }
+
+    };
+
+
+  const script =
+    document.createElement(
+      'script'
+    );
+
+
+  script.id =
+    'attendanceJsonpScript';
+
+  script.async =
+    true;
+
+
+  script.src =
+    ATTENDANCE_API_URL +
+    '?callback=receiveAttendanceData&_=' +
+    Date.now();
+
+
+  script.onerror =
+    function(error) {
+
+      console.error(
+        'Attendance API connection failed:',
+        error
+      );
+
+
+      setAttendanceStatus(
+        'Connection Failed',
+        'error'
+      );
+
+    };
+
+
+  document.body.appendChild(
+    script
+  );
+
+
+  attendanceRequestTimer =
+    setTimeout(
+      function() {
+
+        if (!attendanceLoaded) {
+
+          setAttendanceStatus(
+            'Connection Timeout',
+            'error'
+          );
+
+        }
 
       },
+      20000
+    );
 
-      options:{
+}
 
-        responsive:true,
-        maintainAspectRatio:false,
 
-        plugins:{
-          legend:{
-            display:false
-          }
+/* =========================================================
+   FILTERS
+========================================================= */
+
+function initialiseAttendanceFilters() {
+
+  if (!attendancePayload) {
+    return;
+  }
+
+
+  const deptSelect =
+    document.getElementById(
+      'attendanceDeptFilter'
+    );
+
+  const branchSelect =
+    document.getElementById(
+      'attendanceLocationFilter'
+    );
+
+
+  if (deptSelect) {
+
+    const current =
+      deptSelect.value || 'all';
+
+
+    deptSelect.innerHTML =
+      '<option value="all">All Departments</option>' +
+
+      attendancePayload.departments
+
+        .map(
+          row =>
+            row.department
+        )
+
+        .filter(Boolean)
+
+        .sort()
+
+        .map(
+          name => `
+
+            <option value="${attendanceEscape(name)}">
+              ${attendanceEscape(name)}
+            </option>
+
+          `
+        )
+
+        .join('');
+
+
+    deptSelect.value =
+      [...deptSelect.options]
+        .some(
+          option =>
+            option.value === current
+        )
+        ? current
+        : 'all';
+
+  }
+
+
+  if (branchSelect) {
+
+    const current =
+      branchSelect.value || 'all';
+
+
+    const branches =
+      Array.isArray(
+        attendancePayload.branches
+      )
+        ? attendancePayload.branches
+        : [];
+
+
+    branchSelect.innerHTML =
+      '<option value="all">All Locations / Branches</option>' +
+
+      branches
+
+        .map(
+          row =>
+            row.branch
+        )
+
+        .filter(Boolean)
+
+        .sort()
+
+        .map(
+          name => `
+
+            <option value="${attendanceEscape(name)}">
+              ${attendanceEscape(name)}
+            </option>
+
+          `
+        )
+
+        .join('');
+
+
+    branchSelect.value =
+      [...branchSelect.options]
+        .some(
+          option =>
+            option.value === current
+        )
+        ? current
+        : 'all';
+
+  }
+
+
+  /*
+    Current API is aggregated and does not yet
+    return manager-level summaries.
+
+    Keep Manager filter disabled rather than
+    showing misleading results.
+  */
+
+  const managerSelect =
+    document.getElementById(
+      'attendanceManagerFilter'
+    );
+
+  if (managerSelect) {
+
+    managerSelect.innerHTML =
+      '<option value="all">All Managers</option>';
+
+    managerSelect.disabled =
+      true;
+
+    managerSelect.title =
+      'Manager filter will be enabled when manager-level API aggregation is added.';
+
+  }
+
+
+  /*
+    Status filter is also not required because
+    the API summary already contains Present /
+    Absent / Other aggregate values.
+  */
+
+  const statusSelect =
+    document.getElementById(
+      'attendanceStatusFilter'
+    );
+
+  if (statusSelect) {
+
+    statusSelect.disabled =
+      true;
+
+    statusSelect.title =
+      'Status filtering will be enabled with record-level filtering.';
+
+  }
+
+
+  /*
+    Current API returns all available dates.
+    Period selection is therefore temporarily
+    informational only.
+  */
+
+  const periodSelect =
+    document.getElementById(
+      'attendancePeriodFilter'
+    );
+
+  if (periodSelect) {
+
+    periodSelect.disabled =
+      true;
+
+    periodSelect.title =
+      'Period filter will be enabled in the next API version.';
+
+  }
+
+
+  /*
+    Re-render department-related view
+    when filter changes.
+  */
+
+  if (
+    deptSelect &&
+    !deptSelect.dataset.liveBound
+  ) {
+
+    deptSelect.addEventListener(
+      'change',
+      renderLiveAttendanceDashboard
+    );
+
+    deptSelect.dataset.liveBound =
+      '1';
+
+  }
+
+
+  if (
+    branchSelect &&
+    !branchSelect.dataset.liveBound
+  ) {
+
+    branchSelect.addEventListener(
+      'change',
+      renderLiveAttendanceDashboard
+    );
+
+    branchSelect.dataset.liveBound =
+      '1';
+
+  }
+
+}
+
+
+/* =========================================================
+   MAIN RENDER
+========================================================= */
+
+function renderLiveAttendanceDashboard() {
+
+  if (!attendancePayload) {
+    return;
+  }
+
+
+  renderAttendanceKpis();
+
+  renderAttendanceTrendChart();
+
+  renderAttendanceMixChart();
+
+  renderAttendanceDepartmentChart();
+
+  renderAttendanceBranchChart();
+
+  renderAttendanceDepartmentTable();
+
+  renderAttendanceExceptionTable();
+
+}
+
+
+/* =========================================================
+   KPI CARDS
+========================================================= */
+
+function setAttendanceKpi(
+  id,
+  value
+) {
+
+  const el =
+    document.getElementById(id);
+
+  if (el) {
+    el.innerHTML = value;
+  }
+
+}
+
+
+function renderAttendanceKpis() {
+
+  const data =
+    attendancePayload;
+
+  const summary =
+    data.summary || {};
+
+
+  setAttendanceKpi(
+    'attKpiOverall',
+    attendanceNumber(
+      summary.attendancePercent
+    ).toFixed(1) + '%'
+  );
+
+
+  setAttendanceKpi(
+    'attKpiPresent',
+    attendanceFormatNumber(
+      summary.present
+    )
+  );
+
+
+  setAttendanceKpi(
+    'attKpiAbsent',
+    attendanceFormatNumber(
+      summary.absent
+    )
+  );
+
+
+  /*
+    Third card:
+    use API "other" records.
+  */
+
+  setAttendanceKpi(
+    'attKpiLeave',
+    attendanceFormatNumber(
+      summary.other
+    )
+  );
+
+
+  /*
+    Fourth card:
+    late attendance records.
+  */
+
+  setAttendanceKpi(
+    'attKpiLeaveRequests',
+    attendanceFormatNumber(
+      summary.lateCount
+    )
+  );
+
+
+  /*
+    Avg effective hours.
+  */
+
+  setAttendanceKpi(
+    'attKpiRegularisation',
+    attendanceNumber(
+      summary.avgEffectiveHours
+    ).toFixed(2) +
+    ' <span>hrs</span>'
+  );
+
+
+  /*
+    Employees.
+  */
+
+  setAttendanceKpi(
+    'attKpiLiability',
+    attendanceFormatNumber(
+      data.employeeCount
+    )
+  );
+
+
+  /*
+    Attendance records.
+  */
+
+  setAttendanceKpi(
+    'attKpiExceptions',
+    attendanceFormatNumber(
+      data.attendanceRecordCount
+    )
+  );
+
+}
+
+
+/* =========================================================
+   DAILY ATTENDANCE TREND
+========================================================= */
+
+function renderAttendanceTrendChart() {
+
+  const canvas =
+    document.getElementById(
+      'attendanceTrendChart'
+    );
+
+  if (
+    !canvas ||
+    typeof Chart === 'undefined'
+  ) {
+    return;
+  }
+
+
+  destroyAttendanceChart(
+    'attendanceTrendChart'
+  );
+
+
+  const rows =
+    [...attendancePayload.daily]
+      .sort(
+        (a, b) =>
+          String(a.date)
+            .localeCompare(
+              String(b.date)
+            )
+      );
+
+
+  /*
+    Keep most recent 30 dates in the chart.
+  */
+
+  const recent =
+    rows.slice(-30);
+
+
+  ATTENDANCE_CHARTS[
+    'attendanceTrendChart'
+  ] =
+    new Chart(
+      canvas,
+      {
+
+        type: 'line',
+
+        data: {
+
+          labels:
+            recent.map(
+              row => {
+
+                const d =
+                  new Date(
+                    row.date + 'T00:00:00'
+                  );
+
+                if (
+                  Number.isNaN(
+                    d.getTime()
+                  )
+                ) {
+                  return row.date;
+                }
+
+                return d.toLocaleDateString(
+                  'en-IN',
+                  {
+                    day: '2-digit',
+                    month: 'short'
+                  }
+                );
+
+              }
+            ),
+
+          datasets: [
+
+            {
+
+              label:
+                'Attendance %',
+
+              data:
+                recent.map(
+                  row =>
+                    attendanceNumber(
+                      row.attendancePercent
+                    )
+                ),
+
+              borderColor:
+                '#17616e',
+
+              backgroundColor:
+                'rgba(23,97,110,.08)',
+
+              fill: true,
+
+              tension: 0.35,
+
+              pointRadius: 2,
+
+              pointHoverRadius: 4,
+
+              borderWidth: 2.2
+
+            }
+
+          ]
+
         },
 
-        scales:{
 
-          x:{
-            grid:{
-              display:false
-            }
+        options: {
+
+          responsive: true,
+
+          maintainAspectRatio:
+            false,
+
+          interaction: {
+            intersect: false,
+            mode: 'index'
           },
 
-          y:{
-            min:80,
-            max:100,
-            grid:{
-              color:'#eef2f3'
+          plugins: {
+
+            legend: {
+              display: false
             },
 
-            ticks:{
-              callback:
-                value =>
-                  value + '%'
+            tooltip: {
+
+              callbacks: {
+
+                label:
+                  context =>
+                    context.parsed.y
+                      .toFixed(1) +
+                    '%'
+
+              }
+
             }
+
+          },
+
+          scales: {
+
+            x: {
+
+              grid: {
+                display: false
+              }
+
+            },
+
+            y: {
+
+              beginAtZero: true,
+
+              max: 100,
+
+              ticks: {
+
+                callback:
+                  value =>
+                    value + '%'
+
+              },
+
+              grid: {
+
+                color:
+                  'rgba(15,68,78,.07)'
+
+              }
+
+            }
+
           }
 
         }
 
       }
+    );
 
-    }
+}
+
+
+/* =========================================================
+   PRESENT / ABSENT / OTHER
+========================================================= */
+
+function renderAttendanceMixChart() {
+
+  const canvas =
+    document.getElementById(
+      'attendanceMixChart'
+    );
+
+  if (
+    !canvas ||
+    typeof Chart === 'undefined'
+  ) {
+    return;
+  }
+
+
+  destroyAttendanceChart(
+    'attendanceMixChart'
   );
 
 
-  createStructureChart(
-    'attendanceMixChart',
-    {
+  const summary =
+    attendancePayload.summary;
 
-      type:'doughnut',
 
-      data:{
+  ATTENDANCE_CHARTS[
+    'attendanceMixChart'
+  ] =
+    new Chart(
+      canvas,
+      {
 
-        labels:[
-          'Present',
-          'Absent',
-          'Leave'
-        ],
+        type: 'doughnut',
 
-        datasets:[{
+        data: {
 
-          data:[
-            421,
-            18,
-            19
+          labels: [
+            'Present',
+            'Absent',
+            'Other'
           ],
 
-          backgroundColor:[
-            '#70ad47',
-            '#c22a4d',
-            '#3875b7'
-          ],
+          datasets: [
 
-          borderWidth:0
+            {
 
-        }]
+              data: [
 
-      },
+                attendanceNumber(
+                  summary.present
+                ),
 
-      options:{
+                attendanceNumber(
+                  summary.absent
+                ),
 
-        responsive:true,
-        maintainAspectRatio:false,
+                attendanceNumber(
+                  summary.other
+                )
 
-        cutout:'68%',
+              ],
 
-        plugins:{
+              backgroundColor: [
+                '#70ad47',
+                '#c22a4d',
+                '#899ba0'
+              ],
 
-          legend:{
-            position:'bottom'
-          }
+              borderWidth: 0
 
-        }
+            }
 
-      }
+          ]
 
-    }
-  );
-
-
-  createStructureChart(
-    'attendanceDeptChart',
-    {
-
-      type:'bar',
-
-      data:{
-
-        labels:[
-          'Sales',
-          'Service',
-          'Admin',
-          'Assembly',
-          'Warehouse'
-        ],
-
-        datasets:[{
-
-          data:[
-            92.4,
-            88.1,
-            95.2,
-            91.5,
-            90.8
-          ],
-
-          backgroundColor:
-            '#17616e',
-
-          borderRadius:5
-
-        }]
-
-      },
-
-      options:{
-
-        responsive:true,
-        maintainAspectRatio:false,
-
-        plugins:{
-          legend:{
-            display:false
-          }
         },
 
-        scales:{
 
-          x:{
-            grid:{
-              display:false
+        options: {
+
+          responsive: true,
+
+          maintainAspectRatio:
+            false,
+
+          cutout: '68%',
+
+          plugins: {
+
+            legend: {
+              position: 'bottom'
             }
+
+          }
+
+        }
+
+      }
+    );
+
+}
+
+
+/* =========================================================
+   DEPARTMENT CHART
+========================================================= */
+
+function getSelectedDepartment() {
+
+  const el =
+    document.getElementById(
+      'attendanceDeptFilter'
+    );
+
+  return el
+    ? el.value
+    : 'all';
+
+}
+
+
+function renderAttendanceDepartmentChart() {
+
+  const canvas =
+    document.getElementById(
+      'attendanceDeptChart'
+    );
+
+  if (
+    !canvas ||
+    typeof Chart === 'undefined'
+  ) {
+    return;
+  }
+
+
+  destroyAttendanceChart(
+    'attendanceDeptChart'
+  );
+
+
+  let departments =
+    [...attendancePayload.departments];
+
+
+  const selected =
+    getSelectedDepartment();
+
+
+  if (selected !== 'all') {
+
+    departments =
+      departments.filter(
+        row =>
+          row.department ===
+          selected
+      );
+
+  }
+
+
+  /*
+    Sort high to low.
+  */
+
+  departments.sort(
+    (a, b) =>
+      attendanceNumber(
+        b.attendancePercent
+      )
+      -
+      attendanceNumber(
+        a.attendancePercent
+      )
+  );
+
+
+  ATTENDANCE_CHARTS[
+    'attendanceDeptChart'
+  ] =
+    new Chart(
+      canvas,
+      {
+
+        type: 'bar',
+
+        data: {
+
+          labels:
+            departments.map(
+              row =>
+                row.department
+            ),
+
+          datasets: [
+
+            {
+
+              label:
+                'Attendance %',
+
+              data:
+                departments.map(
+                  row =>
+                    attendanceNumber(
+                      row.attendancePercent
+                    )
+                ),
+
+              backgroundColor:
+                '#17616e',
+
+              borderRadius: 5,
+
+              maxBarThickness: 30
+
+            }
+
+          ]
+
+        },
+
+
+        options: {
+
+          indexAxis:
+            departments.length > 6
+              ? 'y'
+              : 'x',
+
+          responsive: true,
+
+          maintainAspectRatio:
+            false,
+
+          plugins: {
+
+            legend: {
+              display: false
+            }
+
           },
 
-          y:{
-            beginAtZero:true,
-            max:100,
+          scales: {
 
-            ticks:{
-              callback:
-                value =>
-                  value + '%'
+            x: {
+
+              beginAtZero: true,
+
+              grid: {
+                display: false
+              }
+
             },
 
-            grid:{
-              color:'#eef2f3'
+            y: {
+
+              beginAtZero: true,
+
+              grid: {
+
+                color:
+                  'rgba(15,68,78,.06)'
+
+              }
+
             }
+
           }
 
         }
 
       }
+    );
 
-    }
+}
+
+
+/* =========================================================
+   BRANCH CHART
+
+   We reuse attendanceLeaveMixChart canvas because leave data
+   is not available in the current API.
+========================================================= */
+
+function renderAttendanceBranchChart() {
+
+  const canvas =
+    document.getElementById(
+      'attendanceLeaveMixChart'
+    );
+
+  if (
+    !canvas ||
+    typeof Chart === 'undefined'
+  ) {
+    return;
+  }
+
+
+  destroyAttendanceChart(
+    'attendanceLeaveMixChart'
   );
 
 
-  createStructureChart(
-    'attendanceLeaveMixChart',
-    {
+  let branches =
+    Array.isArray(
+      attendancePayload.branches
+    )
+      ? [...attendancePayload.branches]
+      : [];
 
-      type:'doughnut',
 
-      data:{
+  const branchFilter =
+    document.getElementById(
+      'attendanceLocationFilter'
+    );
 
-        labels:[
-          'Earned Leave',
-          'Sick Leave',
-          'Casual Leave',
-          'Other'
-        ],
 
-        datasets:[{
+  if (
+    branchFilter &&
+    branchFilter.value !== 'all'
+  ) {
 
-          data:[
-            36.9,
-            22.5,
-            20.1,
-            20.5
-          ],
+    branches =
+      branches.filter(
+        row =>
+          row.branch ===
+          branchFilter.value
+      );
 
-          backgroundColor:[
-            '#17616e',
-            '#3875b7',
-            '#ffc000',
-            '#ca477b'
-          ],
+  }
 
-          borderWidth:0
 
-        }]
+  branches.sort(
+    (a, b) =>
+      attendanceNumber(
+        b.attendancePercent
+      )
+      -
+      attendanceNumber(
+        a.attendancePercent
+      )
+  );
 
-      },
 
-      options:{
+  ATTENDANCE_CHARTS[
+    'attendanceLeaveMixChart'
+  ] =
+    new Chart(
+      canvas,
+      {
 
-        responsive:true,
-        maintainAspectRatio:false,
+        type: 'bar',
 
-        cutout:'62%',
+        data: {
 
-        plugins:{
-          legend:{
-            position:'bottom'
+          labels:
+            branches.map(
+              row =>
+                row.branch
+            ),
+
+          datasets: [
+
+            {
+
+              label:
+                'Attendance %',
+
+              data:
+                branches.map(
+                  row =>
+                    attendanceNumber(
+                      row.attendancePercent
+                    )
+                ),
+
+              backgroundColor:
+                '#3875b7',
+
+              borderRadius: 5,
+
+              maxBarThickness: 30
+
+            }
+
+          ]
+
+        },
+
+
+        options: {
+
+          indexAxis:
+            branches.length > 6
+              ? 'y'
+              : 'x',
+
+          responsive: true,
+
+          maintainAspectRatio:
+            false,
+
+          plugins: {
+
+            legend: {
+              display: false
+            }
+
           }
+
         }
 
       }
+    );
 
-    }
+}
+
+
+/* =========================================================
+   DEPARTMENT TABLE
+========================================================= */
+
+function renderAttendanceDepartmentTable() {
+
+  const tbody =
+    document.getElementById(
+      'attendanceDeptBody'
+    );
+
+  if (!tbody) {
+    return;
+  }
+
+
+  let rows =
+    [...attendancePayload.departments];
+
+
+  const selected =
+    getSelectedDepartment();
+
+
+  if (
+    selected !== 'all'
+  ) {
+
+    rows =
+      rows.filter(
+        row =>
+          row.department ===
+          selected
+      );
+
+  }
+
+
+  rows.sort(
+    (a, b) =>
+      attendanceNumber(
+        b.attendancePercent
+      )
+      -
+      attendanceNumber(
+        a.attendancePercent
+      )
   );
 
 
-  createStructureChart(
+  tbody.innerHTML =
+    rows.map(
+      row => {
+
+        const pct =
+          attendanceNumber(
+            row.attendancePercent
+          );
+
+
+        let cls =
+          'green';
+
+        let status =
+          'Healthy';
+
+
+        if (pct < 80) {
+
+          cls =
+            'red';
+
+          status =
+            'Critical';
+
+        } else if (
+          pct < 90
+        ) {
+
+          cls =
+            'amber';
+
+          status =
+            'Watch';
+
+        }
+
+
+        return `
+
+          <tr>
+
+            <td>
+              ${attendanceEscape(
+                row.department
+              )}
+            </td>
+
+            <td>
+              ${attendanceFormatNumber(
+                row.total
+              )}
+            </td>
+
+            <td>
+              <strong>
+                ${pct.toFixed(1)}%
+              </strong>
+            </td>
+
+            <td>
+              ${attendanceFormatNumber(
+                row.present
+              )}
+            </td>
+
+            <td>
+              ${attendanceFormatNumber(
+                row.absent
+              )}
+            </td>
+
+            <td>
+              ${attendanceFormatNumber(
+                row.other
+              )}
+            </td>
+
+            <td>
+
+              <span
+                class="module-status ${cls}"
+              >
+                ${status}
+              </span>
+
+            </td>
+
+          </tr>
+
+        `;
+
+      }
+    )
+    .join('');
+
+}
+
+
+/* =========================================================
+   EXCEPTION TABLE
+========================================================= */
+
+function renderAttendanceExceptionTable() {
+
+  const tbody =
+    document.getElementById(
+      'attendanceExceptionBody'
+    );
+
+  if (!tbody) {
+    return;
+  }
+
+
+  let rows =
+    Array.isArray(
+      attendancePayload.exceptions
+    )
+      ? [...attendancePayload.exceptions]
+      : [];
+
+
+  const department =
+    getSelectedDepartment();
+
+
+  if (
+    department !== 'all'
+  ) {
+
+    rows =
+      rows.filter(
+        row =>
+          row.department ===
+          department
+      );
+
+  }
+
+
+  const branchFilter =
+    document.getElementById(
+      'attendanceLocationFilter'
+    );
+
+
+  if (
+    branchFilter &&
+    branchFilter.value !== 'all'
+  ) {
+
+    rows =
+      rows.filter(
+        row =>
+          row.branch ===
+          branchFilter.value
+      );
+
+  }
+
+
+  const counter =
+    document.getElementById(
+      'attendanceExceptionCount'
+    );
+
+  if (counter) {
+
+    counter.textContent =
+      attendanceFormatNumber(
+        rows.length
+      );
+
+  }
+
+
+  if (!rows.length) {
+
+    tbody.innerHTML = `
+
+      <tr>
+
+        <td
+          colspan="8"
+          style="
+            text-align:center;
+            padding:24px;
+            color:#81979d;
+          "
+        >
+          No attendance exceptions found.
+        </td>
+
+      </tr>
+
+    `;
+
+    return;
+
+  }
+
+
+  tbody.innerHTML =
+    rows
+
+      .slice(0, 100)
+
+      .map(
+        row => {
+
+          const pct =
+            attendanceNumber(
+              row.attendancePercent
+            );
+
+
+          let cls =
+            'amber';
+
+          let issue =
+            'Attendance Watch';
+
+
+          if (pct < 75) {
+
+            cls =
+              'red';
+
+            issue =
+              'Low Attendance';
+
+          }
+
+
+          return `
+
+            <tr>
+
+              <td>
+
+                <div class="employee-cell-name">
+
+                  ${attendanceEscape(
+                    row.employeeName
+                  )}
+
+                </div>
+
+                <div class="employee-cell-sub">
+
+                  ${attendanceEscape(
+                    row.employeeNumber
+                  )}
+
+                </div>
+
+              </td>
+
+
+              <td>
+                ${attendanceEscape(
+                  row.department
+                )}
+              </td>
+
+
+              <td>
+                ${attendanceEscape(
+                  row.manager || '-'
+                )}
+              </td>
+
+
+              <td>
+
+                <strong>
+                  ${pct.toFixed(1)}%
+                </strong>
+
+              </td>
+
+
+              <td>
+                ${attendanceFormatNumber(
+                  row.absent
+                )}
+              </td>
+
+
+              <td>
+                ${attendanceFormatNumber(
+                  row.other
+                )}
+              </td>
+
+
+              <td>
+
+                <span
+                  class="module-status ${cls}"
+                >
+                  ${issue}
+                </span>
+
+              </td>
+
+
+              <td>
+
+                <button
+                  type="button"
+                  class="module-action-btn"
+                  onclick="openAttendanceEmployee('${attendanceEscape(
+                    row.employeeNumber
+                  )}')"
+                >
+                  View
+                </button>
+
+              </td>
+
+            </tr>
+
+          `;
+
+        }
+      )
+
+      .join('');
+
+}
+
+
+/* =========================================================
+   TEMPORARY UNUSED CHARTS
+========================================================= */
+
+/*
+The current Keka API does not contain actual leave data.
+
+So instead of showing fake leave usage / regularisation charts,
+we show a clear placeholder.
+*/
+
+function renderAttendanceUnavailableSections() {
+
+  [
     'leaveUsageChart',
-    {
+    'regularisationTrendChart'
+  ]
+  .forEach(
+    id => {
 
-      type:'bar',
+      const canvas =
+        document.getElementById(id);
 
-      data:{
+      if (!canvas) {
+        return;
+      }
 
-        labels:[
-          'Apr',
-          'May',
-          'Jun',
-          'Jul',
-          'Aug',
-          'Sep'
-        ],
 
-        datasets:[{
+      const parent =
+        canvas.parentElement;
 
-          data:[
-            920,
-            1015,
-            1108,
-            1190,
-            1050,
-            980
-          ],
+      if (!parent) {
+        return;
+      }
 
-          backgroundColor:
-            '#3875b7',
 
-          borderRadius:5
+      canvas.style.display =
+        'none';
 
-        }]
 
-      },
+      let note =
+        parent.querySelector(
+          '.attendance-api-note'
+        );
 
-      options:{
 
-        responsive:true,
-        maintainAspectRatio:false,
+      if (!note) {
 
-        plugins:{
-          legend:{
-            display:false
-          }
-        },
+        note =
+          document.createElement(
+            'div'
+          );
 
-        scales:{
+        note.className =
+          'attendance-api-note';
 
-          x:{
-            grid:{
-              display:false
-            }
-          },
+        note.style.cssText = `
+          min-height:220px;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          text-align:center;
+          color:#81979d;
+          font-size:12px;
+          padding:24px;
+        `;
 
-          y:{
-            beginAtZero:true,
-            grid:{
-              color:'#eef2f3'
-            }
-          }
+        note.innerHTML =
+          'Leave API data not connected yet.';
 
-        }
+        parent.appendChild(
+          note
+        );
 
       }
 
     }
   );
 
+}
 
-  createStructureChart(
-    'regularisationTrendChart',
-    {
 
-      type:'line',
+/* =========================================================
+   EMPLOYEE DETAIL
+========================================================= */
 
-      data:{
+function openAttendanceEmployee(
+  employeeNumber
+) {
 
-        labels:[
-          'Apr',
-          'May',
-          'Jun',
-          'Jul',
-          'Aug',
-          'Sep'
-        ],
+  if (!attendancePayload) {
+    return;
+  }
 
-        datasets:[{
 
-          data:[
-            72,
-            81,
-            76,
-            94,
-            98,
-            86
-          ],
+  const employee =
+    attendancePayload.exceptions
+      ?.find(
+        row =>
+          String(
+            row.employeeNumber
+          ) ===
+          String(
+            employeeNumber
+          )
+      );
 
-          borderColor:
-            '#7a5cb8',
 
-          backgroundColor:
-            'rgba(122,92,184,.08)',
+  if (!employee) {
 
-          fill:true,
+    alert(
+      'Employee attendance detail is not available in the current aggregate response.'
+    );
 
-          tension:.4,
+    return;
 
-          pointRadius:3
+  }
 
-        }]
 
-      },
+  alert(
 
-      options:{
+    employee.employeeName +
 
-        responsive:true,
-        maintainAspectRatio:false,
+    '\n\nEmployee ID: ' +
+    employee.employeeNumber +
 
-        plugins:{
-          legend:{
-            display:false
-          }
-        },
+    '\nDepartment: ' +
+    (
+      employee.department ||
+      '-'
+    ) +
 
-        scales:{
+    '\nBranch: ' +
+    (
+      employee.branch ||
+      '-'
+    ) +
 
-          x:{
-            grid:{
-              display:false
-            }
-          },
+    '\nManager: ' +
+    (
+      employee.manager ||
+      '-'
+    ) +
 
-          y:{
-            beginAtZero:true,
-            grid:{
-              color:'#eef2f3'
-            }
-          }
+    '\nAttendance: ' +
+    employee.attendancePercent +
+    '%' +
 
-        }
+    '\nPresent Records: ' +
+    employee.present +
 
-      }
+    '\nAbsent Records: ' +
+    employee.absent
 
-    }
   );
+
+}
+
+
+/* =========================================================
+   LOAD WHEN ATTENDANCE TAB IS OPEN
+========================================================= */
+
+function initialiseLiveAttendance() {
+
+  renderAttendanceUnavailableSections();
+
+
+  const attendancePage =
+    document.getElementById(
+      'attendance'
+    );
+
+
+  /*
+    If Attendance happens to be the initial page,
+    load immediately.
+  */
+
+  if (
+    attendancePage &&
+    attendancePage.classList.contains(
+      'active'
+    )
+  ) {
+
+    loadAttendanceLive(false);
+
+  }
+
+}
+
+
+if (
+  document.readyState ===
+  'loading'
+) {
+
+  document.addEventListener(
+    'DOMContentLoaded',
+    initialiseLiveAttendance
+  );
+
+} else {
+
+  initialiseLiveAttendance();
 
 }
 
