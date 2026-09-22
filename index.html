@@ -312,16 +312,20 @@
 
     <div class="module-header-actions">
 
-      <div class="module-live-pill">
-        ● Structure Ready
-      </div>
+      <div
+  id="employeeLiveStatus"
+  class="module-live-pill"
+>
+  Connecting...
+</div>
 
-      <button
-        class="module-refresh-btn"
-        type="button"
-      >
-        Employee Data Next
-      </button>
+<button
+  class="module-refresh-btn"
+  type="button"
+  onclick="loadEmployeeCrmLive(true)"
+>
+  Refresh Live Data
+</button>
 
     </div>
 
@@ -429,7 +433,7 @@
 
     <div class="employee-kpi-card amber">
       <div class="employee-kpi-label">
-        On Probation
+        Under 3 Months
       </div>
 
       <div
@@ -466,7 +470,7 @@
 
     <div class="employee-kpi-card pink">
       <div class="employee-kpi-label">
-        Gender Mix
+        Net Change MTD
       </div>
 
       <div
