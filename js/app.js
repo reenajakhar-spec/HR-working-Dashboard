@@ -1,2404 +1,7072 @@
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap');
+const pageTitles = {
+  overview: ['Executive Overview', 'CEO & CHRO command view'],
+  employees: ['Employee CRM', 'Searchable employee 360° operating view'],
+  recruitment: ['Recruitment Pipeline', 'Requisition-to-joining funnel'],
+  attendance: ['Attendance & Leave', 'Attendance health and regularisation'],
+  performance: ['Performance Management', 'Green / Yellow / Red / PIP view'],
+  teamob: ['Team OB', 'Operating behaviour and communication discipline'],
+  payroll: ['Payroll & Compensation', 'Cost and compensation health'],
+  learning: ['L&D / EuroVersity', 'Training and certification'],
+  engagement: ['Engagement & Culture', 'Sentiment and recognition'],
+  compliance: ['Compliance & Statutory', 'Statutory readiness'],
+  alerts: ['Alerts & Action Centre', 'Ownership, due dates and follow-up']
+};
 
-:root{
-  --teal:#0f5f6d;
-  --teal-2:#147b8d;
-  --teal-soft:#e9f5f6;
-  --navy:#15333a;
-  --bg:#f4f7f8;
-  --card:#ffffff;
-  --border:#dfe8eb;
-  --text:#16343b;
-  --muted:#7f989e;
-  --green:#16835b;
-  --amber:#b8750a;
-  --red:#c52d4c;
-  --violet:#6a55b7;
-  --shadow:0 8px 24px rgba(18,73,84,.08);
+/* =========================================================
+   DOM COMPATIBILITY SAFETY
+   Keeps the full app.js running even when a page section is
+   not present in the current index.html build. Real elements
+   are always returned when they exist.
+========================================================= */
+
+const __nativeGetElementById = document.getElementById.bind(document);
+const __missingElements = Object.create(null);
+
+document.getElementById = function(id) {
+  const real = __nativeGetElementById(id);
+  if (real) return real;
+
+  if (!__missingElements[id]) {
+    const dummy = document.createElement('div');
+    dummy.id = '__missing__' + id;
+    dummy.value = '';
+    __missingElements[id] = dummy;
+  }
+
+  return __missingElements[id];
+};
+
+function navigate(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+  const pageEl = document.getElementById(page);
+  if (pageEl) pageEl.classList.add('active');
+
+  const navBtn = document.querySelector(`.nav-item[data-page="${page}"]`);
+  if (navBtn) navBtn.classList.add('active');
+
+  if (pageTitles[page]) {
+    document.getElementById('pageTitle').textContent = pageTitles[page][0];
+    document.getElementById('pageSub').textContent = pageTitles[page][1];
+  }
+
+  /* Hide only the outer HR header while Recruitment is open. */
+  document.body.classList.toggle('recruitment-mode', page === 'recruitment');
+
+  /* Keep menu compact after selection. */
+  if (window.innerWidth <= 760) {
+    document.body.classList.remove('mobile-menu-open');
+  } else {
+    document.body.classList.add('sidebar-collapsed');
+  }
+
+  window.scrollTo({
+    top: 0,
+    behavior: 'smooth'
+  });
+
+  if (
+    page === 'employees' &&
+    typeof loadEmployeeCrmLive === 'function'
+  ) {
+    setTimeout(function() {
+      loadEmployeeCrmLive(false);
+    }, 50);
+  }
+
+  if (
+    page === 'attendance' &&
+    typeof loadAttendanceLive === 'function'
+  ) {
+    setTimeout(function() {
+      loadAttendanceLive(false);
+    }, 50);
+  }
+
+  if (
+    page === 'learning' &&
+    typeof loadLndLive === 'function'
+  ) {
+    setTimeout(function() {
+      loadLndLive(false);
+    }, 50);
+  }
+
+  if (
+    page === 'payroll' &&
+    typeof loadPayrollLive === 'function'
+  ) {
+    setTimeout(function() {
+      loadPayrollLive(false);
+    }, 50);
+  }
+
+  if (
+    page === 'teamob' &&
+    typeof teamObLoad === 'function'
+  ) {
+    setTimeout(function() {
+      teamObLoad(false);
+    }, 50);
+  }
 }
 
-*{
-  box-sizing:border-box;
+document.querySelectorAll('.nav-item').forEach(btn => {
+  btn.addEventListener('click', () => {
+    navigate(btn.dataset.page);
+  });
+});
+
+document.querySelectorAll('[data-page-jump]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    navigate(btn.dataset.pageJump);
+  });
+});
+
+
+function kpi(label, value, sub = '', cls = '') {
+  return `
+    <div class="kpi-card ${cls}">
+      <div class="label">${label}</div>
+      <div class="value">${value}</div>
+      <div class="sub ${sub.includes('▲') ? 'good' : sub.includes('▼') ? 'bad' : ''}">
+        ${sub}
+      </div>
+    </div>
+  `;
 }
 
-body{
-  margin:0;
-  font-family:'Montserrat',sans-serif;
-  background:var(--bg);
-  color:var(--text);
+
+/* =========================
+   OVERVIEW
+========================= */
+
+document.getElementById('overviewKpis').innerHTML = [
+  kpi('Total Headcount', '612', '▲ +6 vs June'),
+  kpi('Attendance Rate', '93.4%', 'Jul MTD avg'),
+  kpi('Open Positions', '18', '3 aged >8 weeks', 'warn'),
+  kpi(
+    'Attrition (Rolling 12M)',
+    '14.2%',
+    'Sales 18.4% · Non-Sales 9.7%'
+  ),
+  kpi('PIP Cases', '4', '2 Sales · 1 Plant · 1 Corp'),
+  kpi('eNPS Score', '+32', '▲ +4 vs last survey', 'highlight')
+].join('');
+
+
+makeLineChart(
+  'headcountChart',
+  ['Apr', 'May', 'Jun', 'Jul', 'Aug'],
+  [605, 606, 606, 612, 618],
+  'Headcount'
+);
+
+
+makeLineChart(
+  'attritionChart',
+  ['Apr', 'May', 'Jun', 'Jul', 'Aug'],
+  [15.4, 15.1, 14.8, 14.2, 13.9],
+  'Attrition %'
+);
+
+
+const departments = [
+  ['Production', 89.1, 81, 'red'],
+  ['Sales & BD', 96.2, 74, 'amber'],
+  ['Quality', 94.8, 85, 'green'],
+  ['Supply Chain', 95.5, 79, 'green'],
+  ['Engineering/NPD', 97.1, 88, 'green']
+];
+
+
+document.getElementById('departmentHealth').innerHTML =
+  departments.map(d => `
+    <div class="health-row">
+
+      <div class="health-main">
+
+        <div class="health-dot ${d[3]}"></div>
+
+        <div>
+          <div class="health-name">
+            ${d[0]}
+          </div>
+
+          <div class="health-meta">
+            Attendance ${d[1]}% · Avg KRA ${d[2]}%
+          </div>
+        </div>
+
+      </div>
+
+      <div class="health-score">
+        ${d[2]}%
+      </div>
+
+    </div>
+  `).join('');
+
+
+function alertCard(a) {
+  const cls = a.priority.toLowerCase();
+
+  return `
+    <div class="alert-card">
+
+      <div class="alert-left">
+
+        <span class="priority-pill priority-${cls}">
+          ${a.priority}
+        </span>
+
+        <div>
+          <div class="alert-title">
+            ${a.action}
+          </div>
+
+          <div class="alert-meta">
+            ${a.owner} · Due ${a.due}
+          </div>
+        </div>
+
+      </div>
+
+      <span class="status-pill status-${a.status.toLowerCase().replaceAll(' ', '')}">
+        ${a.status}
+      </span>
+
+    </div>
+  `;
 }
 
-button,
-input,
-select{
-  font:inherit;
+
+document.getElementById('priorityAlerts').innerHTML =
+  HR_DATA.alerts
+    .slice(0, 4)
+    .map(alertCard)
+    .join('');
+
+
+/* =========================
+   EMPLOYEE CRM
+========================= */
+
+function renderEmployees() {
+
+  const q =
+    document.getElementById('employeeSearch')
+      .value
+      .toLowerCase();
+
+  const globalQ =
+    document.getElementById('globalSearch')
+      .value
+      .toLowerCase();
+
+  const loc =
+    document.getElementById('filterLocation')
+      .value;
+
+  const dept =
+    document.getElementById('filterDepartment')
+      .value;
+
+  const manager =
+    document.getElementById('filterManager')
+      .value;
+
+  const status =
+    document.getElementById('filterStatus')
+      .value;
+
+
+  const rows = HR_DATA.employees.filter(e => {
+
+    const text =
+      `${e.name} ${e.role} ${e.department} ${e.manager} ${e.location}`
+        .toLowerCase();
+
+
+    return (
+
+      (!q || text.includes(q)) &&
+
+      (!globalQ || text.includes(globalQ)) &&
+
+      (loc === 'all' || e.location === loc) &&
+
+      (dept === 'all' || e.department === dept) &&
+
+      (manager === 'all' || e.manager === manager) &&
+
+      (status === 'all' || e.status === status)
+
+    );
+
+  });
+
+
+  document.getElementById('employeeCount').textContent =
+    rows.length;
+
+
+  document.getElementById('employeeTableBody').innerHTML =
+    rows.map(e => `
+
+      <tr>
+
+        <td>
+
+          <div class="emp-name">
+            ${e.name}
+          </div>
+
+          <div class="emp-role">
+            ${e.role}
+          </div>
+
+        </td>
+
+
+        <td>
+          ${e.department}
+        </td>
+
+
+        <td>
+          ${e.manager}
+        </td>
+
+
+        <td>
+          ${e.location}
+        </td>
+
+
+        <td>
+          ${e.attendance}%
+        </td>
+
+
+        <td>
+          ${e.kra}%
+        </td>
+
+
+        <td>
+
+          <span class="status-pill status-${e.status.toLowerCase()}">
+            ${e.status}
+          </span>
+
+        </td>
+
+
+        <td>
+
+          <button
+            class="view-btn"
+            onclick="openEmployee(${e.id})"
+          >
+            View 360°
+          </button>
+
+        </td>
+
+      </tr>
+
+    `).join('');
+
 }
 
-button{
-  cursor:pointer;
+
+document
+  .getElementById('employeeSearch')
+  .addEventListener(
+    'input',
+    renderEmployees
+  );
+
+
+document
+  .getElementById('globalSearch')
+  .addEventListener(
+    'input',
+    renderEmployees
+  );
+
+
+[
+  'filterLocation',
+  'filterDepartment',
+  'filterManager',
+  'filterStatus'
+].forEach(id => {
+
+  document
+    .getElementById(id)
+    .addEventListener(
+      'change',
+      renderEmployees
+    );
+
+});
+
+
+document
+  .getElementById('resetFilters')
+  .addEventListener(
+    'click',
+    () => {
+
+      [
+        'filterLocation',
+        'filterDepartment',
+        'filterManager',
+        'filterStatus'
+      ].forEach(id => {
+
+        document
+          .getElementById(id)
+          .value = 'all';
+
+      });
+
+
+      document
+        .getElementById('globalSearch')
+        .value = '';
+
+
+      document
+        .getElementById('employeeSearch')
+        .value = '';
+
+
+      renderEmployees();
+
+    }
+  );
+
+
+renderEmployees();
+
+
+/* =========================
+   EMPLOYEE 360 DRAWER
+========================= */
+
+function openEmployee(id) {
+
+  const e =
+    HR_DATA.employees.find(
+      x => x.id === id
+    );
+
+
+  if (!e) return;
+
+
+  document
+    .getElementById('drawerName')
+    .textContent = e.name;
+
+
+  document
+    .getElementById('drawerRole')
+    .textContent =
+      `${e.role} · ${e.department}`;
+
+
+  document
+    .getElementById('drawerBody')
+    .innerHTML = `
+
+      <div class="profile-grid">
+
+        ${profileCard('Manager', e.manager)}
+
+        ${profileCard('Location', e.location)}
+
+        ${profileCard('Joining Date', e.joining)}
+
+        ${profileCard('Tenure', e.tenure)}
+
+        ${profileCard('Attendance', e.attendance + '%')}
+
+        ${profileCard('KRA Score', e.kra + '%')}
+
+        ${profileCard('Status', e.status)}
+
+        ${profileCard('Band', e.band)}
+
+        ${profileCard('Leave Balance', e.leave)}
+
+        ${profileCard('Training', e.training)}
+
+        ${profileCard('Recognition', e.recognition)}
+
+      </div>
+
+
+      <div class="profile-section">
+
+        <h4>
+          Employee Timeline
+        </h4>
+
+
+        ${e.timeline.map(t => {
+
+          const split =
+            t.split(' · ');
+
+
+          return `
+
+            <div class="timeline-item">
+
+              <strong>
+                ${split[0]}
+              </strong>
+
+              ${split[1] || ''}
+
+            </div>
+
+          `;
+
+        }).join('')}
+
+      </div>
+
+    `;
+
+
+  document
+    .getElementById('employeeDrawer')
+    .classList
+    .add('open');
+
+
+  document
+    .getElementById('drawerOverlay')
+    .classList
+    .add('open');
+
 }
 
-.app-shell{
-  min-height:100vh;
-  display:flex;
+
+function profileCard(label, value) {
+
+  return `
+
+    <div class="profile-card">
+
+      <div class="profile-label">
+        ${label}
+      </div>
+
+      <div class="profile-value">
+        ${value}
+      </div>
+
+    </div>
+
+  `;
+
+}
+
+
+function closeDrawer() {
+
+  document
+    .getElementById('employeeDrawer')
+    .classList
+    .remove('open');
+
+
+  document
+    .getElementById('drawerOverlay')
+    .classList
+    .remove('open');
+
+}
+
+
+document
+  .getElementById('drawerClose')
+  .addEventListener(
+    'click',
+    closeDrawer
+  );
+
+
+document
+  .getElementById('drawerOverlay')
+  .addEventListener(
+    'click',
+    closeDrawer
+  );
+
+
+/* =========================
+   RECRUITMENT
+========================= */
+
+/* Recruitment is now the existing Apps Script TA Panel embedded in index.html.
+   No JSON/fetch layer is required here. */
+
+function toggleSidebar() {
+  if (window.innerWidth <= 760) {
+    document.body.classList.toggle('mobile-menu-open');
+    return;
+  }
+
+  document.body.classList.toggle('sidebar-collapsed');
+}
+
+function recruitmentFrameLoaded() {
+  /* Kept intentionally light: iframe itself is the live dashboard. */
+}
+
+function refreshRecruitmentDashboard() {
+  const frame = document.getElementById('recruitmentFrame');
+  if (!frame) return;
+
+  frame.src = 'https://script.google.com/a/macros/euronics.co.in/s/AKfycbxA8vc8YBnpl1u3lbi8L-K_jHOKVXJPc3j1h1Ggs7c_M2MhpUFxFSGZFDyy88zMLTPg/exec?refresh=' + Date.now();
+}
+
+/* Mobile hamburger remains available even when the sidebar is off canvas. */
+(function createMobileMenuButton() {
+  if (document.querySelector('.mobile-menu-fab')) return;
+
+  const btn = document.createElement('button');
+  btn.className = 'mobile-menu-fab';
+  btn.type = 'button';
+  btn.setAttribute('aria-label', 'Open navigation');
+  btn.innerHTML = '&#9776;';
+  btn.addEventListener('click', toggleSidebar);
+  document.body.appendChild(btn);
+})();
+
+/* Default desktop view: compact sidebar. */
+if (window.innerWidth > 760) {
+  document.body.classList.add('sidebar-collapsed');
 }
 
 /* =========================
-   SIDEBAR
+   PERFORMANCE
 ========================= */
 
-.sidebar{
-  position:fixed;
-  left:0;
-  top:0;
-  bottom:0;
-  width:238px;
-  background:#0f3f49;
-  color:white;
-  padding:20px 16px;
-  display:flex;
-  flex-direction:column;
-  z-index:20;
+document.getElementById('performanceKpis').innerHTML = [
+
+  kpi(
+    'Avg KRA Score',
+    '78%',
+    'Company-wide'
+  ),
+
+  kpi(
+    'Green',
+    '71%',
+    'Healthy workforce'
+  ),
+
+  kpi(
+    'Yellow',
+    '18%',
+    'Coaching required',
+    'warn'
+  ),
+
+  kpi(
+    'Red / PIP',
+    '11%',
+    'Immediate action'
+  )
+
+].join('');
+
+
+document.getElementById('performanceMatrix').innerHTML = `
+
+  <div class="matrix-row matrix-head">
+
+    <div>Employee</div>
+    <div>Attendance</div>
+    <div>KRA</div>
+    <div>Status</div>
+    <div>Manager</div>
+
+  </div>
+
+
+  ${HR_DATA.employees
+    .slice(0, 8)
+    .map(e => `
+
+      <div class="matrix-row">
+
+        <div class="matrix-name">
+          ${e.name}
+        </div>
+
+        <div>
+          ${e.attendance}%
+        </div>
+
+        <div>
+          ${e.kra}%
+        </div>
+
+        <div>
+
+          <span
+            class="status-pill
+            status-${e.status.toLowerCase()}"
+          >
+            ${e.status}
+          </span>
+
+        </div>
+
+        <div>
+          ${e.manager}
+        </div>
+
+      </div>
+
+    `)
+    .join('')}
+
+`;
+
+
+
+
+/* =========================================================
+   L&D / EUROVERSITY - LIVE PROFESSIONAL DASHBOARD
+========================================================= */
+
+const LND_API_URL =
+  'https://script.google.com/macros/s/AKfycbxqmkCfNuLBmohAKGlFR9W8R8rdqXqlJkHn5kt0xLio3n37J2JhGndSyhIJ2Mu3gqMw3Q/exec';
+
+
+let lndRows = [];
+let lndLoaded = false;
+let lndGroupFilter = 'all';
+
+const LND_CHARTS = {};
+
+
+const LND_COLORS = {
+
+  teal: '#17616E',
+
+  tealDeep: '#0F444E',
+
+  green: '#70AD47',
+
+  amber: '#FFC000',
+
+  navy: '#1F3864',
+
+  light: '#EEF1F4',
+
+  muted: '#5B6472'
+
+};
+
+
+/* =========================================================
+   HELPERS
+========================================================= */
+
+function lndClean(value){
+
+  return String(
+    value === undefined ||
+    value === null
+      ? ''
+      : value
+  ).trim();
+
 }
 
-.brand{
-  display:flex;
-  align-items:center;
-  gap:12px;
-  padding:0 8px 22px;
+
+function lndNumber(value){
+
+  const cleaned =
+    lndClean(value)
+      .replace(/,/g,'')
+      .replace(/%/g,'');
+
+  const num =
+    parseFloat(cleaned);
+
+  return Number.isFinite(num)
+    ? num
+    : null;
+
 }
 
-.brand-mark{
-  width:40px;
-  height:40px;
-  border-radius:10px;
-  background:linear-gradient(135deg,#2b93a7,#65b9c7);
-  display:grid;
-  place-items:center;
-  font-weight:800;
-  font-size:20px;
+
+function lndEscape(value){
+
+  return lndClean(value)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#039;');
+
 }
 
-.brand-name{
-  font-weight:800;
-  letter-spacing:.7px;
+
+function lndDate(value){
+
+  let text =
+    lndClean(value);
+
+  if(!text){
+    return null;
+  }
+
+  text =
+    text
+      .replace(
+        /(\d+)(st|nd|rd|th)/gi,
+        '$1'
+      )
+      .replace(/\s+/g,' ')
+      .trim();
+
+  if(!/\b\d{4}\b/.test(text)){
+    text += ' 2026';
+  }
+
+  const d =
+    new Date(text);
+
+  return Number.isNaN(
+    d.getTime()
+  )
+    ? null
+    : d;
+
 }
 
-.brand-sub{
-  font-size:11px;
-  color:#bdd6db;
-  margin-top:2px;
+
+function lndIsPresent(row){
+
+  return (
+    lndClean(
+      row.Attendance
+    ).toLowerCase()
+    ===
+    'present'
+  );
+
 }
 
-.nav{
-  display:flex;
-  flex-direction:column;
-  gap:4px;
+
+function lndIsActive(row){
+
+  return (
+    lndClean(
+      row.Status
+    ).toLowerCase()
+    !==
+    'not active'
+  );
+
 }
 
-.nav-item{
-  border:0;
-  background:transparent;
-  color:#d5e6e9;
-  text-align:left;
-  padding:11px 12px;
-  border-radius:9px;
-  font-size:12.5px;
-  font-weight:600;
-  transition:.15s ease;
+
+function lndEmployeeKey(row){
+
+  return (
+    lndClean(row['Employee ID']) ||
+    lndClean(row['Employee ID 2']) ||
+    lndClean(row.Attendees).toLowerCase()
+  );
+
 }
 
-.nav-item:hover{
-  background:rgba(255,255,255,.07);
+
+function lndAverage(values){
+
+  const valid =
+    values.filter(
+      value =>
+        value !== null &&
+        Number.isFinite(value)
+    );
+
+  if(!valid.length){
+    return null;
+  }
+
+  return (
+    valid.reduce(
+      (sum,value) =>
+        sum + value,
+      0
+    )
+    /
+    valid.length
+  );
+
 }
 
-.nav-item.active{
-  background:#fff;
-  color:#0f5f6d;
-  box-shadow:0 4px 14px rgba(0,0,0,.13);
+
+function lndUnique(values){
+
+  return [
+    ...new Set(
+      values
+        .map(lndClean)
+        .filter(Boolean)
+    )
+  ];
+
 }
 
-.sidebar-footer{
-  margin-top:auto;
-  border-top:1px solid rgba(255,255,255,.11);
-  padding:16px 8px 4px;
-  display:flex;
-  gap:8px;
-  align-items:center;
-  font-size:10.5px;
-  color:#c5dadd;
+
+function destroyLndChart(id){
+
+  if(
+    LND_CHARTS[id]
+  ){
+
+    LND_CHARTS[id].destroy();
+
+    delete LND_CHARTS[id];
+
+  }
+
 }
 
-.live-dot{
-  width:8px;
-  height:8px;
-  border-radius:50%;
-  background:#48c78e;
+
+/* =========================================================
+   LIVE FETCH
+========================================================= */
+
+let lndRequestTimer = null;
+
+function setLndStatus(text, type = '') {
+  const status = __nativeGetElementById('learningLiveStatus');
+  if (!status) return;
+
+  status.textContent = text;
+  status.classList.remove('live', 'error');
+  if (type) status.classList.add(type);
+}
+
+function loadLndLive(force = false) {
+  if (lndLoaded && !force) {
+    renderLndDashboard();
+    return;
+  }
+
+  setLndStatus('Connecting...');
+
+  const recordCount = __nativeGetElementById('lndHeaderRecordCount');
+  if (recordCount) recordCount.textContent = '-';
+
+  const previous = __nativeGetElementById('lndJsonpScript');
+  if (previous) previous.remove();
+
+  if (lndRequestTimer) clearTimeout(lndRequestTimer);
+
+  window.receiveLndData = function(payload) {
+    console.log('L&D JSONP response:', payload);
+
+    if (lndRequestTimer) clearTimeout(lndRequestTimer);
+
+    try {
+      if (!payload || payload.ok !== true) {
+        throw new Error((payload && payload.error) || 'L&D API returned an invalid response');
+      }
+
+      if (!Array.isArray(payload.rows)) {
+        throw new Error('rows[] missing from L&D response');
+      }
+
+      lndRows = payload.rows;
+      lndLoaded = true;
+
+      if (recordCount) {
+        recordCount.textContent = payload.rowCount ?? lndRows.length;
+      }
+
+      setLndStatus('● Live', 'live');
+      initialiseLndFilters();
+      renderLndDashboard();
+
+      console.log('L&D dashboard loaded successfully:', lndRows.length, 'records');
+    } catch (error) {
+      console.error('L&D response processing failed:', error);
+      setLndStatus('Data Error', 'error');
+    }
+  };
+
+  const script = document.createElement('script');
+  script.id = 'lndJsonpScript';
+
+  const separator = LND_API_URL.includes('?') ? '&' : '?';
+  script.src =
+    LND_API_URL +
+    separator +
+    'callback=receiveLndData' +
+    '&_=' +
+    Date.now();
+
+  script.async = true;
+
+  script.onload = function() {
+    console.log('L&D JSONP script loaded:', script.src);
+  };
+
+  script.onerror = function(event) {
+    console.error('Unable to load L&D JSONP endpoint:', event, script.src);
+    if (lndRequestTimer) clearTimeout(lndRequestTimer);
+    setLndStatus('Connection Failed', 'error');
+  };
+
+  document.head.appendChild(script);
+
+  lndRequestTimer = setTimeout(function() {
+    if (!lndLoaded) {
+      console.error('L&D request timeout. URL:', script.src);
+      setLndStatus('Connection Timeout', 'error');
+    }
+  }, 15000);
+}
+
+
+/* =========================================================
+   FILTER SETUP
+========================================================= */
+
+function populateLndSelect(
+  id,
+  values,
+  firstLabel
+){
+
+  const el =
+    document.getElementById(id);
+
+
+  if(!el){
+    return;
+  }
+
+
+  el.innerHTML =
+
+    '<option value="all">' +
+    firstLabel +
+    '</option>' +
+
+    lndUnique(values)
+      .sort(
+        (a,b) =>
+          a.localeCompare(b)
+      )
+      .map(
+        value =>
+
+          '<option value="' +
+          lndEscape(value) +
+          '">' +
+
+          lndEscape(value) +
+
+          '</option>'
+
+      )
+      .join('');
+
+}
+
+
+function initialiseLndFilters(){
+
+  populateLndSelect(
+    'lndRegion',
+    lndRows.map(
+      row => row.Region
+    ),
+    'Region: All'
+  );
+
+
+  populateLndSelect(
+    'lndBranch',
+    lndRows.map(
+      row =>
+        row['Branch Name']
+    ),
+    'Branch: All'
+  );
+
+
+  populateLndSelect(
+    'lndMode',
+    lndRows.map(
+      row => row.Mode
+    ),
+    'Mode: All'
+  );
+
+
+  populateLndSelect(
+    'lndTopic',
+    lndRows.map(
+      row =>
+        row['Training Topic']
+    ),
+    'All Training Topics'
+  );
+
+}
+
+
+function setLndGroupFilter(
+  group,
+  button
+){
+
+  lndGroupFilter =
+    group;
+
+
+  document
+    .querySelectorAll(
+      '.lnd-chip'
+    )
+    .forEach(
+      el =>
+        el.classList.remove(
+          'active'
+        )
+    );
+
+
+  button.classList.add(
+    'active'
+  );
+
+
+  renderLndDashboard();
+
+}
+
+
+/* =========================================================
+   FILTER DATA
+========================================================= */
+
+function getFilteredLndRows(){
+
+  const search =
+    lndClean(
+      document.getElementById(
+        'lndSearch'
+      )?.value
+    ).toLowerCase();
+
+
+  const region =
+    document.getElementById(
+      'lndRegion'
+    )?.value ||
+    'all';
+
+
+  const branch =
+    document.getElementById(
+      'lndBranch'
+    )?.value ||
+    'all';
+
+
+  const mode =
+    document.getElementById(
+      'lndMode'
+    )?.value ||
+    'all';
+
+
+  const topic =
+    document.getElementById(
+      'lndTopic'
+    )?.value ||
+    'all';
+
+
+  const attendance =
+    document.getElementById(
+      'lndAttendance'
+    )?.value ||
+    'all';
+
+
+  return lndRows.filter(
+    row => {
+
+      const group =
+        lndClean(
+          row.Group
+        );
+
+
+      const text =
+        [
+
+          row.Attendees,
+
+          row[
+            'Training Topic'
+          ],
+
+          row[
+            'Branch Name'
+          ],
+
+          row.Region,
+
+          row.L1,
+
+          row.L2
+
+        ]
+        .map(lndClean)
+        .join(' ')
+        .toLowerCase();
+
+
+      return (
+
+        (
+          !search ||
+          text.includes(search)
+        )
+
+        &&
+
+        (
+          region === 'all' ||
+          lndClean(
+            row.Region
+          ) === region
+        )
+
+        &&
+
+        (
+          branch === 'all' ||
+          lndClean(
+            row[
+              'Branch Name'
+            ]
+          ) === branch
+        )
+
+        &&
+
+        (
+          mode === 'all' ||
+          lndClean(
+            row.Mode
+          ) === mode
+        )
+
+        &&
+
+        (
+          topic === 'all' ||
+          lndClean(
+            row[
+              'Training Topic'
+            ]
+          ) === topic
+        )
+
+        &&
+
+        (
+          attendance === 'all' ||
+          lndClean(
+            row.Attendance
+          ) === attendance
+        )
+
+        &&
+
+        (
+          lndGroupFilter === 'all' ||
+          group
+            .toLowerCase()
+            .includes(
+              lndGroupFilter
+                .toLowerCase()
+            )
+        )
+
+      );
+
+    }
+  );
+
+}
+
+
+/* =========================================================
+   KPI CARDS
+========================================================= */
+
+function renderProfessionalLndKpis(rows){
+
+  const active =
+    rows.filter(
+      lndIsActive
+    );
+
+
+  const present =
+    active.filter(
+      lndIsPresent
+    );
+
+
+  const employees =
+    new Set(
+      active
+        .map(
+          lndEmployeeKey
+        )
+        .filter(Boolean)
+    );
+
+
+  const trained =
+    new Set(
+      present
+        .map(
+          lndEmployeeKey
+        )
+        .filter(Boolean)
+    );
+
+
+  const totalEmployees =
+    employees.size;
+
+
+  const employeesTrained =
+    trained.size;
+
+
+  const coverage =
+    totalEmployees
+      ?
+        employeesTrained /
+        totalEmployees *
+        100
+      :
+        0;
+
+
+  const hours =
+    present.reduce(
+      (sum,row) =>
+
+        sum +
+        (
+          lndNumber(
+            row[
+              'Duration (in hours)'
+            ]
+          )
+          || 0
+        ),
+
+      0
+    );
+
+
+  const avgHours =
+    employeesTrained
+      ?
+        hours /
+        employeesTrained
+      :
+        0;
+
+
+  const programs =
+    new Set(
+
+      present.map(
+        row =>
+
+          [
+
+            row[
+              'Training Topic'
+            ],
+
+            row.Date,
+
+            row[
+              'Branch Name'
+            ]
+
+          ]
+          .map(lndClean)
+          .join('|')
+
+      )
+
+    ).size;
+
+
+  const attended =
+    rows.filter(
+      lndIsPresent
+    ).length;
+
+
+  const absent =
+    rows.filter(
+      row =>
+        lndClean(
+          row.Attendance
+        ).toLowerCase()
+        ===
+        'absent'
+    ).length;
+
+
+  const completion =
+    attended + absent
+      ?
+        attended /
+        (
+          attended +
+          absent
+        )
+        *
+        100
+      :
+        0;
+
+
+  const feedback =
+    lndAverage(
+      rows.map(
+        row =>
+          lndNumber(
+            row[
+              'Feedback Score'
+            ]
+          )
+      )
+    );
+
+
+  const assessment =
+    lndAverage(
+      rows.map(
+        row =>
+          lndNumber(
+            row[
+              'Assesment Score'
+            ]
+          )
+      )
+    );
+
+
+  const data = [
+
+    {
+      title:
+        'Total Employees',
+
+      value:
+        totalEmployees,
+
+      sub:
+        'Active employee population',
+
+      accent:
+        LND_COLORS.teal
+    },
+
+    {
+      title:
+        'Employees Trained',
+
+      value:
+        employeesTrained,
+
+      sub:
+        'Unique employees attended training',
+
+      accent:
+        LND_COLORS.teal
+    },
+
+    {
+      title:
+        'Training Coverage %',
+
+      value:
+        coverage.toFixed(1) +
+        '%',
+
+      sub:
+        'Trained ÷ active employees',
+
+      accent:
+        LND_COLORS.green
+    },
+
+    {
+      title:
+        'Total Learning Hours',
+
+      value:
+        hours.toFixed(1),
+
+      sub:
+        'Aggregate learning hours',
+
+      accent:
+        LND_COLORS.teal
+    },
+
+    {
+      title:
+        'Avg. Hours / Employee',
+
+      value:
+        avgHours.toFixed(1),
+
+      sub:
+        'Learning hours per employee',
+
+      accent:
+        LND_COLORS.navy
+    },
+
+    {
+      title:
+        'Programs Conducted',
+
+      value:
+        programs,
+
+      sub:
+        'Unique training sessions',
+
+      accent:
+        LND_COLORS.amber
+    },
+
+    {
+      title:
+        'Completion Rate %',
+
+      value:
+        completion.toFixed(1) +
+        '%',
+
+      sub:
+        attended +
+        ' present · ' +
+        absent +
+        ' absent',
+
+      accent:
+        LND_COLORS.green
+    },
+
+    {
+      title:
+        'Avg. Training Rating',
+
+      value:
+        feedback === null
+          ? '-'
+          : feedback.toFixed(1) +
+            ' / 5',
+
+      sub:
+        'Participant feedback',
+
+      accent:
+        LND_COLORS.amber
+    },
+
+    {
+      title:
+        'Assessment Score',
+
+      value:
+        assessment === null
+          ? '-'
+          : assessment.toFixed(1) +
+            '%',
+
+      sub:
+        'Average assessment score',
+
+      accent:
+        LND_COLORS.navy
+    }
+
+  ];
+
+
+  const target =
+    document.getElementById(
+      'learningKpis'
+    );
+
+
+  if(!target){
+    return;
+  }
+
+
+  target.innerHTML =
+    data.map(
+      item => `
+
+        <div
+          class="lnd-kpi-card"
+          style="--accent:${item.accent}"
+        >
+
+          <div class="title">
+            ${item.title}
+          </div>
+
+          <div class="value">
+            ${item.value}
+          </div>
+
+          <div class="sub">
+            ${item.sub}
+          </div>
+
+        </div>
+
+      `
+    )
+    .join('');
+
+}
+
+
+/* =========================================================
+   MONTHLY DATA
+========================================================= */
+
+function getLndMonthly(rows){
+
+  const map = {};
+
+
+  rows.forEach(
+    row => {
+
+      const date =
+        lndDate(
+          row.Date
+        );
+
+
+      if(!date){
+        return;
+      }
+
+
+      const key =
+        date.getFullYear() +
+        '-' +
+        String(
+          date.getMonth() + 1
+        ).padStart(
+          2,
+          '0'
+        );
+
+
+      if(!map[key]){
+
+        map[key] = {
+
+          hours:0,
+
+          sessions:
+            new Set(),
+
+          employees:
+            new Set(),
+
+          activeEmployees:
+            new Set(),
+
+          assessment:[]
+
+        };
+
+      }
+
+
+      const item =
+        map[key];
+
+
+      if(
+        lndIsActive(row)
+      ){
+
+        item.activeEmployees.add(
+          lndEmployeeKey(row)
+        );
+
+      }
+
+
+      if(
+        lndIsPresent(row)
+      ){
+
+        item.employees.add(
+          lndEmployeeKey(row)
+        );
+
+
+        item.hours +=
+
+          lndNumber(
+            row[
+              'Duration (in hours)'
+            ]
+          )
+          || 0;
+
+
+        item.sessions.add(
+
+          [
+
+            row[
+              'Training Topic'
+            ],
+
+            row.Date,
+
+            row[
+              'Branch Name'
+            ]
+
+          ]
+          .map(lndClean)
+          .join('|')
+
+        );
+
+      }
+
+
+      const assessment =
+        lndNumber(
+          row[
+            'Assesment Score'
+          ]
+        );
+
+
+      if(
+        assessment !== null
+      ){
+
+        item.assessment.push(
+          assessment
+        );
+
+      }
+
+    }
+  );
+
+
+  return Object
+    .keys(map)
+    .sort()
+    .map(
+      key => {
+
+        const [
+          year,
+          month
+        ] =
+          key.split('-');
+
+
+        const item =
+          map[key];
+
+
+        return {
+
+          key,
+
+          label:
+            new Date(
+              Number(year),
+              Number(month) - 1,
+              1
+            )
+            .toLocaleString(
+              'en-IN',
+              {
+                month:'short'
+              }
+            ),
+
+          hours:
+            Number(
+              item.hours
+                .toFixed(1)
+            ),
+
+          programs:
+            item.sessions.size,
+
+          coverage:
+            item.activeEmployees.size
+              ?
+                item.employees.size /
+                item.activeEmployees.size *
+                100
+              :
+                0,
+
+          assessment:
+            lndAverage(
+              item.assessment
+            )
+
+        };
+
+      }
+    );
+
+}
+
+
+/* =========================================================
+   CHARTS
+========================================================= */
+
+function renderLndCharts(rows){
+
+  Chart.defaults.font.family =
+    "'Segoe UI','Inter',sans-serif";
+
+  Chart.defaults.color =
+    '#5B6472';
+
+  Chart.defaults.font.size =
+    11;
+
+
+  const monthly =
+    getLndMonthly(rows);
+
+
+  const labels =
+    monthly.map(
+      item =>
+        item.label
+    );
+
+
+  /* HOURS + PROGRAMS */
+
+  destroyLndChart(
+    'hoursPrograms'
+  );
+
+
+  const hoursCanvas =
+    document.getElementById(
+      'lndHoursProgramsChart'
+    );
+
+
+  if(hoursCanvas){
+
+    LND_CHARTS.hoursPrograms =
+      new Chart(
+        hoursCanvas,
+        {
+
+          type:'bar',
+
+          data:{
+
+            labels,
+
+            datasets:[
+
+              {
+
+                label:
+                  'Learning Hours',
+
+                data:
+                  monthly.map(
+                    item =>
+                      item.hours
+                  ),
+
+                backgroundColor:
+                  LND_COLORS.teal,
+
+                borderRadius:4,
+
+                maxBarThickness:30,
+
+                yAxisID:'y'
+
+              },
+
+              {
+
+                label:
+                  'Programs Conducted',
+
+                type:'line',
+
+                data:
+                  monthly.map(
+                    item =>
+                      item.programs
+                  ),
+
+                borderColor:
+                  LND_COLORS.amber,
+
+                backgroundColor:
+                  LND_COLORS.amber,
+
+                tension:.35,
+
+                pointRadius:3,
+
+                yAxisID:'y1'
+
+              }
+
+            ]
+
+          },
+
+          options:{
+
+            responsive:true,
+
+            maintainAspectRatio:false,
+
+            plugins:{
+
+              legend:{
+
+                position:'bottom',
+
+                labels:{
+                  boxWidth:10,
+                  padding:14
+                }
+
+              }
+
+            },
+
+            scales:{
+
+              x:{
+                grid:{
+                  display:false
+                }
+              },
+
+              y:{
+
+                beginAtZero:true,
+
+                grid:{
+                  color:'#EEF1F4'
+                },
+
+                title:{
+                  display:true,
+                  text:'Hours'
+                }
+
+              },
+
+              y1:{
+
+                beginAtZero:true,
+
+                position:'right',
+
+                grid:{
+                  display:false
+                },
+
+                title:{
+                  display:true,
+                  text:'Programs'
+                }
+
+              }
+
+            }
+
+          }
+
+        }
+      );
+
+  }
+
+
+  /* COVERAGE */
+
+  destroyLndChart(
+    'coverage'
+  );
+
+
+  const coverageCanvas =
+    document.getElementById(
+      'lndCoverageChart'
+    );
+
+
+  if(coverageCanvas){
+
+    LND_CHARTS.coverage =
+      new Chart(
+        coverageCanvas,
+        {
+
+          type:'line',
+
+          data:{
+
+            labels,
+
+            datasets:[{
+
+              label:
+                'Coverage %',
+
+              data:
+                monthly.map(
+                  item =>
+                    Number(
+                      item.coverage
+                        .toFixed(1)
+                    )
+                ),
+
+              borderColor:
+                LND_COLORS.teal,
+
+              backgroundColor:
+                'rgba(23,97,110,.12)',
+
+              fill:true,
+
+              tension:.4,
+
+              pointRadius:3
+
+            }]
+
+          },
+
+          options:{
+
+            responsive:true,
+
+            maintainAspectRatio:false,
+
+            plugins:{
+              legend:{
+                display:false
+              }
+            },
+
+            scales:{
+
+              x:{
+                grid:{
+                  display:false
+                }
+              },
+
+              y:{
+
+                beginAtZero:true,
+
+                max:100,
+
+                grid:{
+                  color:'#EEF1F4'
+                },
+
+                ticks:{
+                  callback:
+                    value =>
+                      value + '%'
+                }
+
+              }
+
+            }
+
+          }
+
+        }
+      );
+
+  }
+
+
+  /* COMPLETION */
+
+  destroyLndChart(
+    'completion'
+  );
+
+
+  const present =
+    rows.filter(
+      lndIsPresent
+    ).length;
+
+
+  const absent =
+    rows.filter(
+      row =>
+        lndClean(
+          row.Attendance
+        ).toLowerCase()
+        ===
+        'absent'
+    ).length;
+
+
+  const total =
+    present + absent;
+
+
+  const completion =
+    total
+      ?
+        present /
+        total *
+        100
+      :
+        0;
+
+
+  const completionCanvas =
+    document.getElementById(
+      'lndCompletionChart'
+    );
+
+
+  if(completionCanvas){
+
+    LND_CHARTS.completion =
+      new Chart(
+        completionCanvas,
+        {
+
+          type:'doughnut',
+
+          data:{
+
+            labels:[
+              'Present',
+              'Absent'
+            ],
+
+            datasets:[{
+
+              data:[
+
+                completion,
+
+                100 -
+                completion
+
+              ],
+
+              backgroundColor:[
+
+                LND_COLORS.green,
+
+                '#EEF1F4'
+
+              ],
+
+              borderWidth:0
+
+            }]
+
+          },
+
+          options:{
+
+            responsive:true,
+
+            maintainAspectRatio:false,
+
+            cutout:'72%',
+
+            plugins:{
+
+              legend:{
+
+                position:'bottom',
+
+                labels:{
+                  boxWidth:10
+                }
+
+              }
+
+            }
+
+          }
+
+        }
+      );
+
+  }
+
+
+  /* RATING BY TOPIC */
+
+  destroyLndChart(
+    'rating'
+  );
+
+
+  const topicRatings = {};
+
+
+  rows.forEach(
+    row => {
+
+      const topic =
+        lndClean(
+          row[
+            'Training Topic'
+          ]
+        );
+
+
+      const rating =
+        lndNumber(
+          row[
+            'Feedback Score'
+          ]
+        );
+
+
+      if(
+        !topic ||
+        rating === null
+      ){
+        return;
+      }
+
+
+      if(!topicRatings[topic]){
+
+        topicRatings[topic] =
+          [];
+
+      }
+
+
+      topicRatings[topic]
+        .push(
+          rating
+        );
+
+    }
+  );
+
+
+  const ratingData =
+    Object
+      .entries(
+        topicRatings
+      )
+      .map(
+        ([topic,values]) => ({
+
+          topic,
+
+          rating:
+            lndAverage(
+              values
+            )
+
+        })
+      )
+      .sort(
+        (a,b) =>
+          b.rating -
+          a.rating
+      )
+      .slice(
+        0,
+        5
+      );
+
+
+  const ratingCanvas =
+    document.getElementById(
+      'lndRatingChart'
+    );
+
+
+  if(ratingCanvas){
+
+    LND_CHARTS.rating =
+      new Chart(
+        ratingCanvas,
+        {
+
+          type:'bar',
+
+          data:{
+
+            labels:
+              ratingData.map(
+                item =>
+                  item.topic
+              ),
+
+            datasets:[{
+
+              data:
+                ratingData.map(
+                  item =>
+                    Number(
+                      item.rating
+                        .toFixed(1)
+                    )
+                ),
+
+              backgroundColor:
+                LND_COLORS.amber,
+
+              borderRadius:4,
+
+              maxBarThickness:26
+
+            }]
+
+          },
+
+          options:{
+
+            indexAxis:'y',
+
+            responsive:true,
+
+            maintainAspectRatio:false,
+
+            plugins:{
+              legend:{
+                display:false
+              }
+            },
+
+            scales:{
+
+              x:{
+
+                beginAtZero:true,
+
+                max:5,
+
+                grid:{
+                  color:'#EEF1F4'
+                }
+
+              },
+
+              y:{
+                grid:{
+                  display:false
+                }
+              }
+
+            }
+
+          }
+
+        }
+      );
+
+  }
+
+
+  /* ASSESSMENT */
+
+  destroyLndChart(
+    'assessment'
+  );
+
+
+  const assessmentCanvas =
+    document.getElementById(
+      'lndAssessmentChart'
+    );
+
+
+  if(assessmentCanvas){
+
+    LND_CHARTS.assessment =
+      new Chart(
+        assessmentCanvas,
+        {
+
+          type:'line',
+
+          data:{
+
+            labels,
+
+            datasets:[{
+
+              label:
+                'Assessment %',
+
+              data:
+                monthly.map(
+                  item =>
+                    item.assessment === null
+                      ? null
+                      : Number(
+                          item.assessment
+                            .toFixed(1)
+                        )
+                ),
+
+              borderColor:
+                LND_COLORS.navy,
+
+              backgroundColor:
+                'rgba(31,56,100,.08)',
+
+              fill:true,
+
+              tension:.4,
+
+              pointRadius:3
+
+            }]
+
+          },
+
+          options:{
+
+            responsive:true,
+
+            maintainAspectRatio:false,
+
+            plugins:{
+              legend:{
+                display:false
+              }
+            },
+
+            scales:{
+
+              x:{
+                grid:{
+                  display:false
+                }
+              },
+
+              y:{
+
+                beginAtZero:true,
+
+                max:100,
+
+                grid:{
+                  color:'#EEF1F4'
+                },
+
+                ticks:{
+                  callback:
+                    value =>
+                      value + '%'
+                }
+
+              }
+
+            }
+
+          }
+
+        }
+      );
+
+  }
+
+}
+
+
+/* =========================================================
+   REGION TABLE
+========================================================= */
+
+function renderLndRegionTable(rows){
+
+  const map = {};
+
+
+  rows.forEach(
+    row => {
+
+      const region =
+        lndClean(
+          row.Region
+        ) ||
+        'Unknown';
+
+
+      if(!map[region]){
+
+        map[region] = {
+
+          employees:
+            new Set(),
+
+          hours:0,
+
+          present:0,
+
+          absent:0,
+
+          assessment:[],
+
+          feedback:[]
+
+        };
+
+      }
+
+
+      const item =
+        map[region];
+
+
+      if(
+        lndIsPresent(row)
+      ){
+
+        item.employees.add(
+          lndEmployeeKey(row)
+        );
+
+
+        item.present++;
+
+
+        item.hours +=
+
+          lndNumber(
+            row[
+              'Duration (in hours)'
+            ]
+          )
+          || 0;
+
+      }
+
+
+      if(
+        lndClean(
+          row.Attendance
+        ).toLowerCase()
+        ===
+        'absent'
+      ){
+
+        item.absent++;
+
+      }
+
+
+      const assessment =
+        lndNumber(
+          row[
+            'Assesment Score'
+          ]
+        );
+
+
+      if(
+        assessment !== null
+      ){
+
+        item.assessment.push(
+          assessment
+        );
+
+      }
+
+
+      const feedback =
+        lndNumber(
+          row[
+            'Feedback Score'
+          ]
+        );
+
+
+      if(
+        feedback !== null
+      ){
+
+        item.feedback.push(
+          feedback
+        );
+
+      }
+
+    }
+  );
+
+
+  const target =
+    document.getElementById(
+      'lndRegionTableBody'
+    );
+
+
+  if(!target){
+    return;
+  }
+
+
+  target.innerHTML =
+
+    Object
+      .entries(map)
+
+      .sort(
+        (a,b) =>
+          b[1].employees.size -
+          a[1].employees.size
+      )
+
+      .map(
+        ([region,item]) => {
+
+
+          const total =
+            item.present +
+            item.absent;
+
+
+          const attendance =
+            total
+              ?
+                item.present /
+                total *
+                100
+              :
+                0;
+
+
+          const assessment =
+            lndAverage(
+              item.assessment
+            );
+
+
+          const feedback =
+            lndAverage(
+              item.feedback
+            );
+
+
+          let status =
+            {
+              text:'On Track',
+              cls:'green'
+            };
+
+
+          if(
+            attendance <
+            75
+          ){
+
+            status = {
+              text:'At Risk',
+              cls:'red'
+            };
+
+          }else if(
+            attendance <
+            85
+          ){
+
+            status = {
+              text:'Watch',
+              cls:'amber'
+            };
+
+          }
+
+
+          return `
+
+            <tr>
+
+              <td>
+                <strong>
+                  ${lndEscape(region)}
+                </strong>
+              </td>
+
+              <td>
+                ${item.employees.size}
+              </td>
+
+              <td>
+                ${item.hours.toFixed(1)}
+              </td>
+
+              <td>
+
+                <div class="lnd-progress-cell">
+
+                  <div class="lnd-progress">
+
+                    <div
+                      class="lnd-progress-fill"
+                      style="width:${attendance}%"
+                    ></div>
+
+                  </div>
+
+                  <span>
+                    ${attendance.toFixed(0)}%
+                  </span>
+
+                </div>
+
+              </td>
+
+              <td>
+                ${
+                  assessment === null
+                    ? '-'
+                    : assessment.toFixed(1) +
+                      '%'
+                }
+              </td>
+
+              <td>
+                ${
+                  feedback === null
+                    ? '-'
+                    : feedback.toFixed(1)
+                }
+              </td>
+
+              <td>
+
+                <span
+                  class="lnd-status-tag ${status.cls}"
+                >
+                  ${status.text}
+                </span>
+
+              </td>
+
+            </tr>
+
+          `;
+
+        }
+      )
+      .join('');
+
+}
+
+
+/* =========================================================
+   REGISTER
+========================================================= */
+
+function renderLndRegister(rows){
+
+  const target =
+    document.getElementById(
+      'lndAttendanceBody'
+    );
+
+
+  const count =
+    document.getElementById(
+      'lndVisibleCount'
+    );
+
+
+  if(count){
+
+    count.textContent =
+      rows.length;
+
+  }
+
+
+  if(!target){
+    return;
+  }
+
+
+  const sorted =
+    [...rows]
+      .sort(
+        (a,b) => {
+
+          const da =
+            lndDate(
+              a.Date
+            );
+
+          const db =
+            lndDate(
+              b.Date
+            );
+
+
+          return (
+
+            (
+              db
+                ? db.getTime()
+                : 0
+            )
+
+            -
+
+            (
+              da
+                ? da.getTime()
+                : 0
+            )
+
+          );
+
+        }
+      );
+
+
+  target.innerHTML =
+
+    sorted.map(
+      row => {
+
+
+        const attendance =
+          lndClean(
+            row.Attendance
+          );
+
+
+        const tagClass =
+          attendance
+            .toLowerCase()
+            ===
+            'present'
+
+            ?
+              'green'
+
+            :
+              'red';
+
+
+        return `
+
+          <tr>
+
+            <td>
+              ${lndEscape(row.Date)}
+            </td>
+
+            <td>
+
+              <strong>
+                ${lndEscape(
+                  row.Attendees
+                )}
+              </strong>
+
+            </td>
+
+            <td>
+              ${lndEscape(
+                row.Region
+              )}
+            </td>
+
+            <td>
+              ${lndEscape(
+                row[
+                  'Branch Name'
+                ]
+              )}
+            </td>
+
+            <td>
+              ${lndEscape(
+                row[
+                  'Training Topic'
+                ]
+              )}
+            </td>
+
+            <td>
+              ${lndEscape(
+                row.Mode
+              )}
+            </td>
+
+            <td>
+              ${lndEscape(
+                row[
+                  'Duration (in hours)'
+                ]
+              )}
+            </td>
+
+            <td>
+
+              <span
+                class="lnd-status-tag ${tagClass}"
+              >
+                ${attendance}
+              </span>
+
+            </td>
+
+            <td>
+              ${
+                lndEscape(
+                  row[
+                    'Assesment Score'
+                  ]
+                ) ||
+                '-'
+              }
+            </td>
+
+            <td>
+              ${
+                lndEscape(
+                  row[
+                    'Feedback Score'
+                  ]
+                ) ||
+                '-'
+              }
+            </td>
+
+            <td>
+              ${lndEscape(
+                row.L1
+              )}
+            </td>
+
+          </tr>
+
+        `;
+
+      }
+    )
+    .join('');
+
+}
+
+
+/* =========================================================
+   MASTER RENDER
+========================================================= */
+
+function renderLndDashboard(){
+
+  const rows =
+    getFilteredLndRows();
+
+
+  renderProfessionalLndKpis(
+    rows
+  );
+
+
+  renderLndCharts(
+    rows
+  );
+
+
+  renderLndRegionTable(
+    rows
+  );
+
+
+  renderLndRegister(
+    rows
+  );
+
+}
+
+
+/* =========================================================
+   EVENTS
+========================================================= */
+
+[
+
+  'lndSearch',
+
+  'lndRegion',
+
+  'lndBranch',
+
+  'lndMode',
+
+  'lndTopic',
+
+  'lndAttendance'
+
+]
+.forEach(
+  id => {
+
+    const el =
+      document.getElementById(
+        id
+      );
+
+
+    if(!el){
+      return;
+    }
+
+
+    el.addEventListener(
+
+      id ===
+      'lndSearch'
+        ?
+          'input'
+        :
+          'change',
+
+      renderLndDashboard
+
+    );
+
+  }
+);
+
+
+loadLndLive(false);
+
+
+/* =========================
+   COMPLIANCE
+========================= */
+
+document.getElementById('complianceKpis').innerHTML = [
+
+  kpi(
+    'PF Compliance',
+    '100%',
+    'On-time filing'
+  ),
+
+  kpi(
+    'ESI Compliance',
+    '100%',
+    'On-time filing'
+  ),
+
+  kpi(
+    'POSH Cases',
+    '0',
+    'No pending cases'
+  ),
+
+  kpi(
+    'Audit Pending',
+    '1',
+    'Factories Act · Aug',
+    'warn'
+  )
+
+].join('');
+
+
+document.getElementById('complianceList').innerHTML = [
+
+  [
+    'PF Filing',
+    'Compliant',
+    'Green'
+  ],
+
+  [
+    'ESI Filing',
+    'Compliant',
+    'Green'
+  ],
+
+  [
+    'POSH Committee',
+    'Compliant',
+    'Green'
+  ],
+
+  [
+    'Factories Act Audit',
+    'Scheduled — August',
+    'Yellow'
+  ]
+
+].map(r => `
+
+  <div class="compliance-row">
+
+    <div>
+
+      <div class="health-name">
+        ${r[0]}
+      </div>
+
+      <div class="health-meta">
+        ${r[1]}
+      </div>
+
+    </div>
+
+    <span
+      class="status-pill
+      status-${r[2].toLowerCase()}"
+    >
+      ${r[2]}
+    </span>
+
+  </div>
+
+`).join('');
+
+
+/* =========================
+   ALERT CENTRE
+========================= */
+
+document.getElementById('alertTableBody').innerHTML =
+
+  HR_DATA.alerts.map(a => `
+
+    <tr>
+
+      <td>
+
+        <span
+          class="priority-pill
+          priority-${a.priority.toLowerCase()}"
+        >
+          ${a.priority}
+        </span>
+
+      </td>
+
+
+      <td>
+
+        <strong>
+          ${a.action}
+        </strong>
+
+      </td>
+
+
+      <td>
+        ${a.owner}
+      </td>
+
+
+      <td>
+        ${a.due}
+      </td>
+
+
+      <td>
+
+        <span
+          class="status-pill
+          status-${a.status
+            .toLowerCase()
+            .replaceAll(' ', '')}"
+        >
+          ${a.status}
+        </span>
+
+      </td>
+
+
+      <td>
+
+        <button class="view-btn">
+          Open
+        </button>
+
+      </td>
+
+    </tr>
+
+  `).join('');
+  /* =========================================================
+   EMPLOYEE CRM - LIVE
+========================================================= */
+
+const EMPLOYEE_CRM_API_URL =
+  'https://script.google.com/macros/s/AKfycbxWzFltc06j3OmPFG62gtuvbj_SumQe3dvbPCcc5BurhqyXeeqRTXJjutzNKStXSJl-/exec';
+
+let EMPLOYEE_CRM_DATA = null;
+let EMPLOYEE_CRM_FILTERED = [];
+let EMPLOYEE_CRM_LOADED = false;
+let EMPLOYEE_CRM_LOADING = false;
+const EMPLOYEE_CHARTS = {};
+
+function employeeGet(id) {
+  return __nativeGetElementById ? __nativeGetElementById(id) : document.getElementById(id);
+}
+
+function destroyExistingEmployeeChart(canvasId) {
+  if (typeof Chart === 'undefined') return;
+  const canvas = employeeGet(canvasId);
+  if (!canvas) return;
+
+  if (typeof Chart.getChart === 'function') {
+    const existing = Chart.getChart(canvas);
+    if (existing) existing.destroy();
+  }
+}
+
+function setEmployeeLiveStatus(text, state) {
+  const el = employeeGet('employeeLiveStatus');
+  if (!el) return;
+
+  el.textContent = state === 'success' ? '● ' + text : text;
+  el.classList.remove('green', 'amber', 'red');
+
+  if (state === 'success') el.classList.add('green');
+  else if (state === 'error') el.classList.add('red');
+  else el.classList.add('amber');
+}
+
+function loadEmployeeCrmLive(forceRefresh) {
+  if (EMPLOYEE_CRM_LOADING) return;
+
+  if (EMPLOYEE_CRM_LOADED && !forceRefresh) {
+    renderEmployeeCrmDashboard(EMPLOYEE_CRM_DATA);
+    return;
+  }
+
+  EMPLOYEE_CRM_LOADING = true;
+  setEmployeeLiveStatus('Connecting...', 'loading');
+
+  const master = employeeGet('employeeMasterBody');
+  const span = employeeGet('employeeSpanBody');
+
+  if (master) {
+    master.innerHTML = '<tr><td colspan="10">Loading live employee data...</td></tr>';
+  }
+
+  if (span) {
+    span.innerHTML = '<tr><td colspan="5">Loading live organisation data...</td></tr>';
+  }
+
+  const oldScript = employeeGet('employeeCrmJsonpScript');
+  if (oldScript && oldScript.parentNode) oldScript.parentNode.removeChild(oldScript);
+
+  /* JSONP callback must be globally accessible on GitHub Pages. */
+  window.receiveEmployeeCrmData = receiveEmployeeCrmData;
+
+  const script = document.createElement('script');
+  script.id = 'employeeCrmJsonpScript';
+  script.async = true;
+  script.src =
+    EMPLOYEE_CRM_API_URL +
+    '?module=employees' +
+    '&callback=receiveEmployeeCrmData' +
+    '&_=' + Date.now();
+
+  script.onerror = function() {
+    EMPLOYEE_CRM_LOADING = false;
+    setEmployeeLiveStatus('Connection Failed', 'error');
+
+    if (master) {
+      master.innerHTML = '<tr><td colspan="10">Unable to load employee data.</td></tr>';
+    }
+  };
+
+  document.body.appendChild(script);
+
+  setTimeout(function() {
+    if (EMPLOYEE_CRM_LOADING) {
+      EMPLOYEE_CRM_LOADING = false;
+      setEmployeeLiveStatus('Connection Timeout', 'error');
+      if (master) {
+        master.innerHTML = '<tr><td colspan="10">Employee API timeout. Please refresh once.</td></tr>';
+      }
+    }
+  }, 25000);
+}
+
+function receiveEmployeeCrmData(data) {
+  EMPLOYEE_CRM_LOADING = false;
+
+  if (!data || data.ok !== true) {
+    console.error('Employee CRM API Error:', data);
+    setEmployeeLiveStatus('Data Error', 'error');
+    return;
+  }
+
+  EMPLOYEE_CRM_DATA = data;
+  EMPLOYEE_CRM_LOADED = true;
+  setEmployeeLiveStatus('Live', 'success');
+
+  renderEmployeeCrmDashboard(data);
+  initialiseEmployeeCrmFilters(data);
+}
+
+function renderEmployeeCrmDashboard(data) {
+  if (!data || !data.summary) return;
+
+  renderEmployeeCrmKpis(data.summary);
+  renderEmployeeDepartmentChart(data.departments || []);
+  renderEmployeeBranchChart(data.branches || []);
+  renderEmployeeTenureChart(data.tenureBuckets || {});
+  renderEmployeeMovementChart(data.summary);
+  renderEmployeeSpanOfControl(data.managers || []);
+
+  EMPLOYEE_CRM_FILTERED = (data.employees || []).slice();
+  renderEmployeeMaster(EMPLOYEE_CRM_FILTERED);
+}
+
+function setEmployeeText(id, value) {
+  const el = employeeGet(id);
+  if (el) el.textContent = value;
+}
+
+function renderEmployeeCrmKpis(summary) {
+  setEmployeeText('empKpiTotal', summary.totalEmployees || 0);
+  setEmployeeText('empKpiActive', summary.activeEmployees || 0);
+  setEmployeeText('empKpiJoiners', summary.newJoinersMtd || 0);
+  setEmployeeText('empKpiProbation', summary.under3Months || 0);
+
+  const tenureEl = employeeGet('empKpiTenure');
+  if (tenureEl) {
+    const tenure = Number(summary.avgTenure || 0);
+    tenureEl.innerHTML = tenure.toFixed(2) + ' <span>yrs</span>';
+  }
+
+  const net = Number(summary.netChangeMtd || 0);
+  setEmployeeText('empKpiGender', net > 0 ? '+' + net : String(net));
+  setEmployeeText('employeeMasterCount', summary.totalEmployees || 0);
+}
+
+function renderEmployeeDepartmentChart(rows) {
+  const canvas = employeeGet('employeeDeptChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  destroyExistingEmployeeChart('employeeDeptChart');
+
+  const cleanRows = (rows || [])
+    .filter(row => row.department && Number(row.headcount || 0) > 0)
+    .slice(0, 20);
+
+  EMPLOYEE_CHARTS.department = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: cleanRows.map(row => row.department),
+      datasets: [{
+        label: 'Headcount',
+        data: cleanRows.map(row => Number(row.headcount || 0)),
+        backgroundColor: '#17616E',
+        borderRadius: 6,
+        borderSkipped: false
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { beginAtZero: true, ticks: { precision: 0 } },
+        y: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+function renderEmployeeBranchChart(rows) {
+  const canvas = employeeGet('employeeLocationChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  destroyExistingEmployeeChart('employeeLocationChart');
+
+  const cleanRows = (rows || [])
+    .filter(row => row.branch && Number(row.headcount || 0) > 0)
+    .slice(0, 20);
+
+  EMPLOYEE_CHARTS.branch = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: cleanRows.map(row => row.branch),
+      datasets: [{
+        label: 'Headcount',
+        data: cleanRows.map(row => Number(row.headcount || 0)),
+        backgroundColor: '#3E7DBB',
+        borderRadius: 6,
+        borderSkipped: false
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { beginAtZero: true, ticks: { precision: 0 } },
+        y: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+function renderEmployeeTenureChart(buckets) {
+  const canvas = employeeGet('employeeTenureChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  destroyExistingEmployeeChart('employeeTenureChart');
+
+  const labels = ['<1 Yr', '1-3 Yrs', '3-5 Yrs', '5-8 Yrs', '8+ Yrs'];
+
+  EMPLOYEE_CHARTS.tenure = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Employees',
+        data: labels.map(label => Number(buckets[label] || 0)),
+        backgroundColor: '#3E7DBB',
+        borderRadius: 7,
+        borderSkipped: false
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, ticks: { precision: 0 } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+function renderEmployeeMovementChart(summary) {
+  const canvas = employeeGet('employeeGenderChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  destroyExistingEmployeeChart('employeeGenderChart');
+
+  EMPLOYEE_CHARTS.movement = new Chart(canvas, {
+    type: 'doughnut',
+    data: {
+      labels: ['New Joiners MTD', 'Exits MTD'],
+      datasets: [{
+        data: [
+          Number(summary.newJoinersMtd || 0),
+          Number(summary.exitsMtd || 0)
+        ],
+        backgroundColor: ['#17616E', '#C9437A'],
+        borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '68%',
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { boxWidth: 18, padding: 16 }
+        }
+      }
+    }
+  });
+}
+
+function renderEmployeeSpanOfControl(rows) {
+  const body = employeeGet('employeeSpanBody');
+  if (!body) return;
+
+  const topManagers = (rows || [])
+    .filter(row => row.manager && row.manager !== 'Unassigned')
+    .slice(0, 25);
+
+  if (!topManagers.length) {
+    body.innerHTML = '<tr><td colspan="5">No manager data available.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = topManagers.map(row => {
+    const reports = Number(row.directReports || 0);
+    let status = 'Normal';
+    let cls = 'green';
+
+    if (reports >= 25) {
+      status = 'High';
+      cls = 'red';
+    } else if (reports >= 15) {
+      status = 'Watch';
+      cls = 'amber';
+    }
+
+    return `
+      <tr>
+        <td>${escapeEmployeeHtml(row.manager)}</td>
+        <td>${escapeEmployeeHtml(row.department || '-')}</td>
+        <td>${reports}</td>
+        <td>${Number(row.share || 0).toFixed(1)}%</td>
+        <td><span class="module-status ${cls}">${status}</span></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function renderEmployeeMaster(employees) {
+  const body = employeeGet('employeeMasterBody');
+  if (!body) return;
+
+  setEmployeeText('employeeMasterCount', employees.length);
+
+  if (!employees.length) {
+    body.innerHTML = '<tr><td colspan="10">No employees found.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = employees.map(emp => `
+    <tr>
+      <td>${escapeEmployeeHtml(emp.employeeId || '-')}</td>
+      <td>
+        <div class="employee-cell-name">${escapeEmployeeHtml(emp.name || '-')}</div>
+        <div class="employee-cell-sub">${escapeEmployeeHtml(emp.email || '')}</div>
+      </td>
+      <td>${escapeEmployeeHtml(emp.designation || '-')}</td>
+      <td>${escapeEmployeeHtml(emp.department || '-')}</td>
+      <td>${escapeEmployeeHtml(emp.manager || '-')}</td>
+      <td>${escapeEmployeeHtml(emp.branch || '-')}</td>
+      <td>${escapeEmployeeHtml(emp.doj || '-')}</td>
+      <td>${escapeEmployeeHtml(emp.tenureLabel || '-')}</td>
+      <td>
+        <span class="module-status ${emp.active ? 'green' : 'red'}">
+          ${emp.active ? 'Active' : 'Inactive'}
+        </span>
+      </td>
+      <td>
+        <button
+          class="module-action-btn"
+          type="button"
+          onclick="openEmployeeCrmProfile('${escapeEmployeeAttr(emp.employeeId || '')}')"
+        >
+          View 360°
+        </button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function initialiseEmployeeCrmFilters(data) {
+  populateEmployeeSelect(
+    'employeeDeptFilter',
+    'All Departments',
+    (data.departments || []).map(row => row.department)
+  );
+
+  populateEmployeeSelect(
+    'employeeLocationFilter',
+    'All Locations',
+    (data.branches || []).map(row => row.branch)
+  );
+
+  populateEmployeeSelect(
+    'employeeManagerFilter',
+    'All Managers',
+    (data.managers || [])
+      .map(row => row.manager)
+      .filter(name => name && name !== 'Unassigned')
+  );
+
+  const elements = [
+    employeeGet('employeeCrmSearch'),
+    employeeGet('employeeDeptFilter'),
+    employeeGet('employeeLocationFilter'),
+    employeeGet('employeeManagerFilter'),
+    employeeGet('employeeStatusFilter')
+  ];
+
+  elements.forEach(el => {
+    if (!el || el.dataset.employeeFilterBound) return;
+    el.dataset.employeeFilterBound = '1';
+    el.addEventListener(el.tagName === 'INPUT' ? 'input' : 'change', applyEmployeeCrmFilters);
+  });
+}
+
+function populateEmployeeSelect(id, firstLabel, values) {
+  const select = employeeGet(id);
+  if (!select) return;
+
+  const current = select.value;
+  const unique = Array.from(new Set((values || []).filter(Boolean)))
+    .sort((a, b) => a.localeCompare(b));
+
+  select.innerHTML =
+    `<option value="all">${escapeEmployeeHtml(firstLabel)}</option>` +
+    unique.map(value =>
+      `<option value="${escapeEmployeeAttr(value)}">${escapeEmployeeHtml(value)}</option>`
+    ).join('');
+
+  if (Array.from(select.options).some(option => option.value === current)) {
+    select.value = current;
+  }
+}
+
+function applyEmployeeCrmFilters() {
+  if (!EMPLOYEE_CRM_DATA) return;
+
+  const search = (employeeGet('employeeCrmSearch')?.value || '').trim().toLowerCase();
+  const department = employeeGet('employeeDeptFilter')?.value || 'all';
+  const branch = employeeGet('employeeLocationFilter')?.value || 'all';
+  const manager = employeeGet('employeeManagerFilter')?.value || 'all';
+  const status = employeeGet('employeeStatusFilter')?.value || 'all';
+
+  EMPLOYEE_CRM_FILTERED = (EMPLOYEE_CRM_DATA.employees || []).filter(emp => {
+    if (search) {
+      const haystack = [
+        emp.employeeId,
+        emp.name,
+        emp.email,
+        emp.designation,
+        emp.department,
+        emp.branch,
+        emp.manager
+      ].join(' ').toLowerCase();
+
+      if (!haystack.includes(search)) return false;
+    }
+
+    if (department !== 'all' && emp.department !== department) return false;
+    if (branch !== 'all' && emp.branch !== branch) return false;
+    if (manager !== 'all' && emp.manager !== manager) return false;
+    if (status === 'Active' && !emp.active) return false;
+    if (status === 'Inactive' && emp.active) return false;
+
+    return true;
+  });
+
+  renderEmployeeMaster(EMPLOYEE_CRM_FILTERED);
+}
+
+function ensureEmployeeCrmModal() {
+  if (employeeGet('employeeCrmModal')) return;
+
+  const modal = document.createElement('div');
+  modal.id = 'employeeCrmModal';
+  modal.style.cssText = [
+    'display:none',
+    'position:fixed',
+    'inset:0',
+    'z-index:99999',
+    'background:rgba(15,23,42,.50)',
+    'align-items:center',
+    'justify-content:center',
+    'padding:24px'
+  ].join(';');
+
+  modal.innerHTML = `
+    <div style="width:min(720px,96vw);max-height:88vh;overflow:auto;background:#fff;border-radius:18px;box-shadow:0 24px 60px rgba(15,23,42,.22);padding:26px;">
+      <div style="display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:20px;">
+        <div>
+          <div id="employeeCrmModalName" style="font-size:24px;font-weight:800;color:#0f3440;"></div>
+          <div id="employeeCrmModalRole" style="margin-top:5px;color:#6b7280;"></div>
+        </div>
+        <button type="button" onclick="closeEmployeeCrmProfile()" style="border:0;background:#eef3f5;border-radius:10px;padding:8px 12px;cursor:pointer;font-weight:700;">Close</button>
+      </div>
+      <div id="employeeCrmModalBody"></div>
+    </div>
+  `;
+
+  modal.addEventListener('click', function(event) {
+    if (event.target === modal) closeEmployeeCrmProfile();
+  });
+
+  document.body.appendChild(modal);
+}
+
+function openEmployeeCrmProfile(employeeId) {
+  if (!EMPLOYEE_CRM_DATA) return;
+
+  const emp = (EMPLOYEE_CRM_DATA.employees || [])
+    .find(row => row.employeeId === employeeId);
+
+  if (!emp) return;
+
+  ensureEmployeeCrmModal();
+
+  const modal = employeeGet('employeeCrmModal');
+  const name = employeeGet('employeeCrmModalName');
+  const role = employeeGet('employeeCrmModalRole');
+  const body = employeeGet('employeeCrmModalBody');
+
+  name.textContent = emp.name || '-';
+  role.textContent = `${emp.designation || '-'} · ${emp.department || '-'}`;
+
+  const cards = [
+    ['Employee ID', emp.employeeId || '-'],
+    ['Email', emp.email || '-'],
+    ['Designation', emp.designation || '-'],
+    ['Department', emp.department || '-'],
+    ['Manager', emp.manager || '-'],
+    ['Location', emp.branch || '-'],
+    ['Date of Joining', emp.doj || '-'],
+    ['Tenure', emp.tenureLabel || '-'],
+    ['Status', emp.active ? 'Active' : 'Inactive']
+  ];
+
+  body.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">
+      ${cards.map(item => `
+        <div style="border:1px solid #e5e7eb;border-radius:12px;padding:14px 15px;background:#fbfcfd;">
+          <div style="font-size:12px;color:#7b8794;margin-bottom:5px;">${escapeEmployeeHtml(item[0])}</div>
+          <div style="font-size:15px;font-weight:700;color:#183b45;word-break:break-word;">${escapeEmployeeHtml(item[1])}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  modal.style.display = 'flex';
+}
+
+function closeEmployeeCrmProfile() {
+  const modal = employeeGet('employeeCrmModal');
+  if (modal) modal.style.display = 'none';
+}
+
+function escapeEmployeeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function escapeEmployeeAttr(value) {
+  return escapeEmployeeHtml(value);
+}
+
+function initialiseEmployeeCrmLive() {
+  const page = employeeGet('employees');
+  if (page && page.classList.contains('active')) {
+    loadEmployeeCrmLive(false);
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initialiseEmployeeCrmLive);
+} else {
+  initialiseEmployeeCrmLive();
+}
+
+
+
+
+/* =========================================================
+   KEKA ATTENDANCE - LIVE DASHBOARD
+========================================================= */
+
+const ATTENDANCE_API_URL =
+  'https://script.google.com/macros/s/AKfycbxWzFltc06j3OmPFG62gtuvbj_SumQe3dvbPCcc5BurhqyXeeqRTXJjutzNKStXSJl-/exec';
+
+
+let attendancePayload = null;
+let attendanceLoaded = false;
+let attendanceRequestTimer = null;
+
+const ATTENDANCE_CHARTS = {};
+
+
+/* =========================================================
+   HELPERS
+========================================================= */
+
+function attendanceNumber(value) {
+
+  const num = Number(value);
+
+  return Number.isFinite(num)
+    ? num
+    : 0;
+
+}
+
+
+function attendanceFormatNumber(value) {
+
+  return attendanceNumber(value)
+    .toLocaleString('en-IN');
+
+}
+
+
+function attendanceEscape(value) {
+
+  return String(
+    value === undefined ||
+    value === null
+      ? ''
+      : value
+  )
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+
+}
+
+
+function setAttendanceStatus(
+  text,
+  type = ''
+) {
+
+  const el =
+    document.getElementById(
+      'attendanceLiveStatus'
+    );
+
+  if (!el) return;
+
+  el.textContent = text;
+
+  el.classList.remove(
+    'live',
+    'error'
+  );
+
+  if (type) {
+    el.classList.add(type);
+  }
+
+}
+
+
+function destroyAttendanceChart(id) {
+
+  /*
+    Destroy our stored chart
+  */
+
+  if (ATTENDANCE_CHARTS[id]) {
+
+    ATTENDANCE_CHARTS[id]
+      .destroy();
+
+    delete ATTENDANCE_CHARTS[id];
+
+  }
+
+
+  /*
+    Also destroy any old placeholder Chart.js
+    instance already attached to this canvas.
+  */
+
+  if (
+    typeof Chart !== 'undefined' &&
+    typeof Chart.getChart === 'function'
+  ) {
+
+    const existing =
+      Chart.getChart(id);
+
+    if (existing) {
+      existing.destroy();
+    }
+
+  }
+
+}
+
+
+/* =========================================================
+   LOAD LIVE DATA
+========================================================= */
+
+function loadAttendanceLive(
+  force = false
+) {
+
+  if (
+    attendanceLoaded &&
+    !force
+  ) {
+
+    renderLiveAttendanceDashboard();
+    return;
+
+  }
+
+
+  setAttendanceStatus(
+    'Connecting...'
+  );
+
+
+  const oldScript =
+    document.getElementById(
+      'attendanceJsonpScript'
+    );
+
+  if (oldScript) {
+    oldScript.remove();
+  }
+
+
+  if (attendanceRequestTimer) {
+
+    clearTimeout(
+      attendanceRequestTimer
+    );
+
+  }
+
+
+  window.receiveAttendanceData =
+    function(payload) {
+
+      if (attendanceRequestTimer) {
+
+        clearTimeout(
+          attendanceRequestTimer
+        );
+
+      }
+
+
+      try {
+
+        console.log(
+          'Attendance API response:',
+          payload
+        );
+
+
+        if (
+          !payload ||
+          payload.ok !== true
+        ) {
+
+          throw new Error(
+            payload?.error ||
+            'Invalid attendance response'
+          );
+
+        }
+
+
+        if (
+          !payload.summary ||
+          !Array.isArray(
+            payload.departments
+          ) ||
+          !Array.isArray(
+            payload.daily
+          )
+        ) {
+
+          throw new Error(
+            'Attendance response structure is incomplete'
+          );
+
+        }
+
+
+        attendancePayload =
+          payload;
+
+        attendanceLoaded =
+          true;
+
+
+        setAttendanceStatus(
+          '● Live',
+          'live'
+        );
+
+
+        initialiseAttendanceFilters();
+
+        renderLiveAttendanceDashboard();
+
+
+        console.log(
+          'Attendance dashboard loaded:',
+          payload.attendanceRecordCount,
+          'records'
+        );
+
+
+      } catch (error) {
+
+        console.error(
+          'Attendance processing error:',
+          error
+        );
+
+
+        setAttendanceStatus(
+          'Data Error',
+          'error'
+        );
+
+      }
+
+    };
+
+
+  const script =
+    document.createElement(
+      'script'
+    );
+
+
+  script.id =
+    'attendanceJsonpScript';
+
+  script.async =
+    true;
+
+
+  script.src =
+    ATTENDANCE_API_URL +
+    '?module=attendance' +
+    '&callback=receiveAttendanceData' +
+    '&_=' +
+    Date.now();
+
+
+  script.onerror =
+    function(error) {
+
+      console.error(
+        'Attendance API connection failed:',
+        error
+      );
+
+
+      setAttendanceStatus(
+        'Connection Failed',
+        'error'
+      );
+
+    };
+
+
+  document.body.appendChild(
+    script
+  );
+
+
+  attendanceRequestTimer =
+    setTimeout(
+      function() {
+
+        if (!attendanceLoaded) {
+
+          setAttendanceStatus(
+            'Connection Timeout',
+            'error'
+          );
+
+        }
+
+      },
+      20000
+    );
+
+}
+
+
+/* =========================================================
+   FILTERS
+========================================================= */
+
+function initialiseAttendanceFilters() {
+
+  if (!attendancePayload) {
+    return;
+  }
+
+
+  const deptSelect =
+    document.getElementById(
+      'attendanceDeptFilter'
+    );
+
+  const branchSelect =
+    document.getElementById(
+      'attendanceLocationFilter'
+    );
+
+
+  if (deptSelect) {
+
+    const current =
+      deptSelect.value || 'all';
+
+
+    deptSelect.innerHTML =
+      '<option value="all">All Departments</option>' +
+
+      attendancePayload.departments
+
+        .map(
+          row =>
+            row.department
+        )
+
+        .filter(Boolean)
+
+        .sort()
+
+        .map(
+          name => `
+
+            <option value="${attendanceEscape(name)}">
+              ${attendanceEscape(name)}
+            </option>
+
+          `
+        )
+
+        .join('');
+
+
+    deptSelect.value =
+      [...deptSelect.options]
+        .some(
+          option =>
+            option.value === current
+        )
+        ? current
+        : 'all';
+
+  }
+
+
+  if (branchSelect) {
+
+    const current =
+      branchSelect.value || 'all';
+
+
+    const branches =
+      Array.isArray(
+        attendancePayload.branches
+      )
+        ? attendancePayload.branches
+        : [];
+
+
+    branchSelect.innerHTML =
+      '<option value="all">All Locations / Branches</option>' +
+
+      branches
+
+        .map(
+          row =>
+            row.branch
+        )
+
+        .filter(Boolean)
+
+        .sort()
+
+        .map(
+          name => `
+
+            <option value="${attendanceEscape(name)}">
+              ${attendanceEscape(name)}
+            </option>
+
+          `
+        )
+
+        .join('');
+
+
+    branchSelect.value =
+      [...branchSelect.options]
+        .some(
+          option =>
+            option.value === current
+        )
+        ? current
+        : 'all';
+
+  }
+
+
+  /*
+    Current API is aggregated and does not yet
+    return manager-level summaries.
+
+    Keep Manager filter disabled rather than
+    showing misleading results.
+  */
+
+  const managerSelect =
+    document.getElementById(
+      'attendanceManagerFilter'
+    );
+
+  if (managerSelect) {
+
+    managerSelect.innerHTML =
+      '<option value="all">All Managers</option>';
+
+    managerSelect.disabled =
+      true;
+
+    managerSelect.title =
+      'Manager filter will be enabled when manager-level API aggregation is added.';
+
+  }
+
+
+  /*
+    Status filter is also not required because
+    the API summary already contains Present /
+    Absent / Other aggregate values.
+  */
+
+  const statusSelect =
+    document.getElementById(
+      'attendanceStatusFilter'
+    );
+
+  if (statusSelect) {
+
+    statusSelect.disabled =
+      true;
+
+    statusSelect.title =
+      'Status filtering will be enabled with record-level filtering.';
+
+  }
+
+
+  /*
+    Current API returns all available dates.
+    Period selection is therefore temporarily
+    informational only.
+  */
+
+  const periodSelect =
+    document.getElementById(
+      'attendancePeriodFilter'
+    );
+
+  if (periodSelect) {
+
+    periodSelect.disabled =
+      true;
+
+    periodSelect.title =
+      'Period filter will be enabled in the next API version.';
+
+  }
+
+
+  /*
+    Re-render department-related view
+    when filter changes.
+  */
+
+  if (
+    deptSelect &&
+    !deptSelect.dataset.liveBound
+  ) {
+
+    deptSelect.addEventListener(
+      'change',
+      renderLiveAttendanceDashboard
+    );
+
+    deptSelect.dataset.liveBound =
+      '1';
+
+  }
+
+
+  if (
+    branchSelect &&
+    !branchSelect.dataset.liveBound
+  ) {
+
+    branchSelect.addEventListener(
+      'change',
+      renderLiveAttendanceDashboard
+    );
+
+    branchSelect.dataset.liveBound =
+      '1';
+
+  }
+
+}
+
+
+/* =========================================================
+   MAIN RENDER
+========================================================= */
+
+function renderLiveAttendanceDashboard() {
+
+  if (!attendancePayload) {
+    return;
+  }
+
+
+  renderAttendanceKpis();
+
+  renderAttendanceTrendChart();
+
+  renderAttendanceMixChart();
+
+  renderAttendanceDepartmentChart();
+
+  renderAttendanceBranchChart();
+
+  renderAttendanceDepartmentTable();
+
+  renderAttendanceExceptionTable();
+
+}
+
+
+/* =========================================================
+   KPI CARDS
+========================================================= */
+
+function setAttendanceKpi(
+  id,
+  value
+) {
+
+  const el =
+    document.getElementById(id);
+
+  if (el) {
+    el.innerHTML = value;
+  }
+
+}
+
+
+function renderAttendanceKpis() {
+
+  const data =
+    attendancePayload;
+
+  const summary =
+    data.summary || {};
+
+
+  setAttendanceKpi(
+    'attKpiOverall',
+    attendanceNumber(
+      summary.attendancePercent
+    ).toFixed(1) + '%'
+  );
+
+
+  setAttendanceKpi(
+    'attKpiPresent',
+    attendanceFormatNumber(
+      summary.present
+    )
+  );
+
+
+  setAttendanceKpi(
+    'attKpiAbsent',
+    attendanceFormatNumber(
+      summary.absent
+    )
+  );
+
+
+  /*
+    Third card:
+    use API "other" records.
+  */
+
+  setAttendanceKpi(
+    'attKpiLeave',
+    attendanceFormatNumber(
+      summary.other
+    )
+  );
+
+
+  /*
+    Fourth card:
+    late attendance records.
+  */
+
+  setAttendanceKpi(
+    'attKpiLeaveRequests',
+    attendanceFormatNumber(
+      summary.lateCount
+    )
+  );
+
+
+  /*
+    Avg effective hours.
+  */
+
+  setAttendanceKpi(
+    'attKpiRegularisation',
+    attendanceNumber(
+      summary.avgEffectiveHours
+    ).toFixed(2) +
+    ' <span>hrs</span>'
+  );
+
+
+  /*
+    Employees.
+  */
+
+  setAttendanceKpi(
+    'attKpiLiability',
+    attendanceFormatNumber(
+      data.employeeCount
+    )
+  );
+
+
+  /*
+    Attendance records.
+  */
+
+  setAttendanceKpi(
+    'attKpiExceptions',
+    attendanceFormatNumber(
+      data.attendanceRecordCount
+    )
+  );
+
+}
+
+
+/* =========================================================
+   DAILY ATTENDANCE TREND
+========================================================= */
+
+function renderAttendanceTrendChart() {
+
+  const canvas =
+    document.getElementById(
+      'attendanceTrendChart'
+    );
+
+  if (
+    !canvas ||
+    typeof Chart === 'undefined'
+  ) {
+    return;
+  }
+
+
+  destroyAttendanceChart(
+    'attendanceTrendChart'
+  );
+
+
+  const rows =
+    [...attendancePayload.daily]
+      .sort(
+        (a, b) =>
+          String(a.date)
+            .localeCompare(
+              String(b.date)
+            )
+      );
+
+
+  /*
+    Keep most recent 30 dates in the chart.
+  */
+
+  const recent =
+    rows.slice(-30);
+
+
+  ATTENDANCE_CHARTS[
+    'attendanceTrendChart'
+  ] =
+    new Chart(
+      canvas,
+      {
+
+        type: 'line',
+
+        data: {
+
+          labels:
+            recent.map(
+              row => {
+
+                const d =
+                  new Date(
+                    row.date + 'T00:00:00'
+                  );
+
+                if (
+                  Number.isNaN(
+                    d.getTime()
+                  )
+                ) {
+                  return row.date;
+                }
+
+                return d.toLocaleDateString(
+                  'en-IN',
+                  {
+                    day: '2-digit',
+                    month: 'short'
+                  }
+                );
+
+              }
+            ),
+
+          datasets: [
+
+            {
+
+              label:
+                'Attendance %',
+
+              data:
+                recent.map(
+                  row =>
+                    attendanceNumber(
+                      row.attendancePercent
+                    )
+                ),
+
+              borderColor:
+                '#17616e',
+
+              backgroundColor:
+                'rgba(23,97,110,.08)',
+
+              fill: true,
+
+              tension: 0.35,
+
+              pointRadius: 2,
+
+              pointHoverRadius: 4,
+
+              borderWidth: 2.2
+
+            }
+
+          ]
+
+        },
+
+
+        options: {
+
+          responsive: true,
+
+          maintainAspectRatio:
+            false,
+
+          interaction: {
+            intersect: false,
+            mode: 'index'
+          },
+
+          plugins: {
+
+            legend: {
+              display: false
+            },
+
+            tooltip: {
+
+              callbacks: {
+
+                label:
+                  context =>
+                    context.parsed.y
+                      .toFixed(1) +
+                    '%'
+
+              }
+
+            }
+
+          },
+
+          scales: {
+
+            x: {
+
+              grid: {
+                display: false
+              }
+
+            },
+
+            y: {
+
+              beginAtZero: true,
+
+              max: 100,
+
+              ticks: {
+
+                callback:
+                  value =>
+                    value + '%'
+
+              },
+
+              grid: {
+
+                color:
+                  'rgba(15,68,78,.07)'
+
+              }
+
+            }
+
+          }
+
+        }
+
+      }
+    );
+
+}
+
+
+/* =========================================================
+   PRESENT / ABSENT / OTHER
+========================================================= */
+
+function renderAttendanceMixChart() {
+
+  const canvas =
+    document.getElementById(
+      'attendanceMixChart'
+    );
+
+  if (
+    !canvas ||
+    typeof Chart === 'undefined'
+  ) {
+    return;
+  }
+
+
+  destroyAttendanceChart(
+    'attendanceMixChart'
+  );
+
+
+  const summary =
+    attendancePayload.summary;
+
+
+  ATTENDANCE_CHARTS[
+    'attendanceMixChart'
+  ] =
+    new Chart(
+      canvas,
+      {
+
+        type: 'doughnut',
+
+        data: {
+
+          labels: [
+            'Present',
+            'Absent',
+            'Other'
+          ],
+
+          datasets: [
+
+            {
+
+              data: [
+
+                attendanceNumber(
+                  summary.present
+                ),
+
+                attendanceNumber(
+                  summary.absent
+                ),
+
+                attendanceNumber(
+                  summary.other
+                )
+
+              ],
+
+              backgroundColor: [
+                '#70ad47',
+                '#c22a4d',
+                '#899ba0'
+              ],
+
+              borderWidth: 0
+
+            }
+
+          ]
+
+        },
+
+
+        options: {
+
+          responsive: true,
+
+          maintainAspectRatio:
+            false,
+
+          cutout: '68%',
+
+          plugins: {
+
+            legend: {
+              position: 'bottom'
+            }
+
+          }
+
+        }
+
+      }
+    );
+
+}
+
+
+/* =========================================================
+   DEPARTMENT CHART
+========================================================= */
+
+function getSelectedDepartment() {
+
+  const el =
+    document.getElementById(
+      'attendanceDeptFilter'
+    );
+
+  return el
+    ? el.value
+    : 'all';
+
+}
+
+
+function renderAttendanceDepartmentChart() {
+
+  const canvas =
+    document.getElementById(
+      'attendanceDeptChart'
+    );
+
+  if (
+    !canvas ||
+    typeof Chart === 'undefined'
+  ) {
+    return;
+  }
+
+
+  destroyAttendanceChart(
+    'attendanceDeptChart'
+  );
+
+
+  let departments =
+    [...attendancePayload.departments];
+
+
+  const selected =
+    getSelectedDepartment();
+
+
+  if (selected !== 'all') {
+
+    departments =
+      departments.filter(
+        row =>
+          row.department ===
+          selected
+      );
+
+  }
+
+
+  /*
+    Sort high to low.
+  */
+
+  departments.sort(
+    (a, b) =>
+      attendanceNumber(
+        b.attendancePercent
+      )
+      -
+      attendanceNumber(
+        a.attendancePercent
+      )
+  );
+
+
+  ATTENDANCE_CHARTS[
+    'attendanceDeptChart'
+  ] =
+    new Chart(
+      canvas,
+      {
+
+        type: 'bar',
+
+        data: {
+
+          labels:
+            departments.map(
+              row =>
+                row.department
+            ),
+
+          datasets: [
+
+            {
+
+              label:
+                'Attendance %',
+
+              data:
+                departments.map(
+                  row =>
+                    attendanceNumber(
+                      row.attendancePercent
+                    )
+                ),
+
+              backgroundColor:
+                '#17616e',
+
+              borderRadius: 5,
+
+              maxBarThickness: 30
+
+            }
+
+          ]
+
+        },
+
+
+        options: {
+
+          indexAxis:
+            departments.length > 6
+              ? 'y'
+              : 'x',
+
+          responsive: true,
+
+          maintainAspectRatio:
+            false,
+
+          plugins: {
+
+            legend: {
+              display: false
+            }
+
+          },
+
+          scales: {
+
+            x: {
+
+              beginAtZero: true,
+
+              grid: {
+                display: false
+              }
+
+            },
+
+            y: {
+
+              beginAtZero: true,
+
+              grid: {
+
+                color:
+                  'rgba(15,68,78,.06)'
+
+              }
+
+            }
+
+          }
+
+        }
+
+      }
+    );
+
+}
+
+
+/* =========================================================
+   BRANCH CHART
+
+   We reuse attendanceLeaveMixChart canvas because leave data
+   is not available in the current API.
+========================================================= */
+
+function renderAttendanceBranchChart() {
+
+  const canvas =
+    document.getElementById(
+      'attendanceLeaveMixChart'
+    );
+
+  if (
+    !canvas ||
+    typeof Chart === 'undefined'
+  ) {
+    return;
+  }
+
+
+  destroyAttendanceChart(
+    'attendanceLeaveMixChart'
+  );
+
+
+  let branches =
+    Array.isArray(
+      attendancePayload.branches
+    )
+      ? [...attendancePayload.branches]
+      : [];
+
+
+  const branchFilter =
+    document.getElementById(
+      'attendanceLocationFilter'
+    );
+
+
+  if (
+    branchFilter &&
+    branchFilter.value !== 'all'
+  ) {
+
+    branches =
+      branches.filter(
+        row =>
+          row.branch ===
+          branchFilter.value
+      );
+
+  }
+
+
+  branches.sort(
+    (a, b) =>
+      attendanceNumber(
+        b.attendancePercent
+      )
+      -
+      attendanceNumber(
+        a.attendancePercent
+      )
+  );
+
+
+  ATTENDANCE_CHARTS[
+    'attendanceLeaveMixChart'
+  ] =
+    new Chart(
+      canvas,
+      {
+
+        type: 'bar',
+
+        data: {
+
+          labels:
+            branches.map(
+              row =>
+                row.branch
+            ),
+
+          datasets: [
+
+            {
+
+              label:
+                'Attendance %',
+
+              data:
+                branches.map(
+                  row =>
+                    attendanceNumber(
+                      row.attendancePercent
+                    )
+                ),
+
+              backgroundColor:
+                '#3875b7',
+
+              borderRadius: 5,
+
+              maxBarThickness: 30
+
+            }
+
+          ]
+
+        },
+
+
+        options: {
+
+          indexAxis:
+            branches.length > 6
+              ? 'y'
+              : 'x',
+
+          responsive: true,
+
+          maintainAspectRatio:
+            false,
+
+          plugins: {
+
+            legend: {
+              display: false
+            }
+
+          }
+
+        }
+
+      }
+    );
+
+}
+
+
+/* =========================================================
+   DEPARTMENT TABLE
+========================================================= */
+
+function renderAttendanceDepartmentTable() {
+
+  const tbody =
+    document.getElementById(
+      'attendanceDeptBody'
+    );
+
+  if (!tbody) {
+    return;
+  }
+
+
+  let rows =
+    [...attendancePayload.departments];
+
+
+  const selected =
+    getSelectedDepartment();
+
+
+  if (
+    selected !== 'all'
+  ) {
+
+    rows =
+      rows.filter(
+        row =>
+          row.department ===
+          selected
+      );
+
+  }
+
+
+  rows.sort(
+    (a, b) =>
+      attendanceNumber(
+        b.attendancePercent
+      )
+      -
+      attendanceNumber(
+        a.attendancePercent
+      )
+  );
+
+
+  tbody.innerHTML =
+    rows.map(
+      row => {
+
+        const pct =
+          attendanceNumber(
+            row.attendancePercent
+          );
+
+
+        let cls =
+          'green';
+
+        let status =
+          'Healthy';
+
+
+        if (pct < 80) {
+
+          cls =
+            'red';
+
+          status =
+            'Critical';
+
+        } else if (
+          pct < 90
+        ) {
+
+          cls =
+            'amber';
+
+          status =
+            'Watch';
+
+        }
+
+
+        return `
+
+          <tr>
+
+            <td>
+              ${attendanceEscape(
+                row.department
+              )}
+            </td>
+
+            <td>
+              ${attendanceFormatNumber(
+                row.total
+              )}
+            </td>
+
+            <td>
+              <strong>
+                ${pct.toFixed(1)}%
+              </strong>
+            </td>
+
+            <td>
+              ${attendanceFormatNumber(
+                row.present
+              )}
+            </td>
+
+            <td>
+              ${attendanceFormatNumber(
+                row.absent
+              )}
+            </td>
+
+            <td>
+              ${attendanceFormatNumber(
+                row.other
+              )}
+            </td>
+
+            <td>
+
+              <span
+                class="module-status ${cls}"
+              >
+                ${status}
+              </span>
+
+            </td>
+
+          </tr>
+
+        `;
+
+      }
+    )
+    .join('');
+
+}
+
+
+/* =========================================================
+   EXCEPTION TABLE
+========================================================= */
+
+function renderAttendanceExceptionTable() {
+
+  const tbody =
+    document.getElementById(
+      'attendanceExceptionBody'
+    );
+
+  if (!tbody) {
+    return;
+  }
+
+
+  let rows =
+    Array.isArray(
+      attendancePayload.exceptions
+    )
+      ? [...attendancePayload.exceptions]
+      : [];
+
+
+  const department =
+    getSelectedDepartment();
+
+
+  if (
+    department !== 'all'
+  ) {
+
+    rows =
+      rows.filter(
+        row =>
+          row.department ===
+          department
+      );
+
+  }
+
+
+  const branchFilter =
+    document.getElementById(
+      'attendanceLocationFilter'
+    );
+
+
+  if (
+    branchFilter &&
+    branchFilter.value !== 'all'
+  ) {
+
+    rows =
+      rows.filter(
+        row =>
+          row.branch ===
+          branchFilter.value
+      );
+
+  }
+
+
+  const counter =
+    document.getElementById(
+      'attendanceExceptionCount'
+    );
+
+  if (counter) {
+
+    counter.textContent =
+      attendanceFormatNumber(
+        rows.length
+      );
+
+  }
+
+
+  if (!rows.length) {
+
+    tbody.innerHTML = `
+
+      <tr>
+
+        <td
+          colspan="8"
+          style="
+            text-align:center;
+            padding:24px;
+            color:#81979d;
+          "
+        >
+          No attendance exceptions found.
+        </td>
+
+      </tr>
+
+    `;
+
+    return;
+
+  }
+
+
+  tbody.innerHTML =
+    rows
+
+      .slice(0, 100)
+
+      .map(
+        row => {
+
+          const pct =
+            attendanceNumber(
+              row.attendancePercent
+            );
+
+
+          let cls =
+            'amber';
+
+          let issue =
+            'Attendance Watch';
+
+
+          if (pct < 75) {
+
+            cls =
+              'red';
+
+            issue =
+              'Low Attendance';
+
+          }
+
+
+          return `
+
+            <tr>
+
+              <td>
+
+                <div class="employee-cell-name">
+
+                  ${attendanceEscape(
+                    row.employeeName
+                  )}
+
+                </div>
+
+                <div class="employee-cell-sub">
+
+                  ${attendanceEscape(
+                    row.employeeNumber
+                  )}
+
+                </div>
+
+              </td>
+
+
+              <td>
+                ${attendanceEscape(
+                  row.department
+                )}
+              </td>
+
+
+              <td>
+                ${attendanceEscape(
+                  row.manager || '-'
+                )}
+              </td>
+
+
+              <td>
+
+                <strong>
+                  ${pct.toFixed(1)}%
+                </strong>
+
+              </td>
+
+
+              <td>
+                ${attendanceFormatNumber(
+                  row.absent
+                )}
+              </td>
+
+
+              <td>
+                ${attendanceFormatNumber(
+                  row.other
+                )}
+              </td>
+
+
+              <td>
+
+                <span
+                  class="module-status ${cls}"
+                >
+                  ${issue}
+                </span>
+
+              </td>
+
+
+              <td>
+
+                <button
+                  type="button"
+                  class="module-action-btn"
+                  onclick="openAttendanceEmployee('${attendanceEscape(
+                    row.employeeNumber
+                  )}')"
+                >
+                  View
+                </button>
+
+              </td>
+
+            </tr>
+
+          `;
+
+        }
+      )
+
+      .join('');
+
+}
+
+
+/* =========================================================
+   TEMPORARY UNUSED CHARTS
+========================================================= */
+
+/*
+The current Keka API does not contain actual leave data.
+
+So instead of showing fake leave usage / regularisation charts,
+we show a clear placeholder.
+*/
+
+function renderAttendanceUnavailableSections() {
+
+  [
+    'leaveUsageChart',
+    'regularisationTrendChart'
+  ]
+  .forEach(
+    id => {
+
+      const canvas =
+        document.getElementById(id);
+
+      if (!canvas) {
+        return;
+      }
+
+
+      const parent =
+        canvas.parentElement;
+
+      if (!parent) {
+        return;
+      }
+
+
+      canvas.style.display =
+        'none';
+
+
+      let note =
+        parent.querySelector(
+          '.attendance-api-note'
+        );
+
+
+      if (!note) {
+
+        note =
+          document.createElement(
+            'div'
+          );
+
+        note.className =
+          'attendance-api-note';
+
+        note.style.cssText = `
+          min-height:220px;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          text-align:center;
+          color:#81979d;
+          font-size:12px;
+          padding:24px;
+        `;
+
+        note.innerHTML =
+          'Leave API data not connected yet.';
+
+        parent.appendChild(
+          note
+        );
+
+      }
+
+    }
+  );
+
+}
+
+
+/* =========================================================
+   EMPLOYEE DETAIL
+========================================================= */
+
+function openAttendanceEmployee(
+  employeeNumber
+) {
+
+  if (!attendancePayload) {
+    return;
+  }
+
+
+  const employee =
+    attendancePayload.exceptions
+      ?.find(
+        row =>
+          String(
+            row.employeeNumber
+          ) ===
+          String(
+            employeeNumber
+          )
+      );
+
+
+  if (!employee) {
+
+    alert(
+      'Employee attendance detail is not available in the current aggregate response.'
+    );
+
+    return;
+
+  }
+
+
+  alert(
+
+    employee.employeeName +
+
+    '\n\nEmployee ID: ' +
+    employee.employeeNumber +
+
+    '\nDepartment: ' +
+    (
+      employee.department ||
+      '-'
+    ) +
+
+    '\nBranch: ' +
+    (
+      employee.branch ||
+      '-'
+    ) +
+
+    '\nManager: ' +
+    (
+      employee.manager ||
+      '-'
+    ) +
+
+    '\nAttendance: ' +
+    employee.attendancePercent +
+    '%' +
+
+    '\nPresent Records: ' +
+    employee.present +
+
+    '\nAbsent Records: ' +
+    employee.absent
+
+  );
+
+}
+
+
+/* =========================================================
+   LOAD WHEN ATTENDANCE TAB IS OPEN
+========================================================= */
+
+function initialiseLiveAttendance() {
+
+  renderAttendanceUnavailableSections();
+
+
+  const attendancePage =
+    document.getElementById(
+      'attendance'
+    );
+
+
+  /*
+    If Attendance happens to be the initial page,
+    load immediately.
+  */
+
+  if (
+    attendancePage &&
+    attendancePage.classList.contains(
+      'active'
+    )
+  ) {
+
+    loadAttendanceLive(false);
+
+  }
+
+}
+
+
+if (
+  document.readyState ===
+  'loading'
+) {
+
+  document.addEventListener(
+    'DOMContentLoaded',
+    initialiseLiveAttendance
+  );
+
+} else {
+
+  initialiseLiveAttendance();
+
+}
+
+
+/* =========================================================
+   PAYROLL & COMPENSATION - LIVE FRONTEND
+========================================================= */
+
+const PAYROLL_API_URL =
+  'https://script.google.com/macros/s/AKfycbxWzFltc06j3OmPFG62gtuvbj_SumQe3dvbPCcc5BurhqyXeeqRTXJjutzNKStXSJl-/exec';
+
+let PAYROLL_DATA = null;
+let PAYROLL_LOADED = false;
+let PAYROLL_LOADING = false;
+let PAYROLL_REQUEST_TIMER = null;
+
+const PAYROLL_CHARTS = {};
+
+const PAYROLL_METRICS = {
+  payrollCost: {
+    title: 'Payroll Cost',
+    subtitle: 'Total Earn Gross with Arrear'
+  },
+  totalDeduction: {
+    title: 'Total Deduction',
+    subtitle: 'PF, ESI, tax, loan and other deductions'
+  },
+  netPayroll: {
+    title: 'Net Payroll',
+    subtitle: 'Final payable in-hand'
+  },
+  arrearIncrement: {
+    title: 'Arrear Increment',
+    subtitle: 'Increment arrears processed'
+  }
+};
+
+function payrollGet(id) {
+  return __nativeGetElementById ? __nativeGetElementById(id) : document.getElementById(id);
+}
+
+function setPayrollStatus(text, state) {
+  const el = payrollGet('payrollLiveStatus');
+  if (!el) return;
+  el.textContent = text;
+  el.classList.remove('live', 'error');
+  if (state === 'live') el.classList.add('live');
+  if (state === 'error') el.classList.add('error');
+}
+
+function loadPayrollLive(forceRefresh = false) {
+  if (PAYROLL_LOADING) return;
+
+  if (PAYROLL_LOADED && !forceRefresh) {
+    renderPayrollDashboard(PAYROLL_DATA);
+    return;
+  }
+
+  PAYROLL_LOADING = true;
+  setPayrollStatus('Connecting...', '');
+
+  const oldScript = payrollGet('payrollJsonpScript');
+  if (oldScript && oldScript.parentNode) oldScript.parentNode.removeChild(oldScript);
+  if (PAYROLL_REQUEST_TIMER) clearTimeout(PAYROLL_REQUEST_TIMER);
+
+  window.receivePayrollData = function(payload) {
+    PAYROLL_LOADING = false;
+    if (PAYROLL_REQUEST_TIMER) clearTimeout(PAYROLL_REQUEST_TIMER);
+
+    try {
+      if (!payload || payload.ok !== true) {
+        throw new Error((payload && payload.error) || 'Payroll API returned invalid data');
+      }
+      if (!Array.isArray(payload.months)) {
+        throw new Error('months[] missing from Payroll API response');
+      }
+
+      PAYROLL_DATA = payload;
+      PAYROLL_LOADED = true;
+      setPayrollStatus('● Live', 'live');
+      renderPayrollDashboard(payload);
+      console.log('Payroll live loaded:', payload);
+    } catch (error) {
+      console.error('Payroll response processing failed:', error, payload);
+      setPayrollStatus('Data Error', 'error');
+    }
+  };
+
+  const script = document.createElement('script');
+  script.id = 'payrollJsonpScript';
+  script.async = true;
+  script.src =
+    PAYROLL_API_URL +
+    '?module=payroll' +
+    '&callback=receivePayrollData' +
+    '&_=' + Date.now();
+
+  script.onerror = function(event) {
+    PAYROLL_LOADING = false;
+    if (PAYROLL_REQUEST_TIMER) clearTimeout(PAYROLL_REQUEST_TIMER);
+    console.error('Unable to load Payroll API:', event, script.src);
+    setPayrollStatus('Connection Failed', 'error');
+  };
+
+  document.head.appendChild(script);
+
+  PAYROLL_REQUEST_TIMER = setTimeout(function() {
+    if (PAYROLL_LOADING) {
+      PAYROLL_LOADING = false;
+      console.error('Payroll API timeout:', script.src);
+      setPayrollStatus('Connection Timeout', 'error');
+    }
+  }, 20000);
+}
+
+function renderPayrollDashboard(data) {
+  if (!data || !data.summary) return;
+
+  const s = data.summary;
+
+  setPayrollText('payrollLatestMonth', data.latestMonth || '-');
+  setPayrollText('payrollKpiCost', formatPayrollMoney(s.payrollCost));
+  setPayrollText('payrollKpiDeduction', formatPayrollMoney(s.totalDeduction));
+  setPayrollText('payrollKpiNet', formatPayrollMoney(s.netPayroll));
+  setPayrollText('payrollKpiArrear', formatPayrollMoney(s.arrearIncrement));
+
+  setPayrollMom('payrollKpiCostMom', s.payrollCostMomPct);
+  setPayrollMom('payrollKpiDeductionMom', s.totalDeductionMomPct);
+  setPayrollMom('payrollKpiNetMom', s.netPayrollMomPct);
+  setPayrollMom('payrollKpiArrearMom', s.arrearIncrementMomPct);
+
+  setPayrollText('payrollEmployeeCount', formatPayrollNumber(s.employeeCount));
+  setPayrollText('payrollSalaryHoldCount', formatPayrollNumber(s.salaryHoldCount));
+  setPayrollText('payrollLopDays', formatPayrollNumber(s.lopDays));
+
+  renderPayrollTrendChart(data.months || []);
+  renderPayrollDepartmentChart(data.latestDepartmentBreakdown || []);
+  renderPayrollLocationChart(data.latestLocationBreakdown || []);
+}
+
+function setPayrollText(id, value) {
+  const el = payrollGet(id);
+  if (el) el.textContent = value;
+}
+
+function setPayrollMom(id, value) {
+  const el = payrollGet(id);
+  if (!el) return;
+
+  el.classList.remove('up', 'down', 'flat');
+
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) {
+    el.textContent = 'MoM: NA';
+    el.classList.add('flat');
+    return;
+  }
+
+  const number = Number(value);
+  if (number > 0) {
+    el.textContent = '▲ ' + Math.abs(number).toFixed(1) + '% vs previous month';
+    el.classList.add('up');
+  } else if (number < 0) {
+    el.textContent = '▼ ' + Math.abs(number).toFixed(1) + '% vs previous month';
+    el.classList.add('down');
+  } else {
+    el.textContent = '0.0% vs previous month';
+    el.classList.add('flat');
+  }
+}
+
+function destroyPayrollChart(key, canvasId) {
+  if (PAYROLL_CHARTS[key]) {
+    try { PAYROLL_CHARTS[key].destroy(); } catch (e) {}
+    delete PAYROLL_CHARTS[key];
+  }
+
+  if (typeof Chart !== 'undefined' && typeof Chart.getChart === 'function') {
+    const canvas = payrollGet(canvasId);
+    if (canvas) {
+      const old = Chart.getChart(canvas);
+      if (old) {
+        try { old.destroy(); } catch (e) {}
+      }
+    }
+  }
+}
+
+function renderPayrollTrendChart(months) {
+  const canvas = payrollGet('payrollTrendChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  destroyPayrollChart('trend', 'payrollTrendChart');
+
+  PAYROLL_CHARTS.trend = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: months.map(row => row.month),
+      datasets: [{
+        label: 'Payroll Cost',
+        data: months.map(row => Number(row.payrollCost || 0)),
+        borderColor: '#17616E',
+        backgroundColor: 'rgba(23,97,110,.10)',
+        tension: .32,
+        fill: true,
+        borderWidth: 3,
+        pointRadius: 4,
+        pointHoverRadius: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ' ' + formatPayrollMoney(ctx.raw)
+          }
+        }
+      },
+      scales: {
+        x: { grid: { display: false } },
+        y: {
+          beginAtZero: false,
+          grid: { color: '#EEF1F4' },
+          ticks: { callback: value => formatPayrollCompact(value) }
+        }
+      }
+    }
+  });
+}
+
+function renderPayrollDepartmentChart(rows) {
+  const canvas = payrollGet('payrollDeptChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  destroyPayrollChart('department', 'payrollDeptChart');
+
+  const clean = (rows || [])
+    .filter(row => row.department && Number(row.payrollCost || 0) > 0)
+    .sort((a,b) => Number(b.payrollCost || 0) - Number(a.payrollCost || 0))
+    .slice(0, 12);
+
+  PAYROLL_CHARTS.department = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: clean.map(row => row.department),
+      datasets: [{
+        label: 'Payroll Cost',
+        data: clean.map(row => Number(row.payrollCost || 0)),
+        backgroundColor: '#17616E',
+        borderRadius: 6,
+        borderSkipped: false
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ' ' + formatPayrollMoney(ctx.raw) } }
+      },
+      scales: {
+        x: { beginAtZero: true, grid: { color: '#EEF1F4' }, ticks: { callback: value => formatPayrollCompact(value) } },
+        y: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+function renderPayrollLocationChart(rows) {
+  const canvas = payrollGet('payrollLocationChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  destroyPayrollChart('location', 'payrollLocationChart');
+
+  const clean = (rows || [])
+    .filter(row => row.location && Number(row.payrollCost || 0) > 0)
+    .sort((a,b) => Number(b.payrollCost || 0) - Number(a.payrollCost || 0))
+    .slice(0, 12);
+
+  PAYROLL_CHARTS.location = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: clean.map(row => row.location),
+      datasets: [{
+        label: 'Payroll Cost',
+        data: clean.map(row => Number(row.payrollCost || 0)),
+        backgroundColor: '#3E7DBB',
+        borderRadius: 6,
+        borderSkipped: false
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ' ' + formatPayrollMoney(ctx.raw) } }
+      },
+      scales: {
+        x: { beginAtZero: true, grid: { color: '#EEF1F4' }, ticks: { callback: value => formatPayrollCompact(value) } },
+        y: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+function openPayrollMom(metricKey) {
+  if (!PAYROLL_DATA || !PAYROLL_METRICS[metricKey]) return;
+
+  const config = PAYROLL_METRICS[metricKey];
+  const months = PAYROLL_DATA.months || [];
+
+  const title = payrollGet('payrollMomTitle');
+  const subtitle = payrollGet('payrollMomSubtitle');
+  if (title) title.textContent = config.title + ' - Month-on-Month';
+  if (subtitle) subtitle.textContent = config.subtitle;
+
+  renderPayrollMomChart(metricKey, months, config);
+  renderPayrollMomTable(metricKey, months);
+
+  const modal = payrollGet('payrollMomModal');
+  if (modal) modal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closePayrollMom() {
+  const modal = payrollGet('payrollMomModal');
+  if (modal) modal.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function closePayrollMomOnBackdrop(event) {
+  if (event && event.target && event.target.id === 'payrollMomModal') closePayrollMom();
+}
+
+function renderPayrollMomChart(metricKey, months, config) {
+  const canvas = payrollGet('payrollMomChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  destroyPayrollChart('mom', 'payrollMomChart');
+
+  PAYROLL_CHARTS.mom = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: months.map(row => row.month),
+      datasets: [{
+        label: config.title,
+        data: months.map(row => Number(row[metricKey] || 0)),
+        borderColor: '#17616E',
+        backgroundColor: 'rgba(23,97,110,.10)',
+        tension: .32,
+        fill: true,
+        borderWidth: 3,
+        pointRadius: 5,
+        pointHoverRadius: 7
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ' ' + formatPayrollMoney(ctx.raw) } }
+      },
+      scales: {
+        x: { grid: { display: false } },
+        y: { beginAtZero: false, grid: { color: '#EEF1F4' }, ticks: { callback: value => formatPayrollCompact(value) } }
+      }
+    }
+  });
+}
+
+function renderPayrollMomTable(metricKey, months) {
+  const body = payrollGet('payrollMomTableBody');
+  if (!body) return;
+
+  if (!months.length) {
+    body.innerHTML = '<tr><td colspan="3">No payroll months available.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = months.map((row, index) => {
+    const value = Number(row[metricKey] || 0);
+    let mom = null;
+    if (index > 0) {
+      const previous = Number(months[index - 1][metricKey] || 0);
+      if (previous !== 0) mom = ((value - previous) / previous) * 100;
+    }
+    const isLatest = index === months.length - 1;
+
+    return `
+      <tr class="${isLatest ? 'payroll-latest-row' : ''}">
+        <td>${escapePayrollHtml(row.month || '-')}${isLatest ? ' <span style="font-size:11px;color:#14825a;">LATEST</span>' : ''}</td>
+        <td>${formatPayrollMoney(value)}</td>
+        <td>${formatPayrollMomCell(mom)}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function formatPayrollMoney(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return '-';
+  const abs = Math.abs(number);
+  if (abs >= 10000000) return '₹' + (number / 10000000).toFixed(2) + ' Cr';
+  if (abs >= 100000) return '₹' + (number / 100000).toFixed(2) + ' L';
+  return '₹' + new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(number);
+}
+
+function formatPayrollCompact(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return '';
+  const abs = Math.abs(number);
+  if (abs >= 10000000) return (number / 10000000).toFixed(1) + 'Cr';
+  if (abs >= 100000) return (number / 100000).toFixed(1) + 'L';
+  if (abs >= 1000) return (number / 1000).toFixed(0) + 'K';
+  return String(Math.round(number));
+}
+
+function formatPayrollNumber(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return '-';
+  return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 1 }).format(number);
+}
+
+function formatPayrollMomCell(value) {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) return 'NA';
+  const number = Number(value);
+  if (number > 0) return '<span style="color:#13895b;font-weight:800;">▲ ' + number.toFixed(1) + '%</span>';
+  if (number < 0) return '<span style="color:#d13850;font-weight:800;">▼ ' + Math.abs(number).toFixed(1) + '%</span>';
+  return '<span style="color:#71838d;font-weight:800;">0.0%</span>';
+}
+
+function escapePayrollHtml(value) {
+  return String(value === null || value === undefined ? '' : value)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#039;');
+}
+
+if (!window.__payrollEscapeBound) {
+  window.__payrollEscapeBound = true;
+  document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') closePayrollMom();
+  });
+}
+
+/* =========================================================
+   TEAM OB - LIVE FRONTEND MODULE ONLY
+   SAFE APPEND:
+   Paste this entire block at the END of your current js/app.js.
+
+   It uses only teamOb* / TEAM_OB_* names and does not replace
+   Employee CRM, Attendance, L&D or Payroll code.
+========================================================= */
+
+const TEAM_OB_API_URL =
+  'https://script.google.com/macros/s/AKfycbxWzFltc06j3OmPFG62gtuvbj_SumQe3dvbPCcc5BurhqyXeeqRTXJjutzNKStXSJl-/exec';
+
+let TEAM_OB_DATA = null;
+let TEAM_OB_LOADED = false;
+let TEAM_OB_LOADING = false;
+let TEAM_OB_REQUEST_TIMER = null;
+
+const TEAM_OB_CHARTS = {};
+
+/* =========================
+   SMALL HELPERS
+========================= */
+
+function teamObEl(id){
+  return document.getElementById(id);
+}
+
+function teamObNum(value){
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function teamObText(value){
+  return String(value === null || value === undefined ? '' : value);
+}
+
+function teamObEsc(value){
+  return teamObText(value)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#039;');
+}
+
+function teamObFormatNum(value, digits){
+  const n = teamObNum(value);
+  if(n === null) return '-';
+  return new Intl.NumberFormat('en-IN',{
+    maximumFractionDigits: digits === undefined ? 1 : digits
+  }).format(n);
+}
+
+function teamObPct(value){
+  const n = teamObNum(value);
+  return n === null ? '-' : n.toFixed(1) + '%';
+}
+
+function teamObHours(value){
+  const n = teamObNum(value);
+  return n === null ? '-' : n.toFixed(2) + ' hrs';
+}
+
+function teamObMinutes(value){
+  const n = teamObNum(value);
+  return n === null ? '-' : teamObFormatNum(n,1) + ' min';
+}
+
+function teamObPrettyDate(value){
+  if(!value) return '-';
+  const d = new Date(value + 'T00:00:00');
+  if(Number.isNaN(d.getTime())) return value;
+  return d.toLocaleDateString('en-IN',{
+    day:'2-digit',
+    month:'short',
+    year:'numeric'
+  });
+}
+
+function teamObSetText(id,value){
+  const el = teamObEl(id);
+  if(el) el.textContent = value;
+}
+
+function teamObStatusClass(status){
+  const s = teamObText(status).toLowerCase();
+  if(s === 'healthy') return 'healthy';
+  if(s === 'attention') return 'attention';
+  return 'watch';
+}
+
+function teamObSetStatus(text,state){
+  const el = teamObEl('teamObLiveStatus');
+  if(!el) return;
+  el.textContent = text;
+  el.classList.remove('live','error');
+  if(state === 'live') el.classList.add('live');
+  if(state === 'error') el.classList.add('error');
+}
+
+function teamObDestroyChart(key, canvasId){
+  if(TEAM_OB_CHARTS[key]){
+    try{ TEAM_OB_CHARTS[key].destroy(); }catch(e){}
+    TEAM_OB_CHARTS[key] = null;
+  }
+
+  if(
+    typeof Chart !== 'undefined' &&
+    typeof Chart.getChart === 'function'
+  ){
+    const canvas = teamObEl(canvasId);
+    if(canvas){
+      const existing = Chart.getChart(canvas);
+      if(existing){
+        try{ existing.destroy(); }catch(e){}
+      }
+    }
+  }
 }
 
 /* =========================
-   MAIN AREA
+   LOAD JSONP
 ========================= */
 
-.main{
-  margin-left:238px;
-  width:calc(100% - 238px);
+function teamObLoad(forceRefresh){
+
+  if(TEAM_OB_LOADING) return;
+
+  if(TEAM_OB_LOADED && !forceRefresh){
+    teamObRenderAll();
+    return;
+  }
+
+  TEAM_OB_LOADING = true;
+  teamObSetStatus('Connecting...','loading');
+
+  const old = teamObEl('teamObJsonpScript');
+  if(old && old.parentNode) old.parentNode.removeChild(old);
+
+  if(TEAM_OB_REQUEST_TIMER){
+    clearTimeout(TEAM_OB_REQUEST_TIMER);
+  }
+
+  const daysEl = teamObEl('teamObDaysFilter');
+  const days = daysEl ? Number(daysEl.value || 7) : 7;
+
+  const script = document.createElement('script');
+  script.id = 'teamObJsonpScript';
+  script.src =
+    TEAM_OB_API_URL +
+    '?module=teamob' +
+    '&days=' + encodeURIComponent(days) +
+    '&callback=receiveTeamObData' +
+    '&_=' + Date.now();
+
+  script.onerror = function(){
+    TEAM_OB_LOADING = false;
+    teamObSetStatus('Connection Failed','error');
+    console.error('Team OB API failed to load.');
+  };
+
+  TEAM_OB_REQUEST_TIMER = setTimeout(function(){
+    if(TEAM_OB_LOADING){
+      TEAM_OB_LOADING = false;
+      teamObSetStatus('Timeout','error');
+      console.error('Team OB API timeout.');
+    }
+  },45000);
+
+  document.body.appendChild(script);
 }
 
-/* =========================
-   TOP BAR
-========================= */
+window.receiveTeamObData = function(data){
 
-.topbar{
-  height:76px;
-  background:#fff;
-  border-bottom:1px solid var(--border);
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  padding:0 30px;
-  position:sticky;
-  top:0;
-  z-index:15;
-}
+  if(TEAM_OB_REQUEST_TIMER){
+    clearTimeout(TEAM_OB_REQUEST_TIMER);
+    TEAM_OB_REQUEST_TIMER = null;
+  }
 
-.topbar h1{
-  font-size:20px;
-  margin:0;
-  color:var(--navy);
-}
+  TEAM_OB_LOADING = false;
 
-.topbar p{
-  font-size:11.5px;
-  color:var(--muted);
-  margin:4px 0 0;
-}
+  if(
+    !data ||
+    data.ok !== true ||
+    !Array.isArray(data.employees)
+  ){
+    console.error('Invalid Team OB payload:',data);
+    teamObSetStatus('Data Error','error');
+    return;
+  }
 
-.top-actions{
-  display:flex;
-  gap:12px;
-  align-items:center;
-}
+  TEAM_OB_DATA = data;
+  TEAM_OB_LOADED = true;
+  teamObSetStatus('● Live','live');
 
-.search-wrap input{
-  width:280px;
-  border:1px solid var(--border);
-  border-radius:9px;
-  padding:10px 12px;
-  background:#f9fbfb;
-  outline:none;
-  font-size:12px;
-}
+  teamObPopulateFilters();
+  teamObRenderFreshness();
+  teamObRenderAll();
+};
 
-.search-wrap input:focus{
-  border-color:var(--teal-2);
-  box-shadow:0 0 0 3px rgba(20,123,141,.08);
-}
-
-.date-chip{
-  background:var(--teal-soft);
-  color:var(--teal);
-  font-weight:700;
-  font-size:11.5px;
-  border-radius:9px;
-  padding:10px 13px;
+function teamObReloadPeriod(){
+  TEAM_OB_LOADED = false;
+  TEAM_OB_DATA = null;
+  teamObLoad(true);
 }
 
 /* =========================
    FILTERS
 ========================= */
 
-.filters{
-  display:flex;
-  gap:10px;
-  align-items:center;
-  padding:14px 30px;
-  background:#fff;
-  border-bottom:1px solid var(--border);
-  position:sticky;
-  top:76px;
-  z-index:14;
+function teamObPopulateFilters(){
+
+  if(!TEAM_OB_DATA) return;
+
+  const rows = TEAM_OB_DATA.employees || [];
+
+  const departments = [...new Set(
+    rows.map(r => r.department).filter(Boolean)
+  )].sort((a,b)=>String(a).localeCompare(String(b)));
+
+  const managers = [...new Set(
+    rows.map(r => r.manager).filter(Boolean)
+  )].sort((a,b)=>String(a).localeCompare(String(b)));
+
+  const dept = teamObEl('teamObDepartmentFilter');
+  const mgr = teamObEl('teamObManagerFilter');
+
+  if(dept){
+    const selected = dept.value || 'all';
+    dept.innerHTML =
+      '<option value="all">All Departments</option>' +
+      departments.map(v =>
+        '<option value="'+teamObEsc(v)+'">'+teamObEsc(v)+'</option>'
+      ).join('');
+    if(departments.includes(selected)) dept.value = selected;
+  }
+
+  if(mgr){
+    const selected = mgr.value || 'all';
+    mgr.innerHTML =
+      '<option value="all">All Managers</option>' +
+      managers.map(v =>
+        '<option value="'+teamObEsc(v)+'">'+teamObEsc(v)+'</option>'
+      ).join('');
+    if(managers.includes(selected)) mgr.value = selected;
+  }
 }
 
-.filters select{
-  border:1px solid var(--border);
-  background:#fff;
-  border-radius:8px;
-  padding:8px 10px;
-  color:var(--text);
-  font-size:11.5px;
-  min-width:150px;
-}
+function teamObFilteredEmployees(){
 
-.btn{
-  border:0;
-  border-radius:9px;
-  padding:9px 14px;
-  font-size:11.5px;
-  font-weight:700;
-}
+  if(!TEAM_OB_DATA) return [];
 
-.btn-primary{
-  background:var(--teal);
-  color:#fff;
-}
+  const dept = teamObEl('teamObDepartmentFilter')?.value || 'all';
+  const manager = teamObEl('teamObManagerFilter')?.value || 'all';
+  const status = teamObEl('teamObStatusFilter')?.value || 'all';
+  const search = (teamObEl('teamObSearch')?.value || '').trim().toLowerCase();
 
-.btn-primary:hover{
-  background:#0c5360;
-}
+  return (TEAM_OB_DATA.employees || []).filter(row => {
 
-.btn-light{
-  background:#eef3f4;
-  color:#49676e;
-}
+    if(dept !== 'all' && row.department !== dept) return false;
+    if(manager !== 'all' && row.manager !== manager) return false;
+    if(status !== 'all' && row.status !== status) return false;
 
-.link-btn{
-  border:0;
-  background:transparent;
-  color:var(--teal);
-  font-size:11px;
-  font-weight:700;
+    if(search){
+      const haystack = [
+        row.employeeCode,
+        row.name,
+        row.department,
+        row.manager,
+        row.jobTitle
+      ].join(' ').toLowerCase();
+
+      if(!haystack.includes(search)) return false;
+    }
+
+    return true;
+  });
 }
 
 /* =========================
-   PAGES
+   FRESHNESS
 ========================= */
 
-.page{
-  display:none;
-  padding:24px 30px 40px;
-}
-
-.page.active{
-  display:block;
-}
-
-.section-toolbar{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  margin-bottom:18px;
-}
-
-.section-toolbar h2{
-  margin:0;
-  font-size:19px;
-}
-
-.section-toolbar p{
-  margin:4px 0 0;
-  font-size:11.5px;
-  color:var(--muted);
-}
-
-/* =========================
-   ATTENTION STRIP
-========================= */
-
-.attention-strip{
-  background:linear-gradient(90deg,#123f48,#176f7e);
-  color:#fff;
-  border-radius:14px;
-  padding:18px 20px;
-  margin-bottom:18px;
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  box-shadow:var(--shadow);
-}
-
-.attention-strip .eyebrow{
-  color:#bfe0e5;
-}
-
-.attention-text{
-  font-size:13px;
-  font-weight:600;
-  margin-top:5px;
-}
-
-.eyebrow{
-  text-transform:uppercase;
-  font-size:9.5px;
-  letter-spacing:.7px;
-  font-weight:800;
-  color:var(--muted);
-}
-
-/* =========================
-   KPI CARDS
-========================= */
-
-.kpi-grid{
-  display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
-  gap:14px;
-  margin-bottom:18px;
-}
-
-.kpi-card{
-  background:#fff;
-  border:1px solid var(--border);
-  border-radius:13px;
-  padding:16px;
-  box-shadow:var(--shadow);
-  transition:.15s ease;
-}
-
-.kpi-card:hover{
-  transform:translateY(-2px);
-  box-shadow:0 12px 28px rgba(18,73,84,.12);
-}
-
-.kpi-card .label{
-  font-size:10.5px;
-  font-weight:800;
-  text-transform:uppercase;
-  color:#56757c;
-  letter-spacing:.35px;
-}
-
-.kpi-card .value{
-  font-size:26px;
-  font-weight:800;
-  color:#113f49;
-  margin-top:8px;
-}
-
-.kpi-card .sub{
-  font-size:10.5px;
-  color:var(--muted);
-  margin-top:6px;
-}
-
-.kpi-card .sub.good{
-  color:var(--green);
-  font-weight:700;
-}
-
-.kpi-card .sub.bad{
-  color:var(--red);
-  font-weight:700;
-}
-
-.kpi-card.highlight{
-  background:#f8f6ff;
-}
-
-.kpi-card.warn{
-  background:#fff8ee;
-}
-
-/* =========================
-   PANELS
-========================= */
-
-.grid-2{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:18px;
-  margin-bottom:18px;
-}
-
-.panel{
-  background:#fff;
-  border:1px solid var(--border);
-  border-radius:14px;
-  padding:18px;
-  box-shadow:var(--shadow);
-}
-
-.panel-head{
-  display:flex;
-  justify-content:space-between;
-  align-items:flex-start;
-  margin-bottom:14px;
-}
-
-.panel-head h3{
-  margin:0;
-  font-size:13px;
-}
-
-.panel-head p{
-  margin:4px 0 0;
-  color:var(--muted);
-  font-size:10.5px;
-}
-
-.panel canvas{
-  width:100% !important;
-  height:270px !important;
-}
-
-/* =========================
-   HEALTH & ALERT ROWS
-========================= */
-
-.health-row,
-.alert-card,
-.issue-row,
-.learning-row,
-.compliance-row{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  padding:12px 0;
-  border-bottom:1px solid #edf2f3;
-}
-
-.health-row:last-child,
-.alert-card:last-child,
-.issue-row:last-child,
-.learning-row:last-child,
-.compliance-row:last-child{
-  border-bottom:0;
-}
-
-.health-main{
-  display:flex;
-  align-items:center;
-  gap:10px;
-}
-
-.health-dot{
-  width:9px;
-  height:9px;
-  border-radius:50%;
-}
-
-.health-dot.green{
-  background:var(--green);
-}
-
-.health-dot.amber{
-  background:var(--amber);
-}
-
-.health-dot.red{
-  background:var(--red);
-}
-
-.health-name{
-  font-size:11.5px;
-  font-weight:700;
-}
-
-.health-meta{
-  font-size:10.5px;
-  color:var(--muted);
-}
-
-.health-score{
-  font-size:11px;
-  font-weight:800;
-}
-
-/* =========================
-   ALERTS & BADGES
-========================= */
-
-.alert-left{
-  display:flex;
-  gap:10px;
-  align-items:flex-start;
-}
-
-.priority-pill,
-.status-pill{
-  display:inline-flex;
-  align-items:center;
-  border-radius:999px;
-  padding:4px 8px;
-  font-size:9.5px;
-  font-weight:800;
-  white-space:nowrap;
-}
-
-.priority-critical,
-.status-red,
-.status-pip{
-  background:#fde9ee;
-  color:var(--red);
-}
-
-.priority-high,
-.status-yellow{
-  background:#fff1d8;
-  color:var(--amber);
-}
-
-.priority-medium{
-  background:#edf4ff;
-  color:#456a9c;
-}
-
-.status-green{
-  background:#e9f7f0;
-  color:var(--green);
-}
-
-.status-open{
-  background:#eef6ff;
-  color:#3a6f9f;
-}
-
-.status-done{
-  background:#e9f7f0;
-  color:var(--green);
-}
-
-.status-inprogress{
-  background:#fff1d8;
-  color:var(--amber);
-}
-
-.alert-title{
-  font-size:11.5px;
-  font-weight:700;
-}
-
-.alert-meta{
-  font-size:10px;
-  color:var(--muted);
-  margin-top:3px;
-}
-
-/* =========================
-   CRM TABLE
-========================= */
-
-.table-tools{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  margin-bottom:12px;
-}
-
-.table-tools input{
-  border:1px solid var(--border);
-  border-radius:8px;
-  padding:9px 11px;
-  width:260px;
-  font-size:11.5px;
-  outline:none;
-}
-
-.table-tools input:focus{
-  border-color:var(--teal-2);
-}
-
-.table-meta{
-  font-size:10.5px;
-  color:var(--muted);
-}
-
-.table-scroll{
-  overflow:auto;
-}
-
-.crm-table{
-  width:100%;
-  border-collapse:collapse;
-  font-size:11.5px;
-}
-
-.crm-table th{
-  text-align:left;
-  padding:10px;
-  background:#f2f5fb;
-  color:#35535b;
-  text-transform:uppercase;
-  font-size:9.5px;
-  letter-spacing:.45px;
-  white-space:nowrap;
-}
-
-.crm-table td{
-  padding:11px 10px;
-  border-bottom:1px solid var(--border);
-  vertical-align:middle;
-}
-
-.crm-table tr:hover td{
-  background:#fbfdfd;
-}
-
-.emp-name{
-  font-weight:700;
-}
-
-.emp-role{
-  font-size:9.8px;
-  color:var(--muted);
-  margin-top:3px;
-}
-
-.view-btn{
-  border:0;
-  background:#eaf5f6;
-  color:var(--teal);
-  border-radius:7px;
-  padding:6px 9px;
-  font-size:10px;
-  font-weight:800;
-}
-
-/* =========================
-   RECRUITMENT PIPELINE
-========================= */
-
-.pipeline{
-  display:grid;
-  grid-template-columns:repeat(5,1fr);
-  gap:12px;
-}
-
-.stage{
-  background:#eef3f4;
-  border:1px solid var(--border);
-  border-radius:13px;
-  padding:12px;
-  min-height:320px;
-}
-
-.stage-head{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  margin-bottom:10px;
-}
-
-.stage-title{
-  font-size:11px;
-  font-weight:800;
-}
-
-.stage-count{
-  background:#fff;
-  border-radius:999px;
-  padding:3px 7px;
-  font-size:9.5px;
-  font-weight:800;
-}
-
-.req-card{
-  background:#fff;
-  border:1px solid var(--border);
-  border-radius:10px;
-  padding:11px;
-  margin-bottom:9px;
-  box-shadow:0 5px 14px rgba(0,0,0,.04);
-}
-
-.req-role{
-  font-size:10.8px;
-  font-weight:800;
-}
-
-.req-meta{
-  font-size:9.5px;
-  color:var(--muted);
-  margin-top:5px;
-}
-
-.req-age{
-  font-size:9.5px;
-  color:var(--red);
-  font-weight:700;
-  margin-top:6px;
-}
-.recruitment-embed-card{
-  width:100%;
-  background:#fff;
-  border:1px solid #dfe8eb;
-  border-radius:16px;
-  overflow:hidden;
-  box-shadow:0 8px 24px rgba(18,73,84,.08);
-}
-
-.recruitment-iframe{
-  display:block;
-  width:100%;
-  height:calc(100vh - 160px);
-  min-height:900px;
-  border:0;
-  background:#fff;
-}
-
-/* =========================
-   PERFORMANCE MATRIX
-========================= */
-
-.matrix-row{
-  display:grid;
-  grid-template-columns:2fr 1fr 1fr 1fr 1fr;
-  gap:10px;
-  align-items:center;
-  padding:11px;
-  border-bottom:1px solid var(--border);
-  font-size:11px;
-}
-
-.matrix-head{
-  font-weight:800;
-  background:#f4f7f8;
-  border-radius:8px;
-}
-
-.matrix-name{
-  font-weight:700;
-}
-
-/* =========================
-   EMPLOYEE 360 DRAWER
-========================= */
-
-.drawer-overlay{
-  position:fixed;
-  inset:0;
-  background:rgba(12,36,41,.32);
-  display:none;
-  z-index:39;
-}
-
-.drawer-overlay.open{
-  display:block;
-}
-
-.drawer{
-  position:fixed;
-  right:-520px;
-  top:0;
-  bottom:0;
-  width:500px;
-  background:#fff;
-  z-index:40;
-  box-shadow:-18px 0 40px rgba(12,36,41,.18);
-  transition:.25s ease;
-  display:flex;
-  flex-direction:column;
-}
-
-.drawer.open{
-  right:0;
-}
-
-.drawer-head{
-  padding:22px;
-  border-bottom:1px solid var(--border);
-  display:flex;
-  justify-content:space-between;
-  align-items:flex-start;
-}
-
-.drawer-head h2{
-  margin:4px 0 0;
-  font-size:20px;
-}
-
-.drawer-head p{
-  margin:5px 0 0;
-  color:var(--muted);
-  font-size:11.5px;
-}
-
-.icon-btn{
-  border:0;
-  background:#eef3f4;
-  width:32px;
-  height:32px;
-  border-radius:8px;
-  font-size:18px;
-}
-
-.drawer-body{
-  padding:20px;
-  overflow:auto;
-}
-
-.profile-grid{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:12px;
-}
-
-.profile-card{
-  border:1px solid var(--border);
-  border-radius:11px;
-  padding:13px;
-}
-
-.profile-label{
-  font-size:9.5px;
-  color:var(--muted);
-  text-transform:uppercase;
-  font-weight:800;
-}
-
-.profile-value{
-  font-size:12px;
-  font-weight:700;
-  margin-top:5px;
-}
-
-.profile-section{
-  margin-top:18px;
-}
-
-.profile-section h4{
-  font-size:11px;
-  text-transform:uppercase;
-  letter-spacing:.4px;
-  margin:0 0 9px;
-  color:#46656d;
-}
-
-.timeline-item{
-  border-left:2px solid #d8e7ea;
-  padding:0 0 14px 12px;
-  font-size:10.5px;
-}
-
-.timeline-item strong{
-  display:block;
-  font-size:11px;
-  margin-bottom:3px;
-}
-
-/* =========================
-   SCROLL BAR
-========================= */
-
-::-webkit-scrollbar{
-  width:8px;
-  height:8px;
-}
-
-::-webkit-scrollbar-track{
-  background:#eef3f4;
-}
-
-::-webkit-scrollbar-thumb{
-  background:#b9cdd1;
-  border-radius:10px;
-}
-
-/* =========================
-   RESPONSIVE
-========================= */
-
-@media(max-width:1100px){
-
-  .sidebar{
-    width:200px;
-  }
-
-  .main{
-    margin-left:200px;
-    width:calc(100% - 200px);
-  }
-
-  .grid-2{
-    grid-template-columns:1fr;
-  }
-
-  .pipeline{
-    grid-template-columns:1fr 1fr;
-  }
-
-  .search-wrap input{
-    width:220px;
-  }
-
-}
-
-@media(max-width:760px){
-
-  .sidebar{
-    display:none;
-  }
-
-  .main{
-    margin-left:0;
-    width:100%;
-  }
-
-  .topbar{
-    padding:0 16px;
-  }
-
-  .filters{
-    padding:10px 16px;
-    overflow:auto;
-  }
-
-  .page{
-    padding:18px 16px;
-  }
-
-  .kpi-grid{
-    grid-template-columns:1fr 1fr;
-  }
-
-  .pipeline{
-    grid-template-columns:1fr;
-  }
-
-  .top-actions .search-wrap{
-    display:none;
-  }
-
-  .drawer{
-    width:100%;
-  }
-
-  .attention-strip{
-    align-items:flex-start;
-    gap:14px;
-    flex-direction:column;
-  }
-
-}
-
-/* =========================================================
-   TARGETED UPDATE: COLLAPSIBLE SIDEBAR + RECRUITMENT EMBED
-   All existing dashboard styles above remain unchanged.
-========================================================= */
-
-.sidebar,
-.main{
-  transition:width .25s ease, margin-left .25s ease;
-}
-
-.sidebar-toggle-row{
-  display:flex;
-  justify-content:flex-end;
-  margin-bottom:12px;
-}
-
-.sidebar-toggle{
-  width:42px;
-  height:42px;
-  border:0;
-  border-radius:10px;
-  background:rgba(255,255,255,.10);
-  display:flex;
-  flex-direction:column;
-  justify-content:center;
-  align-items:center;
-  gap:5px;
-  cursor:pointer;
-  flex:0 0 auto;
-}
-
-.sidebar-toggle:hover{
-  background:rgba(255,255,255,.18);
-}
-
-.sidebar-toggle span{
-  display:block;
-  width:20px;
-  height:2px;
-  border-radius:4px;
-  background:#fff;
-}
-
-body.sidebar-collapsed .sidebar{
-  width:76px;
-  padding-left:12px;
-  padding-right:12px;
-}
-
-body.sidebar-collapsed .main{
-  margin-left:76px;
-  width:calc(100% - 76px);
-}
-
-body.sidebar-collapsed .sidebar-toggle-row{
-  justify-content:center;
-}
-
-body.sidebar-collapsed .brand{
-  justify-content:center;
-  padding-left:0;
-  padding-right:0;
-}
-
-body.sidebar-collapsed .brand-text{
-  display:none;
-}
-
-body.sidebar-collapsed .nav,
-body.sidebar-collapsed .sidebar-footer{
-  display:none;
-}
-
-/* Recruitment: only embedded Euronics TA Panel should remain visible */
-body.recruitment-mode .topbar{
-  display:none !important;
-}
-
-#recruitment.recruitment-page{
-  padding:0 !important;
-  background:#fff;
-}
-
-.recruitment-embed-card{
-  width:100%;
-  min-height:100vh;
-  background:#fff;
-  border:0;
-  border-radius:0;
-  box-shadow:none;
-  overflow:hidden;
-}
-
-.recruitment-iframe{
-  display:block;
-  width:100%;
-  height:100vh;
-  min-height:1000px;
-  border:0;
-  margin:0;
-  padding:0;
-  background:#fff;
-}
-
-@media(max-width:760px){
-  .sidebar{
-    display:flex !important;
-    width:260px !important;
-    transform:translateX(-100%);
-    transition:transform .25s ease;
-    z-index:100;
-  }
-
-  body.mobile-menu-open .sidebar{
-    transform:translateX(0);
-  }
-
-  body.sidebar-collapsed .sidebar{
-    width:260px !important;
-  }
-
-  .main,
-  body.sidebar-collapsed .main{
-    margin-left:0 !important;
-    width:100% !important;
-  }
-
-  .mobile-menu-fab{
-    display:flex !important;
-  }
-}
-
-.mobile-menu-fab{
-  display:none;
-  position:fixed;
-  left:12px;
-  top:12px;
-  z-index:90;
-  width:42px;
-  height:42px;
-  border:0;
-  border-radius:10px;
-  background:#0f3f49;
-  color:#fff;
-  align-items:center;
-  justify-content:center;
-  font-size:22px;
-  box-shadow:0 6px 18px rgba(0,0,0,.18);
-}
-/* =========================================================
-   L&D / EUROVERSITY LIVE DASHBOARD
-========================================================= */
-
-.lnd-header{
-  display:flex;
-  justify-content:space-between;
-  align-items:flex-start;
-  gap:20px;
-  margin-bottom:22px;
-}
-
-
-.lnd-header h2{
-  margin:0 0 5px;
-  color:var(--navy);
-  font-size:26px;
-}
-
-
-.lnd-header p{
-  margin:0;
-  color:var(--muted);
-}
-
-
-.lnd-header-actions{
-  display:flex;
-  align-items:center;
-  gap:10px;
-}
-
-
-.lnd-live-status{
-  padding:9px 13px;
-  border-radius:999px;
-  font-size:12px;
-  font-weight:800;
-  white-space:nowrap;
-}
-
-
-.lnd-live-status.loading{
-  background:#fff7e6;
-  color:#a56700;
-}
-
-
-.lnd-live-status.live{
-  background:#e7f8ef;
-  color:#17855b;
-}
-
-
-.lnd-live-status.error{
-  background:#fdebec;
-  color:#c8344d;
-}
-
-
-.lnd-kpi-grid{
-  grid-template-columns:
-    repeat(
-      3,
-      minmax(0,1fr)
+function teamObRenderFreshness(){
+
+  if(!TEAM_OB_DATA) return;
+
+  const p = TEAM_OB_DATA.sourcePeriods || {};
+
+  function fill(key, valueId, rangeId){
+    const item = p[key] || {};
+    teamObSetText(
+      valueId,
+      item.latestDataDate
+        ? '● ' + teamObPrettyDate(item.latestDataDate)
+        : 'No data'
     );
-  margin-bottom:20px;
-}
-
-
-.lnd-filter-panel{
-  margin-bottom:20px;
-}
-
-
-.panel-title-row{
-  display:flex;
-  align-items:flex-start;
-  justify-content:space-between;
-  gap:16px;
-  margin-bottom:18px;
-}
-
-
-.panel-title-row h3{
-  margin:0 0 4px;
-  color:var(--navy);
-}
-
-
-.panel-title-row p{
-  margin:0;
-  color:var(--muted);
-  font-size:12px;
-}
-
-
-.lnd-filters{
-  display:grid;
-  grid-template-columns:
-    1.5fr
-    repeat(5,1fr);
-  gap:10px;
-}
-
-
-.lnd-filters input,
-.lnd-filters select{
-  width:100%;
-}
-
-
-.lnd-grid-2{
-  display:grid;
-  grid-template-columns:
-    repeat(
-      2,
-      minmax(0,1fr)
+    teamObSetText(
+      rangeId,
+      item.from && item.to
+        ? teamObPrettyDate(item.from) + ' → ' + teamObPrettyDate(item.to)
+        : '-'
     );
-  gap:18px;
-  margin-bottom:18px;
+  }
+
+  fill('system','teamObFreshSystem','teamObFreshSystemRange');
+  fill('email','teamObFreshEmail','teamObFreshEmailRange');
+  fill('callsNever','teamObFreshCall','teamObFreshCallRange');
+  fill('callsTalkTime','teamObFreshTalk','teamObFreshTalkRange');
 }
 
+/* =========================
+   RENDER ALL
+========================= */
 
-.lnd-chart-wrap{
-  height:285px;
-}
+function teamObRenderAll(){
 
+  if(!TEAM_OB_DATA) return;
 
-.lnd-bar-list{
-  display:flex;
-  flex-direction:column;
-  gap:16px;
-}
+  const rows = teamObFilteredEmployees();
 
-
-.lnd-bar-row{
-  min-width:0;
-}
-
-
-.lnd-bar-top{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-  margin-bottom:7px;
-  font-size:12px;
-}
-
-
-.lnd-bar-top span{
-  color:var(--text);
-  font-weight:700;
-}
-
-
-.lnd-bar-top strong{
-  color:var(--navy);
-}
-
-
-.lnd-bar-track{
-  height:8px;
-  overflow:hidden;
-  background:#edf3f5;
-  border-radius:100px;
-}
-
-
-.lnd-bar-fill{
-  height:100%;
-  min-width:3px;
-  border-radius:100px;
-  background:linear-gradient(
-    90deg,
-    #147b8d,
-    #25a7a3
+  teamObSetText(
+    'teamObVisibleCount',
+    teamObFormatNum(rows.length,0) + ' employees in current filter'
   );
+
+  teamObRenderKpis(rows);
+  teamObRenderThresholdChart(rows);
+  teamObRenderHoursChart(rows);
+  teamObRenderDailyChart();
+  teamObRenderEmailChart(rows);
+  teamObRenderCallChart(rows);
+  teamObRenderManagerTable(rows);
+  teamObRenderDepartmentTable(rows);
+  teamObRenderExceptions(rows);
+  teamObRenderEmployeeTable(rows);
 }
 
+/* =========================
+   KPI CALCULATIONS
+========================= */
 
-.lnd-topic-performance{
-  display:flex;
-  flex-direction:column;
+function teamObAverage(rows,key){
+  const vals = rows
+    .map(r => teamObNum(r[key]))
+    .filter(v => v !== null);
+
+  if(!vals.length) return null;
+  return vals.reduce((a,b)=>a+b,0) / vals.length;
 }
 
-
-.lnd-topic-row{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  gap:18px;
-  padding:13px 0;
-  border-bottom:
-    1px solid
-    var(--line);
+function teamObSum(rows,key){
+  return rows.reduce((sum,r)=>{
+    const n = teamObNum(r[key]);
+    return sum + (n === null ? 0 : n);
+  },0);
 }
 
+function teamObRenderKpis(rows){
 
-.lnd-topic-row:last-child{
-  border-bottom:0;
+  const activeRows = rows.filter(r => teamObNum(r.systemDays) > 0);
+
+  teamObSetText('teamObKpiEmployees', teamObFormatNum(rows.length,0));
+  teamObSetText('teamObKpiActive', teamObHours(teamObAverage(activeRows,'avgActiveHours')));
+  teamObSetText('teamObKpiWork', teamObHours(teamObAverage(activeRows,'avgWorkHours')));
+  teamObSetText('teamObKpiProductivity', teamObPct(teamObAverage(activeRows,'productivityPct')));
+  teamObSetText('teamObKpiIdle', teamObHours(teamObAverage(activeRows,'avgIdleHours')));
+  teamObSetText('teamObKpiEmail', teamObPct(teamObAverage(rows,'emailResponsePct')));
+  teamObSetText('teamObKpiMissed', teamObFormatNum(teamObSum(rows,'missedOrRejectedCalls'),0));
+  teamObSetText('teamObKpiTalk', teamObMinutes(teamObSum(rows,'talkTimeMinutes')));
 }
 
+/* =========================
+   CHARTS
+========================= */
 
-.lnd-topic-scores{
-  display:flex;
-  align-items:center;
-  gap:14px;
-  white-space:nowrap;
-  font-size:11px;
+function teamObRenderThresholdChart(rows){
+
+  const canvas = teamObEl('teamObThresholdChart');
+  if(!canvas || typeof Chart === 'undefined') return;
+
+  teamObDestroyChart('threshold','teamObThresholdChart');
+
+  const clean = rows
+    .filter(r =>
+      teamObNum(r.avgActiveHours) !== null &&
+      teamObNum(r.threshold) !== null
+    )
+    .sort((a,b)=>
+      (teamObNum(a.productivityPct) ?? 9999) -
+      (teamObNum(b.productivityPct) ?? 9999)
+    )
+    .slice(0,18);
+
+  TEAM_OB_CHARTS.threshold = new Chart(canvas,{
+    type:'bar',
+    data:{
+      labels: clean.map(r => r.name || r.employeeCode),
+      datasets:[
+        {
+          label:'Avg Active Hours',
+          data:clean.map(r => Number(r.avgActiveHours || 0)),
+          backgroundColor:'#17616e',
+          borderRadius:5
+        },
+        {
+          label:'Threshold',
+          data:clean.map(r => Number(r.threshold || 0)),
+          backgroundColor:'#efb815',
+          borderRadius:5
+        }
+      ]
+    },
+    options:{
+      indexAxis:'y',
+      responsive:true,
+      maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom'}},
+      scales:{
+        x:{beginAtZero:true,grid:{color:'#eef2f3'}},
+        y:{grid:{display:false}}
+      }
+    }
+  });
 }
 
+function teamObRenderHoursChart(rows){
 
-.lnd-topic-scores span{
-  color:var(--muted);
+  const canvas = teamObEl('teamObHoursChart');
+  if(!canvas || typeof Chart === 'undefined') return;
+
+  teamObDestroyChart('hours','teamObHoursChart');
+
+  const active = rows.filter(r => teamObNum(r.systemDays) > 0);
+
+  TEAM_OB_CHARTS.hours = new Chart(canvas,{
+    type:'bar',
+    data:{
+      labels:['Work Hours','Active Hours','Idle Hours'],
+      datasets:[{
+        label:'Average Hours',
+        data:[
+          teamObAverage(active,'avgWorkHours') || 0,
+          teamObAverage(active,'avgActiveHours') || 0,
+          teamObAverage(active,'avgIdleHours') || 0
+        ],
+        backgroundColor:['#3977b8','#17616e','#efb815'],
+        borderRadius:7
+      }]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{y:{beginAtZero:true,grid:{color:'#eef2f3'}},x:{grid:{display:false}}}
+    }
+  });
 }
 
+function teamObRenderDailyChart(){
 
-.lnd-topic-scores strong{
-  color:var(--teal);
+  const canvas = teamObEl('teamObDailyChart');
+  if(!canvas || typeof Chart === 'undefined' || !TEAM_OB_DATA) return;
+
+  teamObDestroyChart('daily','teamObDailyChart');
+
+  const rows = TEAM_OB_DATA.daily || [];
+
+  TEAM_OB_CHARTS.daily = new Chart(canvas,{
+    type:'line',
+    data:{
+      labels:rows.map(r => teamObPrettyDate(r.date)),
+      datasets:[
+        {
+          label:'Avg Active Hours',
+          data:rows.map(r => Number(r.avgActiveHours || 0)),
+          borderColor:'#17616e',
+          backgroundColor:'rgba(23,97,110,.10)',
+          tension:.35,
+          fill:false,
+          borderWidth:3
+        },
+        {
+          label:'Avg Threshold',
+          data:rows.map(r => Number(r.avgThreshold || 0)),
+          borderColor:'#efb815',
+          tension:.35,
+          fill:false,
+          borderWidth:2
+        }
+      ]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{legend:{position:'bottom'}},
+      scales:{x:{grid:{display:false}},y:{beginAtZero:true,grid:{color:'#eef2f3'}}}
+    }
+  });
 }
 
+function teamObRenderEmailChart(rows){
 
-.lnd-table{
-  min-width:1250px;
+  const canvas = teamObEl('teamObEmailChart');
+  if(!canvas || typeof Chart === 'undefined') return;
+
+  teamObDestroyChart('email','teamObEmailChart');
+
+  const external = teamObSum(rows,'externalNotReplied');
+  const internal = teamObSum(rows,'internalNotReplied');
+
+  TEAM_OB_CHARTS.email = new Chart(canvas,{
+    type:'doughnut',
+    data:{
+      labels:['External Not Replied','Internal Not Replied'],
+      datasets:[{
+        data:[external,internal],
+        backgroundColor:['#cc3454','#7957b7'],
+        borderWidth:0
+      }]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      cutout:'67%',
+      plugins:{legend:{position:'bottom'}}
+    }
+  });
 }
 
+function teamObRenderCallChart(rows){
 
-.lnd-attendance-pill{
-  display:inline-flex;
-  align-items:center;
-  padding:5px 9px;
-  border-radius:100px;
-  font-size:10px;
-  font-weight:800;
+  const canvas = teamObEl('teamObCallChart');
+  if(!canvas || typeof Chart === 'undefined') return;
+
+  teamObDestroyChart('calls','teamObCallChart');
+
+  TEAM_OB_CHARTS.calls = new Chart(canvas,{
+    type:'bar',
+    data:{
+      labels:['Outgoing Calls','Missed / Rejected'],
+      datasets:[{
+        data:[
+          teamObSum(rows,'outgoingCalls'),
+          teamObSum(rows,'missedOrRejectedCalls')
+        ],
+        backgroundColor:['#67aa53','#cc3454'],
+        borderRadius:7
+      }]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{y:{beginAtZero:true,grid:{color:'#eef2f3'}},x:{grid:{display:false}}}
+    }
+  });
 }
 
+/* =========================
+   GROUP TABLE BUILDERS
+========================= */
 
-.lnd-present{
-  background:#e7f8ef;
-  color:#17855b;
+function teamObBuildGroupRows(rows,keyName){
+
+  const map = {};
+
+  rows.forEach(r => {
+    const key = r[keyName] || (keyName === 'manager' ? 'Unassigned' : 'Unknown');
+    if(!map[key]) map[key] = [];
+    map[key].push(r);
+  });
+
+  return Object.keys(map).map(key => {
+    const list = map[key];
+    return {
+      key,
+      teamSize:list.length,
+      avgProductivityPct:teamObAverage(list,'productivityPct'),
+      avgActiveHours:teamObAverage(list,'avgActiveHours'),
+      avgIdleHours:teamObAverage(list,'avgIdleHours'),
+      emailResponsePct:teamObAverage(list,'emailResponsePct'),
+      missedOrRejectedCalls:teamObSum(list,'missedOrRejectedCalls'),
+      belowThreshold:list.filter(x =>
+        teamObNum(x.productivityPct) !== null &&
+        Number(x.productivityPct) < 100
+      ).length,
+      attentionCount:list.filter(x => x.status !== 'Healthy').length
+    };
+  }).sort((a,b)=>b.teamSize-a.teamSize);
 }
 
+function teamObRenderManagerTable(rows){
 
-.lnd-absent{
-  background:#fdebec;
-  color:#c8344d;
-}
+  const tbody = teamObEl('teamObManagerBody');
+  if(!tbody) return;
 
+  const groups = teamObBuildGroupRows(rows,'manager');
 
-.table-sub{
-  margin-top:3px;
-  color:var(--muted);
-  font-size:10px;
-}
-
-
-@media(max-width:1200px){
-
-  .lnd-kpi-grid{
-    grid-template-columns:
-      repeat(
-        2,
-        minmax(0,1fr)
-      );
+  if(!groups.length){
+    tbody.innerHTML='<tr><td colspan="7" class="teamob-empty">No manager data for current filter.</td></tr>';
+    return;
   }
 
-
-  .lnd-filters{
-    grid-template-columns:
-      repeat(
-        3,
-        minmax(0,1fr)
-      );
-  }
-
+  tbody.innerHTML = groups.slice(0,100).map(r => `
+    <tr>
+      <td class="teamob-name">${teamObEsc(r.key)}</td>
+      <td>${teamObFormatNum(r.teamSize,0)}</td>
+      <td>${teamObPct(r.avgProductivityPct)}</td>
+      <td>${teamObHours(r.avgActiveHours)}</td>
+      <td>${teamObFormatNum(r.belowThreshold,0)}</td>
+      <td>${teamObFormatNum(r.attentionCount,0)}</td>
+      <td>${teamObFormatNum(r.missedOrRejectedCalls,0)}</td>
+    </tr>
+  `).join('');
 }
 
+function teamObRenderDepartmentTable(rows){
 
-@media(max-width:850px){
+  const tbody = teamObEl('teamObDepartmentBody');
+  if(!tbody) return;
 
-  .lnd-header{
-    flex-direction:column;
+  const groups = teamObBuildGroupRows(rows,'department');
+
+  if(!groups.length){
+    tbody.innerHTML='<tr><td colspan="7" class="teamob-empty">No department data for current filter.</td></tr>';
+    return;
   }
 
-
-  .lnd-grid-2{
-    grid-template-columns:1fr;
-  }
-
-
-  .lnd-filters{
-    grid-template-columns:
-      repeat(
-        2,
-        minmax(0,1fr)
-      );
-  }
-
+  tbody.innerHTML = groups.slice(0,100).map(r => `
+    <tr>
+      <td class="teamob-name">${teamObEsc(r.key)}</td>
+      <td>${teamObFormatNum(r.teamSize,0)}</td>
+      <td>${teamObPct(r.avgProductivityPct)}</td>
+      <td>${teamObHours(r.avgActiveHours)}</td>
+      <td>${teamObHours(r.avgIdleHours)}</td>
+      <td>${teamObPct(r.emailResponsePct)}</td>
+      <td>${teamObFormatNum(r.attentionCount,0)}</td>
+    </tr>
+  `).join('');
 }
 
+/* =========================
+   EXCEPTIONS
+========================= */
 
-@media(max-width:600px){
+function teamObIssuesForEmployee(emp){
 
-  .lnd-kpi-grid{
-    grid-template-columns:1fr;
+  const issues = [];
+
+  if(teamObNum(emp.productivityPct) !== null && Number(emp.productivityPct) < 100){
+    issues.push('Below threshold');
   }
 
-
-  .lnd-filters{
-    grid-template-columns:1fr;
+  if(teamObNum(emp.idlePct) !== null && Number(emp.idlePct) > 25){
+    issues.push('High idle time');
   }
 
-
-  .lnd-header-actions{
-    width:100%;
-    justify-content:space-between;
+  if(teamObNum(emp.avgGateLoginGapMin) !== null && Number(emp.avgGateLoginGapMin) > 30){
+    issues.push('Gate-login gap');
   }
 
+  if(Number(emp.externalNotReplied || 0) + Number(emp.internalNotReplied || 0) > 0){
+    issues.push('Emails not replied');
+  }
+
+  if(Number(emp.missedOrRejectedCalls || 0) > 0){
+    issues.push('Missed / rejected calls');
+  }
+
+  return issues;
 }
 
-/* =========================================================
-   PROFESSIONAL L&D DASHBOARD
-========================================================= */
+function teamObRenderExceptions(rows){
 
-.lnd-page{
-  background:#F4F6F8;
-  padding:0 !important;
-  min-height:100vh;
-}
+  const tbody = teamObEl('teamObExceptionBody');
+  if(!tbody) return;
 
+  const exceptions = rows
+    .map(emp => ({emp,issues:teamObIssuesForEmployee(emp)}))
+    .filter(x => x.issues.length)
+    .sort((a,b)=>b.issues.length-a.issues.length);
 
-/* HEADER */
-
-.lnd-brand-header{
-  background:linear-gradient(
-    115deg,
-    #17616E 0%,
-    #0F444E 100%
+  teamObSetText(
+    'teamObExceptionCount',
+    teamObFormatNum(exceptions.length,0) + ' employees'
   );
-  color:#fff;
-  padding:24px 32px;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:20px;
-  flex-wrap:wrap;
-  border-bottom:3px solid #FFC000;
+
+  if(!exceptions.length){
+    tbody.innerHTML='<tr><td colspan="6" class="teamob-empty">No exceptions in current filter.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = exceptions.slice(0,150).map(x => `
+    <tr>
+      <td>
+        <div class="teamob-name">${teamObEsc(x.emp.name || '-')}</div>
+        <div class="teamob-sub">${teamObEsc(x.emp.employeeCode || '')}</div>
+      </td>
+      <td>${teamObEsc(x.emp.department || '-')}</td>
+      <td>${teamObEsc(x.emp.manager || '-')}</td>
+      <td>${x.issues.map(v=>'<span class="teamob-pill watch" style="margin:2px">'+teamObEsc(v)+'</span>').join('')}</td>
+      <td><span class="teamob-pill ${teamObStatusClass(x.emp.status)}">${teamObEsc(x.emp.status || 'Watch')}</span></td>
+      <td><button class="teamob-action" onclick="teamObOpenEmployee('${teamObEsc(x.emp.employeeCode)}')">View</button></td>
+    </tr>
+  `).join('');
 }
 
+/* =========================
+   EMPLOYEE REGISTER
+========================= */
 
-.lnd-brand{
-  display:flex;
-  align-items:center;
-  gap:14px;
+function teamObRenderEmployeeTable(rows){
+
+  const tbody = teamObEl('teamObEmployeeBody');
+  if(!tbody) return;
+
+  if(!rows.length){
+    tbody.innerHTML='<tr><td colspan="11" class="teamob-empty">No employees match current filter.</td></tr>';
+    return;
+  }
+
+  const sorted = [...rows].sort((a,b)=>{
+    const ap = teamObNum(a.productivityPct);
+    const bp = teamObNum(b.productivityPct);
+    if(ap === null && bp === null) return String(a.name).localeCompare(String(b.name));
+    if(ap === null) return 1;
+    if(bp === null) return -1;
+    return ap-bp;
+  });
+
+  tbody.innerHTML = sorted.slice(0,250).map(emp => `
+    <tr>
+      <td>
+        <div class="teamob-name">${teamObEsc(emp.name || '-')}</div>
+        <div class="teamob-sub">${teamObEsc(emp.employeeCode || '')}</div>
+      </td>
+      <td>${teamObEsc(emp.department || '-')}</td>
+      <td>${teamObEsc(emp.manager || '-')}</td>
+      <td>${teamObHours(emp.avgActiveHours)}</td>
+      <td>${teamObHours(emp.threshold)}</td>
+      <td><strong>${teamObPct(emp.productivityPct)}</strong></td>
+      <td>${teamObHours(emp.avgIdleHours)}</td>
+      <td>${teamObPct(emp.emailResponsePct)}</td>
+      <td>${teamObFormatNum(emp.missedOrRejectedCalls,0)}</td>
+      <td><span class="teamob-pill ${teamObStatusClass(emp.status)}">${teamObEsc(emp.status || '-')}</span></td>
+      <td><button class="teamob-action" onclick="teamObOpenEmployee('${teamObEsc(emp.employeeCode)}')">View 360°</button></td>
+    </tr>
+  `).join('');
 }
 
+/* =========================
+   EMPLOYEE 360 POPUP
+========================= */
 
-.lnd-brand-mark{
-  width:46px;
-  height:46px;
-  border-radius:10px;
-  background:#fff;
-  color:#17616E;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  font-size:22px;
-  font-weight:800;
-}
+function teamObOpenEmployee(employeeCode){
 
+  if(!TEAM_OB_DATA) return;
 
-.lnd-brand h2{
-  margin:0;
-  font-size:19px;
-  font-weight:650;
-  color:#fff;
-}
-
-
-.lnd-brand p{
-  margin:4px 0 0;
-  color:#CFEAEC;
-  font-size:12px;
-  font-weight:500;
-}
-
-
-.lnd-brand-meta{
-  display:flex;
-  gap:28px;
-  flex-wrap:wrap;
-}
-
-
-.lnd-brand-meta div{
-  text-align:right;
-}
-
-
-.lnd-brand-meta span{
-  display:block;
-  font-size:11px;
-  color:#A9D6D9;
-}
-
-
-.lnd-brand-meta strong{
-  display:block;
-  margin-top:2px;
-  font-size:14px;
-  font-weight:650;
-  color:#fff;
-}
-
-
-.lnd-header-live.live{
-  color:#BFF1D0;
-}
-
-
-.lnd-header-live.error{
-  color:#FFD0D0;
-}
-
-
-/* FILTERS */
-
-.lnd-filter-strip{
-  padding:20px 32px 0;
-  display:flex;
-  gap:10px;
-  flex-wrap:wrap;
-  align-items:center;
-}
-
-
-.lnd-filter-strip select,
-.lnd-register-tools select,
-.lnd-register-tools input{
-  background:#fff;
-  border:1px solid #E4E8EE;
-  border-radius:8px;
-  padding:9px 13px;
-  font-size:12.5px;
-  color:#1B2430;
-  font-family:inherit;
-  outline:none;
-}
-
-
-.lnd-filter-strip select:focus,
-.lnd-register-tools select:focus,
-.lnd-register-tools input:focus{
-  border-color:#17616E;
-  box-shadow:0 0 0 3px rgba(23,97,110,.08);
-}
-
-
-.lnd-chip{
-  padding:8px 15px;
-  border-radius:20px;
-  background:#fff;
-  border:1px solid #E4E8EE;
-  color:#5B6472;
-  font-size:12px;
-  cursor:pointer;
-}
-
-
-.lnd-chip:hover{
-  border-color:#17616E;
-}
-
-
-.lnd-chip.active{
-  background:#17616E;
-  border-color:#17616E;
-  color:#fff;
-}
-
-
-.lnd-refresh-btn{
-  margin-left:auto;
-  border:0;
-  background:#17616E;
-  color:#fff;
-  border-radius:8px;
-  padding:9px 15px;
-  font-family:inherit;
-  font-size:12px;
-  font-weight:650;
-  cursor:pointer;
-}
-
-
-.lnd-refresh-btn:hover{
-  background:#0F444E;
-}
-
-
-/* WRAPPER */
-
-.lnd-dashboard-wrap{
-  padding:0 32px 36px;
-}
-
-
-/* SECTION HEAD */
-
-.lnd-section-head{
-  display:flex;
-  justify-content:space-between;
-  align-items:baseline;
-  margin:30px 0 13px;
-}
-
-
-.lnd-section-head h3{
-  margin:0;
-  font-size:16px;
-  color:#1B2430;
-}
-
-
-.lnd-section-head span{
-  color:#5B6472;
-  font-size:12px;
-}
-
-
-/* KPIs */
-
-.lnd-kpi-grid{
-  display:grid;
-  grid-template-columns:repeat(
-    5,
-    minmax(0,1fr)
+  const emp = (TEAM_OB_DATA.employees || []).find(r =>
+    String(r.employeeCode) === String(employeeCode)
   );
-  gap:14px;
-}
 
+  if(!emp) return;
 
-.lnd-kpi-card{
-  background:#fff;
-  border:1px solid #E4E8EE;
-  border-top:3px solid var(--accent,#17616E);
-  border-radius:10px;
-  padding:17px 18px;
-  min-height:122px;
-  display:flex;
-  flex-direction:column;
-  gap:6px;
-}
-
-
-.lnd-kpi-card:hover{
-  box-shadow:0 5px 18px rgba(31,56,100,.08);
-  transform:translateY(-1px);
-}
-
-
-.lnd-kpi-card .title{
-  color:#5B6472;
-  font-size:12px;
-  font-weight:650;
-}
-
-
-.lnd-kpi-card .value{
-  color:#1B2430;
-  font-size:25px;
-  font-weight:750;
-  line-height:1.15;
-}
-
-
-.lnd-kpi-card .sub{
-  color:#7A8390;
-  font-size:11px;
-  line-height:1.35;
-}
-
-
-/* PANELS */
-
-.lnd-panel{
-  background:#fff;
-  border:1px solid #E4E8EE;
-  border-radius:10px;
-  padding:20px 22px;
-}
-
-
-.lnd-panel h4{
-  margin:0 0 4px;
-  color:#1B2430;
-  font-size:13.5px;
-  font-weight:650;
-}
-
-
-.lnd-panel > p{
-  color:#5B6472;
-  font-size:11.5px;
-  margin:0 0 14px;
-}
-
-
-/* CHART LAYOUT */
-
-.lnd-charts-row{
-  display:grid;
-  grid-template-columns:1.4fr 1fr;
-  gap:16px;
-}
-
-
-.lnd-charts-row-3{
-  display:grid;
-  grid-template-columns:repeat(
-    3,
-    minmax(0,1fr)
+  teamObSetText('teamObModalTitle', emp.name || 'Employee 360°');
+  teamObSetText(
+    'teamObModalSub',
+    [
+      emp.employeeCode,
+      emp.department,
+      emp.manager ? 'Manager: ' + emp.manager : ''
+    ].filter(Boolean).join(' • ')
   );
-  gap:16px;
-  margin-top:16px;
-}
 
-
-.lnd-chart-box{
-  position:relative;
-  height:270px;
-}
-
-
-.lnd-chart-box.small{
-  height:225px;
-}
-
-
-/* TABLE */
-
-.lnd-table-scroll{
-  width:100%;
-  overflow-x:auto;
-}
-
-
-.lnd-table{
-  width:100%;
-  border-collapse:collapse;
-  font-size:12.5px;
-}
-
-
-.lnd-table.register{
-  min-width:1250px;
-}
-
-
-.lnd-table thead th{
-  text-align:left;
-  padding:10px 12px;
-  font-size:11px;
-  color:#5B6472;
-  font-weight:650;
-  border-bottom:1px solid #E4E8EE;
-  white-space:nowrap;
-}
-
-
-.lnd-table tbody td{
-  padding:11px 12px;
-  border-bottom:1px solid #EEF1F4;
-  color:#1B2430;
-  vertical-align:middle;
-}
-
-
-.lnd-table tbody tr:hover{
-  background:#FAFBFC;
-}
-
-
-/* REGISTER FILTERS */
-
-.lnd-register-tools{
-  display:grid;
-  grid-template-columns:
-    minmax(250px,1.6fr)
-    1fr
-    1fr;
-  gap:10px;
-  margin-bottom:18px;
-}
-
-
-/* STATUS */
-
-.lnd-status-tag{
-  font-size:10.5px;
-  font-weight:700;
-  padding:4px 9px;
-  border-radius:20px;
-  white-space:nowrap;
-}
-
-
-.lnd-status-tag.green{
-  background:#E8F5EA;
-  color:#1E7B34;
-}
-
-
-.lnd-status-tag.amber{
-  background:#FFF6DE;
-  color:#8A6300;
-}
-
-
-.lnd-status-tag.red{
-  background:#FCEAE9;
-  color:#B3261E;
-}
-
-
-/* PROGRESS */
-
-.lnd-progress-cell{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  min-width:130px;
-}
-
-
-.lnd-progress{
-  flex:1;
-  height:7px;
-  overflow:hidden;
-  border-radius:8px;
-  background:#EEF1F4;
-}
-
-
-.lnd-progress-fill{
-  height:100%;
-  background:#70AD47;
-  border-radius:8px;
-}
-
-
-.lnd-progress-cell span{
-  min-width:32px;
-  color:#5B6472;
-  font-size:11px;
-}
-
-
-/* RESPONSIVE */
-
-@media(max-width:1250px){
-
-  .lnd-kpi-grid{
-    grid-template-columns:
-      repeat(
-        3,
-        minmax(0,1fr)
-      );
+  const grid = teamObEl('teamObDetailGrid');
+  if(grid){
+    grid.innerHTML = [
+      ['Status', emp.status || '-'],
+      ['Productivity', teamObPct(emp.productivityPct)],
+      ['Avg Active Hrs', teamObHours(emp.avgActiveHours)],
+      ['Avg Work Hrs', teamObHours(emp.avgWorkHours)],
+      ['Avg Idle Hrs', teamObHours(emp.avgIdleHours)],
+      ['Threshold', teamObHours(emp.threshold)],
+      ['Email Response', teamObPct(emp.emailResponsePct)],
+      ['Missed / Rejected', teamObFormatNum(emp.missedOrRejectedCalls,0)]
+    ].map(item => `
+      <div class="teamob-detail">
+        <div class="teamob-detail-label">${teamObEsc(item[0])}</div>
+        <div class="teamob-detail-value">${teamObEsc(item[1])}</div>
+      </div>
+    `).join('');
   }
 
-}
-
-
-@media(max-width:1050px){
-
-  .lnd-charts-row{
-    grid-template-columns:1fr;
+  const system = teamObEl('teamObSystemDetail');
+  if(system){
+    system.innerHTML = `
+      <table class="teamob-table" style="min-width:0">
+        <tbody>
+          <tr><td>System Days</td><td><strong>${teamObFormatNum(emp.systemDays,0)}</strong></td></tr>
+          <tr><td>Below Threshold Days</td><td><strong>${teamObFormatNum(emp.belowThresholdDays,0)}</strong></td></tr>
+          <tr><td>Idle %</td><td><strong>${teamObPct(emp.idlePct)}</strong></td></tr>
+          <tr><td>Gate → Login Gap</td><td><strong>${teamObMinutes(emp.avgGateLoginGapMin)}</strong></td></tr>
+          <tr><td>Days Gap >30 min</td><td><strong>${teamObFormatNum(emp.gateGapOver30Days,0)}</strong></td></tr>
+          <tr><td>Location</td><td><strong>${teamObEsc(emp.location || '-')}</strong></td></tr>
+          <tr><td>Job Title</td><td><strong>${teamObEsc(emp.jobTitle || '-')}</strong></td></tr>
+        </tbody>
+      </table>
+    `;
   }
 
-
-  .lnd-charts-row-3{
-    grid-template-columns:
-      repeat(
-        2,
-        minmax(0,1fr)
-      );
+  const comm = teamObEl('teamObCommunicationDetail');
+  if(comm){
+    comm.innerHTML = `
+      <table class="teamob-table" style="min-width:0">
+        <tbody>
+          <tr><td>Email Received</td><td><strong>${teamObFormatNum(emp.emailReceived,0)}</strong></td></tr>
+          <tr><td>Email Sent</td><td><strong>${teamObFormatNum(emp.emailSent,0)}</strong></td></tr>
+          <tr><td>External Not Replied</td><td><strong>${teamObFormatNum(emp.externalNotReplied,0)}</strong></td></tr>
+          <tr><td>Internal Not Replied</td><td><strong>${teamObFormatNum(emp.internalNotReplied,0)}</strong></td></tr>
+          <tr><td>Avg Email TAT</td><td><strong>${teamObMinutes(emp.avgTatMins)}</strong></td></tr>
+          <tr><td>Outgoing Calls</td><td><strong>${teamObFormatNum(emp.outgoingCalls,0)}</strong></td></tr>
+          <tr><td>Talk Time</td><td><strong>${teamObMinutes(emp.talkTimeMinutes)}</strong></td></tr>
+        </tbody>
+      </table>
+    `;
   }
 
+  const modal = teamObEl('teamObEmployeeModal');
+  if(modal) modal.classList.add('open');
+  document.body.style.overflow = 'hidden';
 }
 
+function teamObCloseEmployee(){
+  const modal = teamObEl('teamObEmployeeModal');
+  if(modal) modal.classList.remove('open');
+  document.body.style.overflow = '';
+}
 
-@media(max-width:720px){
-
-  .lnd-brand-header{
-    padding:20px;
+function teamObCloseModalOnBackdrop(event){
+  if(event && event.target && event.target.id === 'teamObEmployeeModal'){
+    teamObCloseEmployee();
   }
+}
 
+if(!window.__teamObEscapeBound){
+  window.__teamObEscapeBound = true;
+  document.addEventListener('keydown',function(event){
+    if(event.key === 'Escape') teamObCloseEmployee();
+  });
+}
 
-  .lnd-filter-strip,
-  .lnd-dashboard-wrap{
-    padding-left:18px;
-    padding-right:18px;
+/* =========================
+   INITIAL LOAD IF ACTIVE
+========================= */
+
+function teamObInitialise(){
+  const page = teamObEl('teamob');
+  if(page && page.classList.contains('active')){
+    teamObLoad(false);
   }
-
-
-  .lnd-kpi-grid{
-    grid-template-columns:
-      repeat(
-        2,
-        minmax(0,1fr)
-      );
-  }
-
-
-  .lnd-charts-row-3{
-    grid-template-columns:1fr;
-  }
-
-
-  .lnd-register-tools{
-    grid-template-columns:1fr;
-  }
-
-
-  .lnd-brand-meta{
-    width:100%;
-    justify-content:space-between;
-  }
-
-
-  .lnd-brand-meta div{
-    text-align:left;
-  }
-
 }
 
-
-@media(max-width:480px){
-
-  .lnd-kpi-grid{
-    grid-template-columns:1fr;
-  }
-
-}
-
-/* =========================================================
-   EMPLOYEE CRM + ATTENDANCE COMMAND CENTRE
-========================================================= */
-
-.module-header{
-  background:linear-gradient(
-    115deg,
-    #17616e 0%,
-    #0f444e 100%
-  );
-  color:#fff;
-  padding:24px 28px;
-  border-radius:14px;
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  gap:20px;
-  flex-wrap:wrap;
-  border-bottom:3px solid #ffc000;
-  margin-bottom:18px;
-}
-
-.module-eyebrow{
-  font-size:10px;
-  font-weight:800;
-  letter-spacing:1px;
-  color:#b8dfe4;
-  margin-bottom:6px;
-}
-
-.module-header h2{
-  margin:0;
-  color:#fff;
-  font-size:23px;
-  font-weight:750;
-}
-
-.module-header p{
-  margin:5px 0 0;
-  color:#cfe7ea;
-  font-size:12px;
-}
-
-.module-header-actions{
-  display:flex;
-  align-items:center;
-  gap:10px;
-}
-
-.module-live-pill{
-  background:rgba(255,255,255,.12);
-  border:1px solid rgba(255,255,255,.22);
-  color:#d9f5e5;
-  padding:8px 12px;
-  border-radius:20px;
-  font-size:11px;
-  font-weight:650;
-}
-
-.module-refresh-btn{
-  background:#fff;
-  color:#17616e;
-  border:none;
-  border-radius:8px;
-  padding:9px 15px;
-  font-family:inherit;
-  font-weight:700;
-  font-size:11px;
-  cursor:pointer;
-}
-
-.module-filter-bar{
-  display:flex;
-  flex-wrap:wrap;
-  gap:10px;
-  align-items:center;
-  margin-bottom:22px;
-}
-
-.module-filter-bar input,
-.module-filter-bar select{
-  border:1px solid #dde7ea;
-  background:#fff;
-  padding:9px 12px;
-  border-radius:8px;
-  font-family:inherit;
-  font-size:12px;
-  min-height:38px;
-  color:#17333a;
-}
-
-.module-filter-bar input:focus,
-.module-filter-bar select:focus{
-  border-color:#17616e;
-  outline:none;
-  box-shadow:0 0 0 3px rgba(23,97,110,.08);
-}
-
-.module-search{
-  min-width:260px;
-  flex:1;
-}
-
-.module-section-head{
-  margin:26px 0 12px;
-  display:flex;
-  align-items:flex-end;
-  justify-content:space-between;
-  gap:16px;
-}
-
-.module-section-head h3{
-  margin:0;
-  font-size:16px;
-  color:#17333a;
-}
-
-.module-section-head span{
-  display:block;
-  margin-top:3px;
-  font-size:11px;
-  color:#81979d;
-}
-
-.module-count{
-  color:#6d858c;
-  font-size:11px;
-}
-
-.module-count strong{
-  color:#17616e;
-  font-size:15px;
-}
-
-
-/* KPI */
-
-.employee-kpi-grid{
-  display:grid;
-  grid-template-columns:repeat(6,minmax(0,1fr));
-  gap:13px;
-}
-
-.employee-kpi-card,
-.attendance-kpi-card{
-  background:#fff;
-  border:1px solid #dfe9ec;
-  border-top:3px solid #17616e;
-  border-radius:12px;
-  padding:15px 16px;
-  min-height:110px;
-  box-shadow:0 2px 10px rgba(26,99,114,.05);
-}
-
-.employee-kpi-card.green,
-.attendance-kpi-card.green{
-  border-top-color:#70ad47;
-}
-
-.employee-kpi-card.blue,
-.attendance-kpi-card.blue{
-  border-top-color:#3875b7;
-}
-
-.employee-kpi-card.amber,
-.attendance-kpi-card.amber{
-  border-top-color:#ffc000;
-}
-
-.employee-kpi-card.violet,
-.attendance-kpi-card.violet{
-  border-top-color:#7a5cb8;
-}
-
-.employee-kpi-card.pink,
-.attendance-kpi-card.pink{
-  border-top-color:#ca477b;
-}
-
-.attendance-kpi-card.red{
-  border-top-color:#c22a4d;
-}
-
-.attendance-kpi-card.grey{
-  border-top-color:#7d8b91;
-}
-
-.employee-kpi-label,
-.attendance-kpi-label{
-  color:#668087;
-  font-size:10.5px;
-  font-weight:750;
-  text-transform:uppercase;
-}
-
-.employee-kpi-value,
-.attendance-kpi-value{
-  margin-top:8px;
-  font-size:24px;
-  line-height:1;
-  font-weight:800;
-  color:#17333a;
-}
-
-.employee-kpi-value span,
-.attendance-kpi-value span{
-  font-size:11px;
-  color:#82969b;
-  font-weight:600;
-}
-
-.employee-kpi-value.small-value{
-  font-size:19px;
-}
-
-.employee-kpi-sub,
-.attendance-kpi-sub{
-  margin-top:7px;
-  font-size:10.5px;
-  line-height:1.35;
-  color:#8da0a5;
-}
-
-
-/* ATTENDANCE KPIs */
-
-.attendance-kpi-grid{
-  display:grid;
-  grid-template-columns:repeat(4,minmax(0,1fr));
-  gap:13px;
-}
-
-
-/* CARDS */
-
-.module-card{
-  background:#fff;
-  border:1px solid #dfe9ec;
-  border-radius:13px;
-  padding:18px 20px;
-  box-shadow:0 2px 10px rgba(26,99,114,.05);
-}
-
-.module-card-header{
-  display:flex;
-  justify-content:space-between;
-  align-items:flex-start;
-  margin-bottom:10px;
-}
-
-.module-card-header h4{
-  margin:0;
-  font-size:13px;
-  color:#17333a;
-}
-
-.module-card-header p{
-  margin:4px 0 0;
-  font-size:10.5px;
-  color:#899ba0;
-}
-
-.module-tag{
-  font-size:9px;
-  font-weight:750;
-  padding:4px 9px;
-  border-radius:14px;
-  color:#17616e;
-  background:#eaf4f6;
-}
-
-
-/* CHARTS */
-
-.employee-chart-grid{
-  display:grid;
-  grid-template-columns:repeat(2,minmax(0,1fr));
-  gap:15px;
-}
-
-.attendance-chart-grid{
-  display:grid;
-  grid-template-columns:repeat(2,minmax(0,1fr));
-  gap:15px;
-  margin-bottom:15px;
-}
-
-.module-card.wide{
-  min-width:0;
-}
-
-.module-chart{
-  height:260px;
-  position:relative;
-}
-
-.module-chart.small-chart{
-  height:230px;
-}
-
-
-/* TABLES */
-
-.module-table-wrap{
-  width:100%;
-  overflow-x:auto;
-}
-
-.module-table{
-  width:100%;
-  border-collapse:collapse;
-  font-size:11.5px;
-}
-
-.employee-master-table{
-  min-width:1150px;
-}
-
-.module-table th{
-  text-align:left;
-  padding:10px 11px;
-  background:#f5f2fd;
-  color:#31525a;
-  font-size:10px;
-  text-transform:uppercase;
-  font-weight:750;
-  letter-spacing:.3px;
-  border-bottom:1px solid #dfe9ec;
-  white-space:nowrap;
-}
-
-.module-table td{
-  padding:11px;
-  color:#29454c;
-  border-bottom:1px solid #eef2f3;
-}
-
-.module-table tbody tr:hover{
-  background:#fafcfc;
-}
-
-.employee-cell-name{
-  font-weight:700;
-  color:#17333a;
-}
-
-.employee-cell-sub{
-  margin-top:3px;
-  font-size:9.5px;
-  color:#92a2a7;
-}
-
-
-/* STATUS */
-
-.module-status{
-  display:inline-flex;
-  align-items:center;
-  padding:4px 8px;
-  border-radius:15px;
-  font-size:9.5px;
-  font-weight:750;
-}
-
-.module-status.green{
-  background:#e9f6ee;
-  color:#1a8a5e;
-}
-
-.module-status.amber{
-  background:#fff4de;
-  color:#a3660a;
-}
-
-.module-status.red{
-  background:#fdebed;
-  color:#c22a4d;
-}
-
-.module-status.blue{
-  background:#edf5ff;
-  color:#3875b7;
-}
-
-.module-action-btn{
-  border:1px solid #b9d6dc;
-  background:#f7fbfc;
-  color:#17616e;
-  border-radius:7px;
-  padding:6px 9px;
-  font-family:inherit;
-  font-size:10px;
-  font-weight:700;
-  cursor:pointer;
-}
-
-.module-action-btn:hover{
-  background:#17616e;
-  color:#fff;
-}
-
-
-/* RESPONSIVE */
-
-@media(max-width:1300px){
-
-  .employee-kpi-grid{
-    grid-template-columns:repeat(3,1fr);
-  }
-
-  .attendance-kpi-grid{
-    grid-template-columns:repeat(4,1fr);
-  }
-
-}
-
-@media(max-width:950px){
-
-  .employee-chart-grid,
-  .attendance-chart-grid{
-    grid-template-columns:1fr;
-  }
-
-  .attendance-kpi-grid{
-    grid-template-columns:repeat(2,1fr);
-  }
-
-}
-
-@media(max-width:650px){
-
-  .employee-kpi-grid,
-  .attendance-kpi-grid{
-    grid-template-columns:1fr;
-  }
-
-  .module-header{
-    padding:20px;
-  }
-
-  .module-search{
-    min-width:100%;
-  }
-
+if(document.readyState === 'loading'){
+  document.addEventListener('DOMContentLoaded',teamObInitialise);
+}else{
+  teamObInitialise();
 }
