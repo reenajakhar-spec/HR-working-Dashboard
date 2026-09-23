@@ -1304,24 +1304,527 @@
      PAYROLL
 ====================================================== -->
 
-<section
-  id="payroll"
-  class="page"
->
+<section id="payroll" ...>...</section>
+========================================================= -->
 
+<section id="payroll" class="page payroll-live-page">
 
-  <div class="panel">
+  <style>
+    .payroll-live-page{
+      padding:28px 32px 40px;
+    }
 
-    <div class="empty-state">
+    .payroll-hero{
+      display:flex;
+      justify-content:space-between;
+      gap:24px;
+      align-items:center;
+      padding:28px 32px;
+      border-radius:22px;
+      background:linear-gradient(135deg,#0e5962 0%,#124b55 100%);
+      border-bottom:4px solid #f3ba16;
+      color:#fff;
+      margin-bottom:24px;
+    }
 
-      Payroll module will be connected later.
+    .payroll-eyebrow{
+      font-size:12px;
+      font-weight:800;
+      letter-spacing:.12em;
+      opacity:.8;
+      margin-bottom:8px;
+    }
 
+    .payroll-hero h2{
+      margin:0 0 6px;
+      font-size:30px;
+      color:#fff;
+    }
+
+    .payroll-hero p{
+      margin:0;
+      opacity:.82;
+      font-size:15px;
+    }
+
+    .payroll-hero-actions{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+
+    .payroll-status{
+      min-width:110px;
+      text-align:center;
+      padding:10px 15px;
+      border-radius:999px;
+      background:rgba(255,255,255,.12);
+      border:1px solid rgba(255,255,255,.20);
+      font-size:13px;
+      font-weight:800;
+    }
+
+    .payroll-status.live{
+      background:rgba(40,180,120,.18);
+    }
+
+    .payroll-status.error{
+      background:rgba(220,66,82,.20);
+    }
+
+    .payroll-refresh{
+      border:0;
+      border-radius:12px;
+      padding:12px 18px;
+      font-weight:800;
+      background:#fff;
+      color:#0e5962;
+      cursor:pointer;
+    }
+
+    .payroll-section-head{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-end;
+      gap:16px;
+      margin:22px 0 14px;
+    }
+
+    .payroll-section-head h3{
+      margin:0 0 4px;
+      font-size:22px;
+      color:#0e3440;
+    }
+
+    .payroll-section-head p{
+      margin:0;
+      color:#8295a0;
+      font-size:14px;
+    }
+
+    .payroll-latest-month{
+      color:#6c7f8a;
+      font-size:14px;
+      white-space:nowrap;
+    }
+
+    .payroll-kpi-grid{
+      display:grid;
+      grid-template-columns:repeat(4,minmax(0,1fr));
+      gap:18px;
+    }
+
+    .payroll-kpi{
+      position:relative;
+      min-height:164px;
+      padding:22px 24px;
+      border:1px solid #dce6ea;
+      border-radius:20px;
+      background:#fff;
+      box-shadow:0 10px 26px rgba(17,54,64,.07);
+      cursor:pointer;
+      transition:transform .18s ease, box-shadow .18s ease;
+      overflow:hidden;
+    }
+
+    .payroll-kpi:hover{
+      transform:translateY(-2px);
+      box-shadow:0 14px 30px rgba(17,54,64,.12);
+    }
+
+    .payroll-kpi::after{
+      content:"View MoM";
+      position:absolute;
+      right:18px;
+      bottom:16px;
+      font-size:11px;
+      font-weight:800;
+      color:#16707b;
+      opacity:.75;
+    }
+
+    .payroll-kpi.cost{background:#fff;}
+    .payroll-kpi.deduction{background:#fff8ee;}
+    .payroll-kpi.net{background:#f5f1ff;}
+    .payroll-kpi.arrear{background:#eefaf4;}
+
+    .payroll-kpi-label{
+      font-size:13px;
+      font-weight:900;
+      letter-spacing:.03em;
+      color:#3b5d67;
+      text-transform:uppercase;
+      margin-bottom:12px;
+    }
+
+    .payroll-kpi-value{
+      font-size:36px;
+      line-height:1;
+      font-weight:900;
+      color:#073f50;
+      margin-bottom:10px;
+    }
+
+    .payroll-kpi-sub{
+      font-size:14px;
+      color:#8aa0aa;
+    }
+
+    .payroll-kpi-mom{
+      margin-top:8px;
+      font-size:13px;
+      font-weight:800;
+    }
+
+    .payroll-kpi-mom.up{color:#13895b;}
+    .payroll-kpi-mom.down{color:#d13850;}
+    .payroll-kpi-mom.flat{color:#71838d;}
+
+    .payroll-secondary-grid{
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:18px;
+      margin-top:20px;
+    }
+
+    .payroll-mini-card{
+      padding:20px 22px;
+      background:#fff;
+      border:1px solid #dce6ea;
+      border-radius:18px;
+    }
+
+    .payroll-mini-label{
+      color:#788c96;
+      font-size:13px;
+      font-weight:800;
+      margin-bottom:6px;
+    }
+
+    .payroll-mini-value{
+      font-size:28px;
+      font-weight:900;
+      color:#0b4453;
+    }
+
+    .payroll-panel{
+      margin-top:22px;
+      background:#fff;
+      border:1px solid #dce6ea;
+      border-radius:20px;
+      padding:22px;
+      box-shadow:0 8px 24px rgba(17,54,64,.05);
+    }
+
+    .payroll-panel h4{
+      margin:0 0 4px;
+      font-size:18px;
+      color:#0d3e4c;
+    }
+
+    .payroll-panel p{
+      margin:0 0 16px;
+      color:#879aa4;
+      font-size:13px;
+    }
+
+    .payroll-main-chart{
+      height:320px;
+    }
+
+    .payroll-modal{
+      position:fixed;
+      inset:0;
+      z-index:99999;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:24px;
+      background:rgba(3,31,38,.55);
+      backdrop-filter:blur(3px);
+    }
+
+    .payroll-modal.open{
+      display:flex;
+    }
+
+    .payroll-modal-card{
+      width:min(980px,96vw);
+      max-height:90vh;
+      overflow:auto;
+      background:#fff;
+      border-radius:24px;
+      box-shadow:0 30px 90px rgba(0,0,0,.25);
+    }
+
+    .payroll-modal-head{
+      position:sticky;
+      top:0;
+      z-index:2;
+      display:flex;
+      justify-content:space-between;
+      gap:18px;
+      align-items:flex-start;
+      padding:22px 26px;
+      background:#fff;
+      border-bottom:1px solid #e4ecef;
+    }
+
+    .payroll-modal-head h3{
+      margin:0 0 4px;
+      font-size:23px;
+      color:#0b3f4e;
+    }
+
+    .payroll-modal-head p{
+      margin:0;
+      color:#8799a2;
+      font-size:13px;
+    }
+
+    .payroll-modal-close{
+      width:38px;
+      height:38px;
+      border:0;
+      border-radius:50%;
+      background:#eef4f5;
+      color:#164e59;
+      font-size:20px;
+      cursor:pointer;
+    }
+
+    .payroll-modal-body{
+      padding:24px 26px 28px;
+    }
+
+    .payroll-modal-chart{
+      height:300px;
+      margin-bottom:22px;
+    }
+
+    .payroll-mom-table-wrap{
+      overflow:auto;
+      border:1px solid #e1e9ec;
+      border-radius:14px;
+    }
+
+    .payroll-mom-table{
+      width:100%;
+      border-collapse:collapse;
+      min-width:650px;
+    }
+
+    .payroll-mom-table th,
+    .payroll-mom-table td{
+      padding:13px 15px;
+      border-bottom:1px solid #e8eef0;
+      text-align:left;
+      font-size:13px;
+    }
+
+    .payroll-mom-table th{
+      background:#f3f0fc;
+      color:#355761;
+      text-transform:uppercase;
+      letter-spacing:.02em;
+    }
+
+    .payroll-mom-table tr:last-child td{
+      border-bottom:0;
+    }
+
+    .payroll-latest-row{
+      background:#eef9f4;
+      font-weight:800;
+    }
+
+    @media(max-width:1100px){
+      .payroll-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+      .payroll-secondary-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+    }
+
+    @media(max-width:700px){
+      .payroll-live-page{padding:18px 14px 30px;}
+      .payroll-hero{padding:22px 18px;align-items:flex-start;flex-direction:column;}
+      .payroll-kpi-grid,
+      .payroll-secondary-grid{grid-template-columns:1fr;}
+      .payroll-kpi-value{font-size:31px;}
+    }
+  </style>
+
+  <div class="payroll-hero">
+    <div>
+      <div class="payroll-eyebrow">PAYROLL MANAGEMENT</div>
+      <h2>Payroll & Compensation Command Centre</h2>
+      <p>Monthly payroll cost, deductions, net payout and increment arrears</p>
+    </div>
+
+    <div class="payroll-hero-actions">
+      <div id="payrollLiveStatus" class="payroll-status">Connecting...</div>
+
+      <button
+        class="payroll-refresh"
+        type="button"
+        onclick="loadPayrollLive(true)"
+      >
+        Refresh Live Data
+      </button>
+    </div>
+  </div>
+
+  <div class="payroll-section-head">
+    <div>
+      <h3>Payroll Overview</h3>
+      <p>Click any card to view month-on-month history</p>
+    </div>
+
+    <div class="payroll-latest-month">
+      Latest payroll: <strong id="payrollLatestMonth">-</strong>
+    </div>
+  </div>
+
+  <div class="payroll-kpi-grid">
+
+    <div
+      class="payroll-kpi cost"
+      role="button"
+      tabindex="0"
+      onclick="openPayrollMom('payrollCost')"
+    >
+      <div class="payroll-kpi-label">Payroll Cost</div>
+      <div id="payrollKpiCost" class="payroll-kpi-value">-</div>
+      <div id="payrollKpiCostSub" class="payroll-kpi-sub">Total Earn Gross with Arrear</div>
+      <div id="payrollKpiCostMom" class="payroll-kpi-mom flat">-</div>
+    </div>
+
+    <div
+      class="payroll-kpi deduction"
+      role="button"
+      tabindex="0"
+      onclick="openPayrollMom('totalDeduction')"
+    >
+      <div class="payroll-kpi-label">Total Deduction</div>
+      <div id="payrollKpiDeduction" class="payroll-kpi-value">-</div>
+      <div class="payroll-kpi-sub">PF, ESI, tax, loan and other deductions</div>
+      <div id="payrollKpiDeductionMom" class="payroll-kpi-mom flat">-</div>
+    </div>
+
+    <div
+      class="payroll-kpi net"
+      role="button"
+      tabindex="0"
+      onclick="openPayrollMom('netPayroll')"
+    >
+      <div class="payroll-kpi-label">Net Payroll</div>
+      <div id="payrollKpiNet" class="payroll-kpi-value">-</div>
+      <div class="payroll-kpi-sub">Final payable in-hand</div>
+      <div id="payrollKpiNetMom" class="payroll-kpi-mom flat">-</div>
+    </div>
+
+    <div
+      class="payroll-kpi arrear"
+      role="button"
+      tabindex="0"
+      onclick="openPayrollMom('arrearIncrement')"
+    >
+      <div class="payroll-kpi-label">Arrear Increment</div>
+      <div id="payrollKpiArrear" class="payroll-kpi-value">-</div>
+      <div class="payroll-kpi-sub">Increment arrears processed</div>
+      <div id="payrollKpiArrearMom" class="payroll-kpi-mom flat">-</div>
     </div>
 
   </div>
 
+  <div class="payroll-secondary-grid">
+
+    <div class="payroll-mini-card">
+      <div class="payroll-mini-label">Employees in Latest Payroll</div>
+      <div id="payrollEmployeeCount" class="payroll-mini-value">-</div>
+    </div>
+
+    <div class="payroll-mini-card">
+      <div class="payroll-mini-label">Salary Hold Cases</div>
+      <div id="payrollSalaryHoldCount" class="payroll-mini-value">-</div>
+    </div>
+
+    <div class="payroll-mini-card">
+      <div class="payroll-mini-label">LOP Days</div>
+      <div id="payrollLopDays" class="payroll-mini-value">-</div>
+    </div>
+
+  </div>
+
+  <div class="payroll-panel">
+    <h4>Monthly Payroll Cost Trend</h4>
+    <p>Automatically includes future month tabs when they are added to Payroll & Compensation</p>
+
+    <div class="payroll-main-chart">
+      <canvas id="payrollTrendChart"></canvas>
+    </div>
+  </div>
+
+  <!-- =========================
+       MOM POPUP
+  ========================== -->
+
+  <div
+    id="payrollMomModal"
+    class="payroll-modal"
+    onclick="closePayrollMomOnBackdrop(event)"
+  >
+    <div class="payroll-modal-card">
+
+      <div class="payroll-modal-head">
+        <div>
+          <h3 id="payrollMomTitle">Month-on-Month Trend</h3>
+          <p id="payrollMomSubtitle">Monthly payroll movement</p>
+        </div>
+
+        <button
+          type="button"
+          class="payroll-modal-close"
+          onclick="closePayrollMom()"
+          aria-label="Close"
+        >
+          ×
+        </button>
+      </div>
+
+      <div class="payroll-modal-body">
+
+        <div class="payroll-modal-chart">
+          <canvas id="payrollMomChart"></canvas>
+        </div>
+
+        <div class="payroll-mom-table-wrap">
+          <table class="payroll-mom-table">
+            <thead>
+              <tr>
+                <th>Month</th>
+                <th>Value</th>
+                <th>MoM Change</th>
+              </tr>
+            </thead>
+
+            <tbody id="payrollMomTableBody">
+              <tr>
+                <td colspan="3">Loading...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
 
 </section>
+
+
+
 
 
 
@@ -1868,7 +2371,7 @@
 
 
 <script
-  src="./js/app.js?v=20260922-3">
+  src="./js/app.js?v=20260923-payroll1">
 </script>
 
 
