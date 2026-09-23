@@ -91,6 +91,16 @@ function navigate(page) {
       loadLndLive(false);
     }, 50);
   }
+
+
+  if (
+    page === 'payroll' &&
+    typeof loadPayrollLive === 'function'
+  ) {
+    setTimeout(function() {
+      loadPayrollLive(false);
+    }, 50);
+  }
 }
 
 document.querySelectorAll('.nav-item').forEach(btn => {
@@ -726,47 +736,1082 @@ document.getElementById('performanceMatrix').innerHTML = `
 `;
 
 
-/* =========================
-   PAYROLL
-========================= */
+/* =========================================================
+   PAYROLL & COMPENSATION - LIVE
+   Uses the same Apps Script web app with ?module=payroll.
+   Attendance, Employee CRM and L&D live code below/elsewhere
+   is preserved unchanged.
+========================================================= */
 
-document.getElementById('payrollKpis').innerHTML = [
+const PAYROLL_API_URL =
+  'https://script.google.com/macros/s/AKfycbxWzFltc06j3OmPFG62gtuvbj_SumQe3dvbPCcc5BurhqyXeeqRTXJjutzNKStXSJl-/exec';
 
-  kpi(
-    'Payroll Cost',
-    '₹1.42 Cr/mo',
-    'Excl Directors'
-  ),
+let PAYROLL_DATA = null;
+let PAYROLL_LOADED = false;
+let PAYROLL_LOADING = false;
 
-  kpi(
-    'OT Cost',
-    '₹4.8 L',
-    '▲ 6% vs Jun',
-    'warn'
-  ),
+const PAYROLL_CHARTS = {
+  trend: null,
+  mom: null
+};
 
-  kpi(
-    'Comp Ratio',
-    '0.96',
-    'Vs band midpoint'
-  ),
+const PAYROLL_METRICS = {
+  payrollCost: {
+    title: 'Payroll Cost',
+    subtitle: 'Total Earn Gross with Arrear',
+    momKey: 'payrollCostMomPct'
+  },
+  totalDeduction: {
+    title: 'Total Deduction',
+    subtitle: 'PF, ESI, tax, loan and other deductions',
+    momKey: 'totalDeductionMomPct'
+  },
+  netPayroll: {
+    title: 'Net Payroll',
+    subtitle: 'Final payable in-hand',
+    momKey: 'netPayrollMomPct'
+  },
+  arrearIncrement: {
+    title: 'Arrear Increment',
+    subtitle: 'Increment arrears processed',
+    momKey: 'arrearIncrementMomPct'
+  }
+};
 
-  kpi(
-    'Increment Budget',
-    '68%',
-    'FY26-27 utilised'
-  )
 
-].join('');
+/* =========================================================
+   JSONP LOAD
+========================================================= */
+
+function loadPayrollLive(forceRefresh) {
+
+  if (PAYROLL_LOADING) {
+    return;
+  }
+
+  if (
+    PAYROLL_LOADED &&
+    !forceRefresh
+  ) {
+    renderPayrollDashboard(PAYROLL_DATA);
+    return;
+  }
+
+  PAYROLL_LOADING = true;
+
+  setPayrollStatus(
+    'Connecting...',
+    'loading'
+  );
+
+  const oldScript =
+    document.getElementById(
+      'payrollJsonpScript'
+    );
+
+  if (
+    oldScript &&
+    oldScript.parentNode
+  ) {
+    oldScript.parentNode.removeChild(
+      oldScript
+    );
+  }
+
+  const script =
+    document.createElement(
+      'script'
+    );
+
+  script.id =
+    'payrollJsonpScript';
+
+  script.src =
+    PAYROLL_API_URL +
+    '?module=payroll' +
+    '&callback=receivePayrollData' +
+    '&_=' +
+    Date.now();
+
+  script.onerror =
+    function() {
+
+      PAYROLL_LOADING = false;
+
+      setPayrollStatus(
+        'Connection Failed',
+        'error'
+      );
+
+      console.error(
+        'Payroll API script failed to load.'
+      );
+
+    };
+
+  document.body.appendChild(
+    script
+  );
+
+}
 
 
-makeLineChart(
-  'payrollChart',
-  ['Apr', 'May', 'Jun', 'Jul', 'Aug'],
-  [1.34, 1.36, 1.39, 1.42, 1.44],
-  'Payroll ₹Cr'
+/* JSONP must be globally available */
+window.receivePayrollData =
+function receivePayrollData(data) {
+
+  PAYROLL_LOADING = false;
+
+  if (
+    !data ||
+    data.ok !== true ||
+    !Array.isArray(data.months)
+  ) {
+
+    console.error(
+      'Payroll API returned invalid data:',
+      data
+    );
+
+    setPayrollStatus(
+      'Data Error',
+      'error'
+    );
+
+    return;
+  }
+
+  PAYROLL_DATA = data;
+  PAYROLL_LOADED = true;
+
+  setPayrollStatus(
+    '● Live',
+    'live'
+  );
+
+  renderPayrollDashboard(
+    data
+  );
+
+};
+
+
+/* =========================================================
+   STATUS
+========================================================= */
+
+function setPayrollStatus(
+  text,
+  state
+) {
+
+  const el =
+    document.getElementById(
+      'payrollLiveStatus'
+    );
+
+  if (!el) {
+    return;
+  }
+
+  el.textContent = text;
+
+  el.classList.remove(
+    'live',
+    'error'
+  );
+
+  if (state === 'live') {
+    el.classList.add('live');
+  }
+
+  if (state === 'error') {
+    el.classList.add('error');
+  }
+
+}
+
+
+/* =========================================================
+   MAIN RENDER
+========================================================= */
+
+function renderPayrollDashboard(
+  data
+) {
+
+  if (
+    !data ||
+    !data.summary
+  ) {
+    return;
+  }
+
+  const s =
+    data.summary;
+
+  setPayrollText(
+    'payrollLatestMonth',
+    data.latestMonth || '-'
+  );
+
+  setPayrollText(
+    'payrollKpiCost',
+    formatPayrollMoney(
+      s.payrollCost
+    )
+  );
+
+  setPayrollText(
+    'payrollKpiDeduction',
+    formatPayrollMoney(
+      s.totalDeduction
+    )
+  );
+
+  setPayrollText(
+    'payrollKpiNet',
+    formatPayrollMoney(
+      s.netPayroll
+    )
+  );
+
+  setPayrollText(
+    'payrollKpiArrear',
+    formatPayrollMoney(
+      s.arrearIncrement
+    )
+  );
+
+  setPayrollMom(
+    'payrollKpiCostMom',
+    s.payrollCostMomPct
+  );
+
+  setPayrollMom(
+    'payrollKpiDeductionMom',
+    s.totalDeductionMomPct
+  );
+
+  setPayrollMom(
+    'payrollKpiNetMom',
+    s.netPayrollMomPct
+  );
+
+  setPayrollMom(
+    'payrollKpiArrearMom',
+    s.arrearIncrementMomPct
+  );
+
+  setPayrollText(
+    'payrollEmployeeCount',
+    formatPayrollNumber(
+      s.employeeCount
+    )
+  );
+
+  setPayrollText(
+    'payrollSalaryHoldCount',
+    formatPayrollNumber(
+      s.salaryHoldCount
+    )
+  );
+
+  setPayrollText(
+    'payrollLopDays',
+    formatPayrollNumber(
+      s.lopDays
+    )
+  );
+
+  renderPayrollTrendChart(
+    data.months || []
+  );
+
+}
+
+
+/* =========================================================
+   CARD HELPERS
+========================================================= */
+
+function setPayrollText(
+  id,
+  value
+) {
+
+  const el =
+    document.getElementById(
+      id
+    );
+
+  if (el) {
+    el.textContent = value;
+  }
+
+}
+
+
+function setPayrollMom(
+  id,
+  value
+) {
+
+  const el =
+    document.getElementById(
+      id
+    );
+
+  if (!el) {
+    return;
+  }
+
+  el.classList.remove(
+    'up',
+    'down',
+    'flat'
+  );
+
+  if (
+    value === null ||
+    value === undefined ||
+    !Number.isFinite(
+      Number(value)
+    )
+  ) {
+
+    el.textContent =
+      'MoM: NA';
+
+    el.classList.add(
+      'flat'
+    );
+
+    return;
+  }
+
+  const number =
+    Number(value);
+
+  if (number > 0) {
+
+    el.textContent =
+      '▲ ' +
+      Math.abs(number).toFixed(1) +
+      '% vs previous month';
+
+    el.classList.add('up');
+
+  }
+
+  else if (number < 0) {
+
+    el.textContent =
+      '▼ ' +
+      Math.abs(number).toFixed(1) +
+      '% vs previous month';
+
+    el.classList.add('down');
+
+  }
+
+  else {
+
+    el.textContent =
+      '0.0% vs previous month';
+
+    el.classList.add('flat');
+
+  }
+
+}
+
+
+/* =========================================================
+   MAIN TREND CHART
+========================================================= */
+
+function destroyPayrollChart(
+  key,
+  canvasId
+) {
+
+  if (
+    PAYROLL_CHARTS[key]
+  ) {
+
+    PAYROLL_CHARTS[key].destroy();
+    PAYROLL_CHARTS[key] = null;
+
+  }
+
+  if (
+    typeof Chart !== 'undefined' &&
+    typeof Chart.getChart === 'function'
+  ) {
+
+    const canvas =
+      document.getElementById(
+        canvasId
+      );
+
+    if (canvas) {
+
+      const old =
+        Chart.getChart(canvas);
+
+      if (old) {
+        old.destroy();
+      }
+
+    }
+
+  }
+
+}
+
+
+function renderPayrollTrendChart(
+  months
+) {
+
+  const canvas =
+    document.getElementById(
+      'payrollTrendChart'
+    );
+
+  if (
+    !canvas ||
+    typeof Chart === 'undefined'
+  ) {
+    return;
+  }
+
+  destroyPayrollChart(
+    'trend',
+    'payrollTrendChart'
+  );
+
+  PAYROLL_CHARTS.trend =
+    new Chart(
+      canvas,
+      {
+        type: 'line',
+
+        data: {
+          labels:
+            months.map(
+              function(row) {
+                return row.month;
+              }
+            ),
+
+          datasets: [{
+            label: 'Payroll Cost',
+            data:
+              months.map(
+                function(row) {
+                  return Number(
+                    row.payrollCost || 0
+                  );
+                }
+              ),
+            tension: .32,
+            fill: false,
+            borderWidth: 3,
+            pointRadius: 4,
+            pointHoverRadius: 6
+          }]
+        },
+
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+
+          interaction: {
+            mode: 'index',
+            intersect: false
+          },
+
+          plugins: {
+            legend: {
+              display: false
+            },
+
+            tooltip: {
+              callbacks: {
+                label:
+                  function(context) {
+                    return (
+                      ' ' +
+                      formatPayrollMoney(
+                        context.raw
+                      )
+                    );
+                  }
+              }
+            }
+          },
+
+          scales: {
+            x: {
+              grid: {
+                display: false
+              }
+            },
+
+            y: {
+              beginAtZero: false,
+
+              ticks: {
+                callback:
+                  function(value) {
+                    return formatPayrollCompact(
+                      value
+                    );
+                  }
+              }
+            }
+          }
+        }
+      }
+    );
+
+}
+
+
+/* =========================================================
+   CLICKABLE MoM POPUP
+========================================================= */
+
+function openPayrollMom(
+  metricKey
+) {
+
+  if (
+    !PAYROLL_DATA ||
+    !PAYROLL_METRICS[
+      metricKey
+    ]
+  ) {
+    return;
+  }
+
+  const config =
+    PAYROLL_METRICS[
+      metricKey
+    ];
+
+  const months =
+    PAYROLL_DATA.months || [];
+
+  const title =
+    document.getElementById(
+      'payrollMomTitle'
+    );
+
+  const subtitle =
+    document.getElementById(
+      'payrollMomSubtitle'
+    );
+
+  if (title) {
+    title.textContent =
+      config.title +
+      ' - Month-on-Month';
+  }
+
+  if (subtitle) {
+    subtitle.textContent =
+      config.subtitle;
+  }
+
+  renderPayrollMomChart(
+    metricKey,
+    months,
+    config
+  );
+
+  renderPayrollMomTable(
+    metricKey,
+    months
+  );
+
+  const modal =
+    document.getElementById(
+      'payrollMomModal'
+    );
+
+  if (modal) {
+    modal.classList.add('open');
+  }
+
+  document.body.style.overflow =
+    'hidden';
+
+}
+
+
+function closePayrollMom() {
+
+  const modal =
+    document.getElementById(
+      'payrollMomModal'
+    );
+
+  if (modal) {
+    modal.classList.remove('open');
+  }
+
+  document.body.style.overflow =
+    '';
+
+}
+
+
+function closePayrollMomOnBackdrop(
+  event
+) {
+
+  if (
+    event &&
+    event.target &&
+    event.target.id ===
+      'payrollMomModal'
+  ) {
+
+    closePayrollMom();
+
+  }
+
+}
+
+
+document.addEventListener(
+  'keydown',
+  function(event) {
+
+    if (
+      event.key === 'Escape'
+    ) {
+      closePayrollMom();
+    }
+
+  }
 );
 
+
+/* =========================================================
+   MOM CHART
+========================================================= */
+
+function renderPayrollMomChart(
+  metricKey,
+  months,
+  config
+) {
+
+  const canvas =
+    document.getElementById(
+      'payrollMomChart'
+    );
+
+  if (
+    !canvas ||
+    typeof Chart === 'undefined'
+  ) {
+    return;
+  }
+
+  destroyPayrollChart(
+    'mom',
+    'payrollMomChart'
+  );
+
+  PAYROLL_CHARTS.mom =
+    new Chart(
+      canvas,
+      {
+        type: 'line',
+
+        data: {
+          labels:
+            months.map(
+              function(row) {
+                return row.month;
+              }
+            ),
+
+          datasets: [{
+            label:
+              config.title,
+
+            data:
+              months.map(
+                function(row) {
+                  return Number(
+                    row[
+                      metricKey
+                    ] || 0
+                  );
+                }
+              ),
+
+            tension: .32,
+            fill: false,
+            borderWidth: 3,
+            pointRadius: 5,
+            pointHoverRadius: 7
+          }]
+        },
+
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+
+          plugins: {
+            legend: {
+              display: false
+            },
+
+            tooltip: {
+              callbacks: {
+                label:
+                  function(context) {
+                    return (
+                      ' ' +
+                      formatPayrollMoney(
+                        context.raw
+                      )
+                    );
+                  }
+              }
+            }
+          },
+
+          scales: {
+            x: {
+              grid: {
+                display: false
+              }
+            },
+
+            y: {
+              beginAtZero: false,
+
+              ticks: {
+                callback:
+                  function(value) {
+                    return formatPayrollCompact(
+                      value
+                    );
+                  }
+              }
+            }
+          }
+        }
+      }
+    );
+
+}
+
+
+/* =========================================================
+   MOM TABLE
+========================================================= */
+
+function renderPayrollMomTable(
+  metricKey,
+  months
+) {
+
+  const body =
+    document.getElementById(
+      'payrollMomTableBody'
+    );
+
+  if (!body) {
+    return;
+  }
+
+  if (!months.length) {
+
+    body.innerHTML =
+      '<tr><td colspan="3">No payroll months available.</td></tr>';
+
+    return;
+  }
+
+  body.innerHTML =
+    months.map(
+      function(row, index) {
+
+        const value =
+          Number(
+            row[
+              metricKey
+            ] || 0
+          );
+
+        let mom =
+          null;
+
+        if (index > 0) {
+
+          const previous =
+            Number(
+              months[
+                index - 1
+              ][
+                metricKey
+              ] || 0
+            );
+
+          if (
+            previous !== 0
+          ) {
+
+            mom =
+              (
+                (
+                  value -
+                  previous
+                )
+                /
+                previous
+                *
+                100
+              );
+
+          }
+
+        }
+
+        const isLatest =
+          index ===
+          months.length - 1;
+
+        return `
+          <tr class="${isLatest ? 'payroll-latest-row' : ''}">
+            <td>
+              ${escapePayrollHtml(row.month || '-')}
+              ${isLatest ? ' <span style="font-size:11px;color:#14825a;">LATEST</span>' : ''}
+            </td>
+
+            <td>
+              ${formatPayrollMoney(value)}
+            </td>
+
+            <td>
+              ${formatPayrollMomCell(mom)}
+            </td>
+          </tr>
+        `;
+
+      }
+    ).join('');
+
+}
+
+
+/* =========================================================
+   FORMATTERS
+========================================================= */
+
+function formatPayrollMoney(
+  value
+) {
+
+  const number =
+    Number(value);
+
+  if (
+    !Number.isFinite(number)
+  ) {
+    return '-';
+  }
+
+  const abs =
+    Math.abs(number);
+
+  if (
+    abs >= 10000000
+  ) {
+
+    return (
+      '₹' +
+      (
+        number /
+        10000000
+      ).toFixed(2) +
+      ' Cr'
+    );
+
+  }
+
+  if (
+    abs >= 100000
+  ) {
+
+    return (
+      '₹' +
+      (
+        number /
+        100000
+      ).toFixed(2) +
+      ' L'
+    );
+
+  }
+
+  return (
+    '₹' +
+    new Intl.NumberFormat(
+      'en-IN',
+      {
+        maximumFractionDigits: 0
+      }
+    ).format(number)
+  );
+
+}
+
+
+function formatPayrollCompact(
+  value
+) {
+
+  const number =
+    Number(value);
+
+  if (
+    !Number.isFinite(number)
+  ) {
+    return '';
+  }
+
+  const abs =
+    Math.abs(number);
+
+  if (abs >= 10000000) {
+    return (
+      (
+        number /
+        10000000
+      ).toFixed(1) +
+      'Cr'
+    );
+  }
+
+  if (abs >= 100000) {
+    return (
+      (
+        number /
+        100000
+      ).toFixed(1) +
+      'L'
+    );
+  }
+
+  if (abs >= 1000) {
+    return (
+      (
+        number /
+        1000
+      ).toFixed(0) +
+      'K'
+    );
+  }
+
+  return String(
+    Math.round(number)
+  );
+
+}
+
+
+function formatPayrollNumber(
+  value
+) {
+
+  const number =
+    Number(value);
+
+  if (
+    !Number.isFinite(number)
+  ) {
+    return '-';
+  }
+
+  return new Intl.NumberFormat(
+    'en-IN',
+    {
+      maximumFractionDigits: 1
+    }
+  ).format(number);
+
+}
+
+
+function formatPayrollMomCell(
+  value
+) {
+
+  if (
+    value === null ||
+    value === undefined ||
+    !Number.isFinite(
+      Number(value)
+    )
+  ) {
+
+    return 'NA';
+
+  }
+
+  const number =
+    Number(value);
+
+  if (number > 0) {
+    return (
+      '<span style="color:#13895b;font-weight:800;">▲ ' +
+      number.toFixed(1) +
+      '%</span>'
+    );
+  }
+
+  if (number < 0) {
+    return (
+      '<span style="color:#d13850;font-weight:800;">▼ ' +
+      Math.abs(number).toFixed(1) +
+      '%</span>'
+    );
+  }
+
+  return (
+    '<span style="color:#71838d;font-weight:800;">0.0%</span>'
+  );
+
+}
+
+
+function escapePayrollHtml(
+  value
+) {
+
+  return String(
+    value === null ||
+    value === undefined
+      ? ''
+      : value
+  )
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#039;');
+
+}
 
 /* =========================================================
    L&D / EUROVERSITY - LIVE PROFESSIONAL DASHBOARD
