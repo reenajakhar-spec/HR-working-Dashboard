@@ -1957,3 +1957,362 @@
 </body>
 
 </html>
+<!-- =========================================================
+     TEAM OB - LIVE MODULE ONLY
+     SAFE INSERT:
+     Place this section in index.html BEFORE the Engagement section
+     (or anywhere with the other <section class="page"> blocks).
+
+     This block does NOT replace Employee CRM, Attendance, L&D or Payroll.
+========================================================= -->
+
+<section id="teamob" class="page teamob-live-page">
+
+  <style>
+    /* TEAM OB ONLY - all selectors are prefixed to avoid conflicts */
+    .teamob-live-page{padding:28px 32px 40px}
+    .teamob-hero{display:flex;justify-content:space-between;align-items:center;gap:22px;padding:26px 30px;border-radius:22px;background:linear-gradient(135deg,#0f5b65,#103f4b);border-bottom:4px solid #f4bd18;color:#fff;margin-bottom:20px}
+    .teamob-eyebrow{font-size:12px;font-weight:900;letter-spacing:.12em;opacity:.78;margin-bottom:7px}
+    .teamob-hero h2{margin:0 0 6px;color:#fff;font-size:29px}
+    .teamob-hero p{margin:0;color:rgba(255,255,255,.82);font-size:14px}
+    .teamob-hero-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+    .teamob-status{padding:10px 14px;border-radius:999px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.10);font-size:12px;font-weight:900;white-space:nowrap}
+    .teamob-status.live{background:rgba(68,192,132,.22)}
+    .teamob-status.error{background:rgba(219,66,80,.24)}
+    .teamob-btn{border:0;border-radius:11px;background:#fff;color:#0f5660;padding:11px 16px;font-weight:900;cursor:pointer}
+
+    .teamob-filters{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:0 0 18px}
+    .teamob-filters select,.teamob-filters input{height:44px;border:1px solid #d8e3e7;border-radius:12px;background:#fff;padding:0 14px;color:#264d58;font-size:13px;outline:none}
+    .teamob-filters input{min-width:230px}
+
+    .teamob-freshness{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:22px}
+    .teamob-fresh-card{background:#fff;border:1px solid #dfe9ec;border-radius:14px;padding:13px 15px}
+    .teamob-fresh-label{font-size:11px;font-weight:900;color:#78909a;text-transform:uppercase;letter-spacing:.05em}
+    .teamob-fresh-value{margin-top:4px;color:#104a56;font-weight:900;font-size:14px}
+    .teamob-fresh-range{margin-top:2px;color:#94a4ac;font-size:11px}
+
+    .teamob-section-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin:22px 0 12px}
+    .teamob-section-head h3{margin:0 0 4px;color:#0d3c49;font-size:21px}
+    .teamob-section-head p{margin:0;color:#879aa3;font-size:13px}
+
+    .teamob-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:15px}
+    .teamob-kpi{background:#fff;border:1px solid #dde7ea;border-radius:18px;padding:18px 20px;min-height:125px;box-shadow:0 8px 24px rgba(18,62,72,.055)}
+    .teamob-kpi.teal{border-top:4px solid #17616e}
+    .teamob-kpi.green{border-top:4px solid #67aa53}
+    .teamob-kpi.amber{border-top:4px solid #efb815}
+    .teamob-kpi.blue{border-top:4px solid #3977b8}
+    .teamob-kpi.violet{border-top:4px solid #7957b7}
+    .teamob-kpi.red{border-top:4px solid #cc3454}
+    .teamob-kpi-label{font-size:11px;font-weight:900;letter-spacing:.03em;color:#617c86;text-transform:uppercase}
+    .teamob-kpi-value{font-size:31px;line-height:1.05;font-weight:900;color:#083e4e;margin:10px 0 6px}
+    .teamob-kpi-sub{font-size:12px;color:#91a2aa}
+
+    .teamob-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+    .teamob-panel{background:#fff;border:1px solid #dfe8eb;border-radius:18px;padding:20px;box-shadow:0 8px 24px rgba(18,62,72,.045)}
+    .teamob-panel h4{margin:0 0 4px;color:#0d3f4c;font-size:17px}
+    .teamob-panel p{margin:0 0 14px;color:#8a9da5;font-size:12px}
+    .teamob-chart{height:310px}
+    .teamob-chart-tall{height:420px}
+
+    .teamob-table-wrap{overflow:auto;border:1px solid #e3eaed;border-radius:14px}
+    .teamob-table{width:100%;border-collapse:collapse;min-width:850px}
+    .teamob-table th,.teamob-table td{padding:12px 13px;border-bottom:1px solid #e8eef0;text-align:left;font-size:12px;vertical-align:middle}
+    .teamob-table th{background:#f2effb;color:#35545d;font-size:11px;text-transform:uppercase;letter-spacing:.03em;position:sticky;top:0;z-index:1}
+    .teamob-table tr:last-child td{border-bottom:0}
+    .teamob-name{font-weight:900;color:#163f49}
+    .teamob-sub{font-size:10px;color:#91a2aa;margin-top:2px}
+    .teamob-pill{display:inline-flex;align-items:center;padding:5px 9px;border-radius:999px;font-size:10px;font-weight:900;white-space:nowrap}
+    .teamob-pill.healthy{background:#eaf7ef;color:#128253}
+    .teamob-pill.watch{background:#fff4d9;color:#a86f00}
+    .teamob-pill.attention{background:#fde9ed;color:#c12f4c}
+    .teamob-action{border:1px solid #bcd2d8;background:#fff;color:#17616e;border-radius:9px;padding:7px 10px;font-size:11px;font-weight:900;cursor:pointer}
+
+    .teamob-progress{height:7px;background:#edf2f3;border-radius:999px;overflow:hidden;min-width:90px}
+    .teamob-progress > div{height:100%;border-radius:999px;background:#17616e}
+
+    .teamob-modal{position:fixed;inset:0;z-index:100000;display:none;align-items:center;justify-content:center;padding:22px;background:rgba(2,28,34,.56);backdrop-filter:blur(3px)}
+    .teamob-modal.open{display:flex}
+    .teamob-modal-card{width:min(1100px,96vw);max-height:91vh;overflow:auto;background:#fff;border-radius:22px;box-shadow:0 28px 80px rgba(0,0,0,.24)}
+    .teamob-modal-head{position:sticky;top:0;z-index:2;background:#fff;border-bottom:1px solid #e5ecee;padding:20px 24px;display:flex;justify-content:space-between;gap:16px}
+    .teamob-modal-head h3{margin:0 0 4px;color:#0c3f4d}
+    .teamob-modal-head p{margin:0;color:#8b9ca4;font-size:12px}
+    .teamob-modal-close{width:38px;height:38px;border:0;border-radius:50%;background:#eef4f5;color:#12515c;font-size:21px;cursor:pointer}
+    .teamob-modal-body{padding:22px 24px 26px}
+    .teamob-detail-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:18px}
+    .teamob-detail{background:#f8fbfb;border:1px solid #e3ecee;border-radius:13px;padding:13px}
+    .teamob-detail-label{font-size:10px;color:#80939c;text-transform:uppercase;font-weight:900}
+    .teamob-detail-value{font-size:18px;color:#0b4351;font-weight:900;margin-top:5px}
+
+    .teamob-empty{text-align:center;padding:28px;color:#8b9da5}
+
+    @media(max-width:1100px){
+      .teamob-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .teamob-freshness{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .teamob-detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+    }
+    @media(max-width:760px){
+      .teamob-live-page{padding:18px 14px 32px}
+      .teamob-hero{flex-direction:column;align-items:flex-start;padding:22px 18px}
+      .teamob-grid-2,.teamob-kpis,.teamob-freshness,.teamob-detail-grid{grid-template-columns:1fr}
+      .teamob-filters>*{width:100%;min-width:0!important}
+    }
+  </style>
+
+  <div class="teamob-hero">
+    <div>
+      <div class="teamob-eyebrow">OPERATING BEHAVIOUR</div>
+      <h2>Team OB Command Centre</h2>
+      <p>System productivity, communication discipline and employee exceptions</p>
+    </div>
+    <div class="teamob-hero-actions">
+      <div id="teamObLiveStatus" class="teamob-status">Not loaded</div>
+      <button type="button" class="teamob-btn" onclick="teamObLoad(true)">Refresh Live Data</button>
+    </div>
+  </div>
+
+  <div class="teamob-filters">
+    <select id="teamObDaysFilter" onchange="teamObReloadPeriod()">
+      <option value="7">Latest 7 Days</option>
+      <option value="14">Latest 14 Days</option>
+      <option value="30">Latest 30 Days</option>
+    </select>
+
+    <select id="teamObDepartmentFilter" onchange="teamObRenderAll()">
+      <option value="all">All Departments</option>
+    </select>
+
+    <select id="teamObManagerFilter" onchange="teamObRenderAll()">
+      <option value="all">All Managers</option>
+    </select>
+
+    <select id="teamObStatusFilter" onchange="teamObRenderAll()">
+      <option value="all">All Status</option>
+      <option value="Healthy">Healthy</option>
+      <option value="Watch">Watch</option>
+      <option value="Attention">Attention</option>
+    </select>
+
+    <input
+      id="teamObSearch"
+      type="text"
+      placeholder="Search employee / ID..."
+      oninput="teamObRenderAll()"
+    >
+  </div>
+
+  <div class="teamob-freshness">
+    <div class="teamob-fresh-card">
+      <div class="teamob-fresh-label">System Data</div>
+      <div id="teamObFreshSystem" class="teamob-fresh-value">-</div>
+      <div id="teamObFreshSystemRange" class="teamob-fresh-range">-</div>
+    </div>
+    <div class="teamob-fresh-card">
+      <div class="teamob-fresh-label">Email Data</div>
+      <div id="teamObFreshEmail" class="teamob-fresh-value">-</div>
+      <div id="teamObFreshEmailRange" class="teamob-fresh-range">-</div>
+    </div>
+    <div class="teamob-fresh-card">
+      <div class="teamob-fresh-label">Missed / Rejected Calls</div>
+      <div id="teamObFreshCall" class="teamob-fresh-value">-</div>
+      <div id="teamObFreshCallRange" class="teamob-fresh-range">-</div>
+    </div>
+    <div class="teamob-fresh-card">
+      <div class="teamob-fresh-label">Talk Time Data</div>
+      <div id="teamObFreshTalk" class="teamob-fresh-value">-</div>
+      <div id="teamObFreshTalkRange" class="teamob-fresh-range">-</div>
+    </div>
+  </div>
+
+  <div class="teamob-section-head">
+    <div>
+      <h3>Team Overview</h3>
+      <p>Filtered live view across system, email and calls</p>
+    </div>
+    <div id="teamObVisibleCount" style="font-size:12px;color:#84979f">-</div>
+  </div>
+
+  <div class="teamob-kpis">
+    <div class="teamob-kpi teal"><div class="teamob-kpi-label">Employees Analysed</div><div id="teamObKpiEmployees" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Combined Team OB population</div></div>
+    <div class="teamob-kpi green"><div class="teamob-kpi-label">Avg Active Hours</div><div id="teamObKpiActive" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">System active time</div></div>
+    <div class="teamob-kpi blue"><div class="teamob-kpi-label">Avg Work Hours</div><div id="teamObKpiWork" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">System work hours</div></div>
+    <div class="teamob-kpi violet"><div class="teamob-kpi-label">Productivity vs Threshold</div><div id="teamObKpiProductivity" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Active time vs employee threshold</div></div>
+    <div class="teamob-kpi amber"><div class="teamob-kpi-label">Avg Idle Time</div><div id="teamObKpiIdle" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Average idle hours</div></div>
+    <div class="teamob-kpi red"><div class="teamob-kpi-label">Email Response</div><div id="teamObKpiEmail" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Response compliance</div></div>
+    <div class="teamob-kpi red"><div class="teamob-kpi-label">Missed / Rejected Calls</div><div id="teamObKpiMissed" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Latest call-source period</div></div>
+    <div class="teamob-kpi teal"><div class="teamob-kpi-label">Talk Time</div><div id="teamObKpiTalk" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Total minutes</div></div>
+  </div>
+
+  <div class="teamob-section-head">
+    <div><h3>System Productivity</h3><p>Employee productivity and daily operating trend</p></div>
+  </div>
+
+  <div class="teamob-grid-2">
+    <div class="teamob-panel">
+      <h4>Active Hours vs Threshold</h4>
+      <p>Lowest productivity employees first</p>
+      <div class="teamob-chart-tall"><canvas id="teamObThresholdChart"></canvas></div>
+    </div>
+
+    <div class="teamob-panel">
+      <h4>Work / Active / Idle Hours</h4>
+      <p>Average hours for the current filtered population</p>
+      <div class="teamob-chart"><canvas id="teamObHoursChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="teamob-panel" style="margin-top:18px">
+    <h4>Daily Productivity Trend</h4>
+    <p>System source only; uses its own latest available period</p>
+    <div class="teamob-chart"><canvas id="teamObDailyChart"></canvas></div>
+  </div>
+
+  <div class="teamob-section-head">
+    <div><h3>Communication Discipline</h3><p>Email and call behaviour from their latest available source periods</p></div>
+  </div>
+
+  <div class="teamob-grid-2">
+    <div class="teamob-panel">
+      <h4>Email Responsiveness</h4>
+      <p>External and internal emails not replied</p>
+      <div class="teamob-chart"><canvas id="teamObEmailChart"></canvas></div>
+    </div>
+
+    <div class="teamob-panel">
+      <h4>Call Behaviour</h4>
+      <p>Outgoing calls vs missed / rejected calls</p>
+      <div class="teamob-chart"><canvas id="teamObCallChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="teamob-section-head">
+    <div><h3>Manager-wise Team Health</h3><p>Reporting hierarchy from employee master</p></div>
+  </div>
+
+  <div class="teamob-panel">
+    <div class="teamob-table-wrap">
+      <table class="teamob-table">
+        <thead>
+          <tr>
+            <th>Manager</th>
+            <th>Team Size</th>
+            <th>Avg Productivity</th>
+            <th>Avg Active Hrs</th>
+            <th>Below Threshold</th>
+            <th>Attention</th>
+            <th>Missed / Rejected</th>
+          </tr>
+        </thead>
+        <tbody id="teamObManagerBody">
+          <tr><td colspan="7" class="teamob-empty">Load Team OB data to view managers.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="teamob-section-head">
+    <div><h3>Department-wise Team Health</h3><p>Department operating behaviour overview</p></div>
+  </div>
+
+  <div class="teamob-panel">
+    <div class="teamob-table-wrap">
+      <table class="teamob-table">
+        <thead>
+          <tr>
+            <th>Department</th>
+            <th>Team Size</th>
+            <th>Avg Productivity</th>
+            <th>Avg Active Hrs</th>
+            <th>Avg Idle Hrs</th>
+            <th>Email Response</th>
+            <th>Attention</th>
+          </tr>
+        </thead>
+        <tbody id="teamObDepartmentBody">
+          <tr><td colspan="7" class="teamob-empty">Load Team OB data to view departments.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="teamob-section-head">
+    <div><h3>Needs Attention</h3><p>Exception-first view for follow-up</p></div>
+    <div id="teamObExceptionCount" style="font-size:12px;color:#84979f">-</div>
+  </div>
+
+  <div class="teamob-panel">
+    <div class="teamob-table-wrap">
+      <table class="teamob-table">
+        <thead>
+          <tr>
+            <th>Employee</th>
+            <th>Department</th>
+            <th>Manager</th>
+            <th>Issues</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="teamObExceptionBody">
+          <tr><td colspan="6" class="teamob-empty">Load Team OB data to view exceptions.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="teamob-section-head">
+    <div><h3>Employee Register</h3><p>Click View for employee 360° operating behaviour</p></div>
+  </div>
+
+  <div class="teamob-panel">
+    <div class="teamob-table-wrap">
+      <table class="teamob-table">
+        <thead>
+          <tr>
+            <th>Employee</th>
+            <th>Department</th>
+            <th>Manager</th>
+            <th>Active Hrs</th>
+            <th>Threshold</th>
+            <th>Productivity</th>
+            <th>Idle Hrs</th>
+            <th>Email Response</th>
+            <th>Missed Calls</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="teamObEmployeeBody">
+          <tr><td colspan="11" class="teamob-empty">Load Team OB data to view employees.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- EMPLOYEE 360 MODAL -->
+  <div id="teamObEmployeeModal" class="teamob-modal" onclick="teamObCloseModalOnBackdrop(event)">
+    <div class="teamob-modal-card">
+      <div class="teamob-modal-head">
+        <div>
+          <h3 id="teamObModalTitle">Employee 360°</h3>
+          <p id="teamObModalSub">Operating behaviour detail</p>
+        </div>
+        <button type="button" class="teamob-modal-close" onclick="teamObCloseEmployee()">×</button>
+      </div>
+      <div class="teamob-modal-body">
+        <div id="teamObDetailGrid" class="teamob-detail-grid"></div>
+
+        <div class="teamob-grid-2">
+          <div class="teamob-panel">
+            <h4>System Behaviour</h4>
+            <div id="teamObSystemDetail"></div>
+          </div>
+          <div class="teamob-panel">
+            <h4>Communication</h4>
+            <div id="teamObCommunicationDetail"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</section>
