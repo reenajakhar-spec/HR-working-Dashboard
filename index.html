@@ -28,7 +28,7 @@
 
   <link
     rel="stylesheet"
-    href="./styles.css?v=20260923-5"
+    href="./css/styles.css?v=20260923-5"
   >
 
 </head>
@@ -1391,6 +1391,18 @@
 
     .teamob-empty{text-align:center;padding:28px;color:#8b9da5}
 
+    /* Team OB KPI month-on-month drilldown */
+    .teamob-live-page .teamob-kpi{cursor:pointer;position:relative;transition:transform .18s ease,box-shadow .18s ease}
+    .teamob-live-page .teamob-kpi:hover,.teamob-live-page .teamob-kpi:focus-visible{transform:translateY(-3px);box-shadow:0 14px 28px rgba(18,62,72,.14);outline:2px solid transparent}
+    .teamob-live-page .teamob-kpi:focus-visible{outline:3px solid #1594a4;outline-offset:2px}
+    .teamob-live-page .teamob-kpi::after{content:'View MoM ↗';position:absolute;right:15px;bottom:12px;font-size:10px;font-weight:800;color:#17616e}
+    .teamob-mom-chart{height:310px;margin:18px 0}
+    .teamob-mom-note{padding:13px 15px;border-radius:12px;background:#f3f7f8;color:#54717a;font-size:13px;margin:12px 0}
+    .teamob-mom-table{width:100%;border-collapse:collapse;font-size:13px}
+    .teamob-mom-table th,.teamob-mom-table td{padding:12px;border-bottom:1px solid #e7eef0;text-align:left}
+    .teamob-mom-table th{background:#f3f7f8;color:#42616b}
+
+
     @media(max-width:1100px){
       .teamob-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
       .teamob-freshness{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -1478,14 +1490,14 @@
   </div>
 
   <div class="teamob-kpis">
-    <div class="teamob-kpi teal"><div class="teamob-kpi-label">Employees Analysed</div><div id="teamObKpiEmployees" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Combined Team OB population</div></div>
-    <div class="teamob-kpi green"><div class="teamob-kpi-label">Avg Active Hours</div><div id="teamObKpiActive" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">System active time</div></div>
-    <div class="teamob-kpi blue"><div class="teamob-kpi-label">Avg Work Hours</div><div id="teamObKpiWork" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">System work hours</div></div>
-    <div class="teamob-kpi violet"><div class="teamob-kpi-label">Productivity vs Threshold</div><div id="teamObKpiProductivity" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Active time vs employee threshold</div></div>
-    <div class="teamob-kpi amber"><div class="teamob-kpi-label">Avg Idle Time</div><div id="teamObKpiIdle" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Average idle hours</div></div>
-    <div class="teamob-kpi red"><div class="teamob-kpi-label">Email Response</div><div id="teamObKpiEmail" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Response compliance</div></div>
-    <div class="teamob-kpi red"><div class="teamob-kpi-label">Missed / Rejected Calls</div><div id="teamObKpiMissed" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Latest call-source period</div></div>
-    <div class="teamob-kpi teal"><div class="teamob-kpi-label">Talk Time</div><div id="teamObKpiTalk" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Total minutes</div></div>
+    <div class="teamob-kpi teal" role="button" tabindex="0" aria-haspopup="dialog"><div class="teamob-kpi-label">Employees Analysed</div><div id="teamObKpiEmployees" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Combined Team OB population</div></div>
+    <div class="teamob-kpi green" role="button" tabindex="0" aria-haspopup="dialog"><div class="teamob-kpi-label">Avg Active Hours</div><div id="teamObKpiActive" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">System active time</div></div>
+    <div class="teamob-kpi blue" role="button" tabindex="0" aria-haspopup="dialog"><div class="teamob-kpi-label">Avg Work Hours</div><div id="teamObKpiWork" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">System work hours</div></div>
+    <div class="teamob-kpi violet" role="button" tabindex="0" aria-haspopup="dialog"><div class="teamob-kpi-label">Productivity vs Threshold</div><div id="teamObKpiProductivity" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Active time vs employee threshold</div></div>
+    <div class="teamob-kpi amber" role="button" tabindex="0" aria-haspopup="dialog"><div class="teamob-kpi-label">Avg Idle Time</div><div id="teamObKpiIdle" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Average idle hours</div></div>
+    <div class="teamob-kpi red" role="button" tabindex="0" aria-haspopup="dialog"><div class="teamob-kpi-label">Email Response</div><div id="teamObKpiEmail" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Response compliance</div></div>
+    <div class="teamob-kpi red" role="button" tabindex="0" aria-haspopup="dialog"><div class="teamob-kpi-label">Missed / Rejected Calls</div><div id="teamObKpiMissed" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Latest call-source period</div></div>
+    <div class="teamob-kpi teal" role="button" tabindex="0" aria-haspopup="dialog"><div class="teamob-kpi-label">Talk Time</div><div id="teamObKpiTalk" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Total minutes</div></div>
   </div>
 
   <div class="teamob-section-head">
@@ -1661,6 +1673,23 @@
     </div>
   </div>
 
+
+  <!-- KPI MOM POPUP: independent from Employee 360 -->
+  <div id="teamObMomModal" class="teamob-modal" role="dialog" aria-modal="true" aria-labelledby="teamObMomTitle" onclick="if(event.target===this)teamObCloseMom()">
+    <div class="teamob-modal-card">
+      <div class="teamob-modal-head">
+        <div><h3 id="teamObMomTitle">Last 7 Days Trend</h3><p id="teamObMomSubtitle">Daily performance</p></div>
+        <button type="button" class="teamob-modal-close" aria-label="Close trend" onclick="teamObCloseMom()">×</button>
+      </div>
+      <div class="teamob-modal-body">
+        <div id="teamObMomSummary" class="teamob-detail-grid"></div>
+        <div id="teamObMomNote" class="teamob-mom-note"></div>
+        <div id="teamObMomChartWrap" class="teamob-mom-chart"><canvas id="teamObMomChart"></canvas></div>
+        <div class="teamob-table-wrap"><table class="teamob-mom-table"><thead><tr><th>Date</th><th>Value</th><th>DoD Change</th></tr></thead><tbody id="teamObMomTable"></tbody></table></div>
+      </div>
+    </div>
+  </div>
+
 </section>
 
 <!-- =====================================================
@@ -1758,10 +1787,10 @@
 
   <div id="payrollMomModal" class="payroll-modal" onclick="closePayrollMomOnBackdrop(event)">
     <div class="payroll-modal-card">
-      <div class="payroll-modal-head"><div><h3 id="payrollMomTitle">Month-on-Month Trend</h3><p id="payrollMomSubtitle">Monthly payroll movement</p></div><button type="button" class="payroll-modal-close" onclick="closePayrollMom()">×</button></div>
+      <div class="payroll-modal-head"><div><h3 id="payrollMomTitle">Last 7 Days Trend</h3><p id="payrollMomSubtitle">Monthly payroll movement</p></div><button type="button" class="payroll-modal-close" onclick="closePayrollMom()">×</button></div>
       <div class="payroll-modal-body">
         <div class="payroll-modal-chart"><canvas id="payrollMomChart"></canvas></div>
-        <div class="payroll-mom-table-wrap"><table class="payroll-mom-table"><thead><tr><th>Month</th><th>Value</th><th>MoM Change</th></tr></thead><tbody id="payrollMomTableBody"><tr><td colspan="3">Loading...</td></tr></tbody></table></div>
+        <div class="payroll-mom-table-wrap"><table class="payroll-mom-table"><thead><tr><th>Date</th><th>Value</th><th>DoD Change</th></tr></thead><tbody id="payrollMomTableBody"><tr><td colspan="3">Loading...</td></tr></tbody></table></div>
       </div>
     </div>
   </div>
@@ -2316,19 +2345,110 @@
 ====================================================== -->
 
 <script
-  src="./JS/data.js?v=20260924-1">
+  src="./js/data.js?v=20261016-2">
 </script>
 
 
 <script
-  src="./JS/charts.js?v=20260924-1">
+  src="./js/charts.js?v=20261016-2">
 </script>
 
 
 <script
-  src="./JS/app.js?v=20260924-1">
+  src="./js/app.js?v=20261016-2">
 </script>
 
+
+<style>
+#overviewKpis .kpi-card{cursor:pointer;transition:transform .18s,box-shadow .18s;position:relative}
+#overviewKpis .kpi-card:hover{transform:translateY(-3px);box-shadow:0 14px 32px rgba(14,57,66,.13)}
+#overviewKpis .kpi-card:focus-visible{outline:3px solid #39a2b5;outline-offset:3px}
+#overviewKpis .kpi-card::after{content:'↗';position:absolute;right:15px;top:12px;color:#438b97;font-size:16px}
+#execTrendOverlay{display:none;position:fixed;inset:0;background:rgba(8,34,42,.55);z-index:999999;align-items:center;justify-content:center;padding:20px}
+#execTrendOverlay.is-open{display:flex}
+.exec-trend-panel{width:min(850px,100%);max-height:92vh;overflow:auto;background:#fff;border-radius:18px;padding:26px;box-shadow:0 24px 90px rgba(0,0,0,.25);font-family:inherit;color:#153d47}
+.exec-trend-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start}
+.exec-trend-head h2{margin:0;font-size:23px}
+.exec-trend-close{border:0;background:#eaf2f4;border-radius:10px;padding:9px 14px;cursor:pointer;font-size:20px;color:#174652}
+.exec-trend-current{font-size:32px;font-weight:800;margin:10px 0 0}
+.exec-trend-note{color:#637d86;font-size:13px;margin:8px 0 16px}
+.exec-trend-chart{height:260px;position:relative;border:1px solid #e8eff1;border-radius:12px;padding:14px}
+.exec-trend-empty{display:flex;align-items:center;justify-content:center;text-align:center;height:100%;color:#6d858c;padding:24px;box-sizing:border-box}
+.exec-trend-table{width:100%;border-collapse:collapse;margin-top:16px;font-size:13px}
+.exec-trend-table th,.exec-trend-table td{padding:11px;text-align:left;border-bottom:1px solid #e9eff0}
+.exec-trend-table th{background:#f4f8f9}
+</style>
+<div id="execTrendOverlay" role="presentation">
+ <div class="exec-trend-panel" role="dialog" aria-modal="true" aria-labelledby="execTrendTitle">
+  <div class="exec-trend-head"><div><h2 id="execTrendTitle"></h2><div class="exec-trend-current" id="execTrendCurrent"></div></div><button type="button" class="exec-trend-close" id="execTrendClose" aria-label="Close">×</button></div>
+  <p class="exec-trend-note" id="execTrendNote"></p>
+  <div class="exec-trend-chart" id="execTrendChartWrap"><canvas id="execTrendChart"></canvas><div id="execTrendEmpty" class="exec-trend-empty" hidden></div></div>
+  <table class="exec-trend-table"><thead><tr><th>Date</th><th>Value</th><th>Change vs previous</th></tr></thead><tbody id="execTrendRows"></tbody></table>
+ </div>
+</div>
+<script>
+(function(){
+ 'use strict';
+ const metrics=[
+  {key:'headcount',name:'Total Headcount',unit:'',detail:'Headcount snapshots and joiner/exit changes'},
+  {key:'attendance',name:'Attendance Rate',unit:'%',detail:'Daily attendance percentage'},
+  {key:'positions',name:'Open Positions',unit:'',detail:'Daily open requisitions'},
+  {key:'attrition',name:'Attrition (Rolling 12M)',unit:'%',detail:'Rolling 12-month attrition snapshots'},
+  {key:'pip',name:'PIP Cases',unit:'',detail:'Active PIP cases'},
+  {key:'enps',name:'eNPS Score',unit:'',detail:'Survey scores on actual survey dates'}
+ ];
+ let chart=null,previousFocus=null;
+ const overlay=document.getElementById('execTrendOverlay');
+ const cards=document.getElementById('overviewKpis');
+ const close=document.getElementById('execTrendClose');
+ const valueNumber=v=>{if(v===null||v===undefined||v==='')return null;const n=Number(String(v).replace(/[, %+]/g,''));return Number.isFinite(n)?n:null};
+ const safeDate=s=>{if(typeof s!=='string')return null;const d=new Date(/^\d{4}-\d{2}-\d{2}$/.test(s)?s+'T12:00:00':s);return Number.isNaN(d.getTime())?null:d};
+ const fmtDate=d=>d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+ function getHistory(key){
+   // Optional real dated snapshots supplied by the connected HR backend.
+   // Expected: window.EXEC_OVERVIEW_HISTORY = {headcount:[{date:'2026-10-15',value:612}], ...}
+   const sources=[window.EXEC_OVERVIEW_HISTORY,window.HR_OVERVIEW_HISTORY,window.HR_DATA&&window.HR_DATA.overviewHistory];
+   const source=sources.find(s=>s&&Array.isArray(s[key]));
+   if(!source)return [];
+   return source[key].map(r=>({date:safeDate(r.date||r.snapshotDate||r.surveyDate),value:valueNumber(r.value)}))
+     .filter(r=>r.date&&r.value!==null).sort((a,b)=>a.date-b.date).slice(-30);
+ }
+ function openMetric(i){
+   const metric=metrics[i];if(!metric)return;
+   const card=cards.querySelectorAll('.kpi-card')[i];
+   const current=card?.querySelector('.value')?.textContent?.trim()||'—';
+   const history=getHistory(metric.key);
+   previousFocus=document.activeElement;
+   document.getElementById('execTrendTitle').textContent=metric.name+' — Historical Trend';
+   document.getElementById('execTrendCurrent').textContent=current;
+   document.getElementById('execTrendNote').textContent=metric.detail+' · '+(history.length?history.length+' historical records available':'Historical records not connected yet');
+   const empty=document.getElementById('execTrendEmpty');
+   const canvas=document.getElementById('execTrendChart');
+   if(chart){chart.destroy();chart=null}
+   canvas.hidden=!history.length;
+   empty.hidden=!!history.length;
+   if(!history.length){empty.textContent='No dated historical records are available for this metric. Connect the HR source to display the trend; the current card value is not used to fabricate history.'}
+   const tbody=document.getElementById('execTrendRows');tbody.replaceChildren();
+   if(history.length){
+     history.forEach((r,idx)=>{
+       const tr=document.createElement('tr');
+       const diff=idx? r.value-history[idx-1].value:null;
+       [fmtDate(r.date),String(r.value)+metric.unit,diff===null?'—':(diff>0?'+':'')+Number(diff.toFixed(2))+metric.unit].forEach(t=>{const td=document.createElement('td');td.textContent=t;tr.appendChild(td)});
+       tbody.appendChild(tr);
+     });
+     if(typeof Chart==='function'){
+       chart=new Chart(canvas,{type:'line',data:{labels:history.map(r=>fmtDate(r.date)),datasets:[{label:metric.name,data:history.map(r=>r.value),borderColor:'#177e8b',backgroundColor:'rgba(23,126,139,.1)',fill:true,tension:.3,pointRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{beginAtZero:false}}}});
+     }else{canvas.hidden=true;empty.hidden=false;empty.textContent='Chart.js is unavailable. Historical records are listed below.'}
+   }else{const tr=document.createElement('tr');const td=document.createElement('td');td.colSpan=3;td.textContent='No historical data connected';tr.appendChild(td);tbody.appendChild(tr)}
+   overlay.classList.add('is-open');close.focus();
+ }
+ function hide(){overlay.classList.remove('is-open');if(chart){chart.destroy();chart=null}previousFocus?.focus?.()}
+ cards.querySelectorAll('.kpi-card').forEach((card,i)=>{if(i>=metrics.length)return;card.tabIndex=0;card.setAttribute('role','button');card.setAttribute('aria-label','View '+metrics[i].name+' historical trend');card.addEventListener('click',()=>openMetric(i));card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openMetric(i)}})});
+ close.addEventListener('click',hide);
+ overlay.addEventListener('click',e=>{if(e.target===overlay)hide()});
+ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&overlay.classList.contains('is-open'))hide()});
+})();
+</script>
 
 </body>
 
