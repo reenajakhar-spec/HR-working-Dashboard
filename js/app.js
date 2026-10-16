@@ -7096,16 +7096,28 @@ const TEAM_OB_MOM_METRICS = {
 };
 let TEAM_OB_MOM_CHART = null;
 let TEAM_OB_MOM_LAST_FOCUS = null;
-function teamObDailySeries(metric){
+function teamObMonthlySeries(metric){
   const data=typeof TEAM_OB_DATA!=='undefined'?TEAM_OB_DATA:null;
-  if(!data)return {rows:[],latestDate:null,source:null};
-  const source=metric.key==='emailResponsePct'?'email':metric.key==='missedOrRejectedCalls'?'never':metric.key==='talkTimeMinutes'?'talk':'system';
-  const group=data.dailyTrends?.[source];
-  if(!group || !Array.isArray(group.points))return {rows:[],latestDate:null,source};
-  return {rows:group.points.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))),latestDate:group.latestDate,source};
+  if(!data)return [];
+  const candidates=[data.monthlyTrends,data.monthlyHistory,data.monthly];
+  let input=candidates.find(Array.isArray);
+  if(!input){
+    const source=metric.key==='emailResponsePct'?'email':metric.key==='missedOrRejectedCalls'?'never':metric.key==='talkTimeMinutes'?'talk':'system';
+    const grouped=data.monthlyTrends?.[source]||data.monthlyHistory?.[source]||data.monthly?.[source];
+    input=Array.isArray(grouped)?grouped:Array.isArray(grouped?.points)?grouped.points:[];
+  }
+  const monthKey=r=>{
+    const raw=String(r.month||r.monthKey||r.period||r.yearMonth||r.date||r.monthStart||'').trim();
+    const iso=raw.match(/^(\d{4})[-/](\d{1,2})/);
+    if(iso)return iso[1]+'-'+iso[2].padStart(2,'0');
+    const d=new Date(raw);
+    return !Number.isNaN(d.getTime())?d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'):null;
+  };
+  return input.map(r=>({...r,__month:monthKey(r)})).filter(r=>r.__month).sort((a,b)=>a.__month.localeCompare(b.__month));
 }
-function teamObDayLabel(date){
-  const [y,m,d]=String(date).split('-');return d+'/'+m+'/'+y;
+function teamObMonthLabel(month){
+  const parts=String(month).split('-');
+  return new Date(Number(parts[0]),Number(parts[1])-1,1).toLocaleDateString('en-IN',{month:'short',year:'numeric'});
 }
 function teamObMomFormat(n,unit){
   if(n===null || !Number.isFinite(n))return '-';
@@ -7124,46 +7136,48 @@ function teamObOpenMom(id){
   const modal=document.getElementById('teamObMomModal');
   if(!metric||!modal)return;
   TEAM_OB_MOM_LAST_FOCUS=document.activeElement;
-  document.getElementById('teamObMomTitle').textContent=metric.title+' — Last 7 Days Trend';
-  const selected=teamObDailySeries(metric);
+  document.getElementById('teamObMomTitle').textContent=metric.title+' — Month-on-Month';
+  document.getElementById('teamObMomSubtitle').textContent='Monthly performance and month-on-month comparison';
+  const history=teamObMonthlySeries(metric);
   const current=document.getElementById(id)?.textContent?.trim()||'-';
-  document.getElementById('teamObMomSubtitle').textContent='Daily performance · '+(selected.latestDate?'Latest source date: '+teamObDayLabel(selected.latestDate):'No dated source data');
-  const rows=selected.rows.map(r=>{
+  const rows=history.map(r=>{
     const keys=[metric.key,...(metric.aliases||[])];
     const found=keys.map(k=>r[k]).find(v=>v!==undefined&&v!==null&&v!=='');
     const num=found===undefined?null:Number(found);
-    return {date:r.date,value:Number.isFinite(num)?num:null};
+    return {month:r.__month,value:Number.isFinite(num)?num:null};
   });
   const valid=rows.filter(r=>r.value!==null);
   const summary=document.getElementById('teamObMomSummary');
-  summary.innerHTML='<div class="teamob-detail"><div class="teamob-detail-label">Current Filtered KPI</div><div class="teamob-detail-value"></div></div><div class="teamob-detail"><div class="teamob-detail-label">Days with Data</div><div class="teamob-detail-value"></div></div>';
+  summary.innerHTML='<div class="teamob-detail"><div class="teamob-detail-label">Current Filtered KPI</div><div class="teamob-detail-value"></div></div><div class="teamob-detail"><div class="teamob-detail-label">Historical Months Available</div><div class="teamob-detail-value"></div></div>';
   summary.querySelectorAll('.teamob-detail-value')[0].textContent=current;
-  summary.querySelectorAll('.teamob-detail-value')[1].textContent=valid.length+' / '+rows.length;
+  summary.querySelectorAll('.teamob-detail-value')[1].textContent=valid.length;
   const note=document.getElementById('teamObMomNote');
   const chartWrap=document.getElementById('teamObMomChartWrap');
   const tbody=document.getElementById('teamObMomTable');
   const header=document.querySelector('#teamObMomModal .teamob-mom-table thead');
-  if(header)header.innerHTML='<tr><th>Date</th><th>Value</th><th>DoD Change</th></tr>';
+  if(header)header.innerHTML='<tr><th>Month</th><th>Value</th><th>MoM Change</th></tr>';
   if(TEAM_OB_MOM_CHART){TEAM_OB_MOM_CHART.destroy();TEAM_OB_MOM_CHART=null;}
   note.style.display='block';
   if(!valid.length){
-    note.textContent='No dated daily data available for this KPI. Check its source sheet and deploy the backend containing dailyTrends.';
+    note.textContent='Monthly history is not available for this KPI in the current Team OB API response. The backend must return monthlyTrends with actual dated monthly values.';
     chartWrap.style.display='none';
-    tbody.innerHTML='<tr><td colspan="3" class="teamob-empty">No daily history available.</td></tr>';
+    tbody.innerHTML='<tr><td colspan="3" class="teamob-empty">No monthly history available.</td></tr>';
   }else{
-    note.textContent='Last 7 calendar days ending '+teamObDayLabel(selected.latestDate)+'. Missing days are gaps, not zeroes. Other sources may have different latest dates.';
+    note.textContent='Actual monthly history from the Team OB API. Missing metrics are shown as gaps, not zeroes. MoM compares with the immediately preceding month when both values are available.';
     chartWrap.style.display='block';tbody.innerHTML='';
     rows.forEach((r,i)=>{
       const prev=i>0?rows[i-1].value:null;
-      const change=r.value!==null&&prev!==null&&prev!==0?((r.value-prev)/Math.abs(prev))*100:null;
+      const previousMonth=i>0?rows[i-1].month:null;
+      const isConsecutive=previousMonth && ((Number(r.month.slice(0,4))*12+Number(r.month.slice(5))) -(Number(previousMonth.slice(0,4))*12+Number(previousMonth.slice(5)))===1);
+      const change=isConsecutive&&r.value!==null&&prev!==null&&prev!==0?((r.value-prev)/Math.abs(prev))*100:null;
       const tr=document.createElement('tr');
-      [teamObDayLabel(r.date),teamObMomFormat(r.value,metric.unit),change===null?'—':(change>0?'+':'')+change.toFixed(1)+'%'].forEach(t=>{
+      [teamObMonthLabel(r.month),teamObMomFormat(r.value,metric.unit),change===null?'—':(change>0?'+':'')+change.toFixed(1)+'%'].forEach(t=>{
         const td=document.createElement('td');td.textContent=t;tr.appendChild(td);
       });tbody.appendChild(tr);
     });
     const canvas=document.getElementById('teamObMomChart');
     if(typeof Chart!=='undefined'&&canvas){
-      TEAM_OB_MOM_CHART=new Chart(canvas,{type:'line',data:{labels:rows.map(r=>teamObDayLabel(r.date)),datasets:[{label:metric.title,data:rows.map(r=>r.value),borderColor:'#17616e',backgroundColor:'rgba(23,97,110,.10)',fill:true,tension:.28,pointRadius:4,spanGaps:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:false}}}});
+      TEAM_OB_MOM_CHART=new Chart(canvas,{type:'line',data:{labels:rows.map(r=>teamObMonthLabel(r.month)),datasets:[{label:metric.title,data:rows.map(r=>r.value),borderColor:'#17616e',backgroundColor:'rgba(23,97,110,.10)',fill:true,tension:.28,pointRadius:4,spanGaps:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:false}}}});
     }
   }
   modal.classList.add('open');document.body.style.overflow='hidden';
@@ -7178,7 +7192,7 @@ function teamObBindMomCards(){
     if(!card || card.dataset.momBound==='1')return;
     card.dataset.momBound='1';
     card.setAttribute('role','button');card.setAttribute('tabindex','0');
-    card.setAttribute('aria-label',TEAM_OB_MOM_METRICS[id].title+' last 7 days trend');
+    card.setAttribute('aria-label',TEAM_OB_MOM_METRICS[id].title+' month-on-month trend');
     card.addEventListener('click',()=>teamObOpenMom(id));
     card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();teamObOpenMom(id);}});
   });
