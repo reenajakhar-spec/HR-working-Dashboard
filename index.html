@@ -28,7 +28,7 @@
 
   <link
     rel="stylesheet"
-    href="./styles.css?v=20261016-1"
+    href="./css/styles.css?v=20260923-5"
   >
 
 </head>
@@ -1678,14 +1678,14 @@
   <div id="teamObMomModal" class="teamob-modal" role="dialog" aria-modal="true" aria-labelledby="teamObMomTitle" onclick="if(event.target===this)teamObCloseMom()">
     <div class="teamob-modal-card">
       <div class="teamob-modal-head">
-        <div><h3 id="teamObMomTitle">Last 7 Days Trend</h3><p id="teamObMomSubtitle">Daily performance</p></div>
+        <div><h3 id="teamObMomTitle">Month-on-Month Trend</h3><p id="teamObMomSubtitle">Monthly performance</p></div>
         <button type="button" class="teamob-modal-close" aria-label="Close trend" onclick="teamObCloseMom()">×</button>
       </div>
       <div class="teamob-modal-body">
         <div id="teamObMomSummary" class="teamob-detail-grid"></div>
         <div id="teamObMomNote" class="teamob-mom-note"></div>
         <div id="teamObMomChartWrap" class="teamob-mom-chart"><canvas id="teamObMomChart"></canvas></div>
-        <div class="teamob-table-wrap"><table class="teamob-mom-table"><thead><tr><th>Date</th><th>Value</th><th>DoD Change</th></tr></thead><tbody id="teamObMomTable"></tbody></table></div>
+        <div class="teamob-table-wrap"><table class="teamob-mom-table"><thead><tr><th>Month</th><th>Value</th><th>MoM Change</th></tr></thead><tbody id="teamObMomTable"></tbody></table></div>
       </div>
     </div>
   </div>
@@ -1790,7 +1790,7 @@
       <div class="payroll-modal-head"><div><h3 id="payrollMomTitle">Last 7 Days Trend</h3><p id="payrollMomSubtitle">Monthly payroll movement</p></div><button type="button" class="payroll-modal-close" onclick="closePayrollMom()">×</button></div>
       <div class="payroll-modal-body">
         <div class="payroll-modal-chart"><canvas id="payrollMomChart"></canvas></div>
-        <div class="payroll-mom-table-wrap"><table class="payroll-mom-table"><thead><tr><th>Date</th><th>Value</th><th>DoD Change</th></tr></thead><tbody id="payrollMomTableBody"><tr><td colspan="3">Loading...</td></tr></tbody></table></div>
+        <div class="payroll-mom-table-wrap"><table class="payroll-mom-table"><thead><tr><th>Month</th><th>Value</th><th>MoM Change</th></tr></thead><tbody id="payrollMomTableBody"><tr><td colspan="3">Loading...</td></tr></tbody></table></div>
       </div>
     </div>
   </div>
