@@ -1391,18 +1391,6 @@
 
     .teamob-empty{text-align:center;padding:28px;color:#8b9da5}
 
-    /* Team OB KPI month-on-month drilldown */
-    .teamob-live-page .teamob-kpi{cursor:pointer;position:relative;transition:transform .18s ease,box-shadow .18s ease}
-    .teamob-live-page .teamob-kpi:hover,.teamob-live-page .teamob-kpi:focus-visible{transform:translateY(-3px);box-shadow:0 14px 28px rgba(18,62,72,.14);outline:2px solid transparent}
-    .teamob-live-page .teamob-kpi:focus-visible{outline:3px solid #1594a4;outline-offset:2px}
-    .teamob-live-page .teamob-kpi::after{content:'View MoM ↗';position:absolute;right:15px;bottom:12px;font-size:10px;font-weight:800;color:#17616e}
-    .teamob-mom-chart{height:310px;margin:18px 0}
-    .teamob-mom-note{padding:13px 15px;border-radius:12px;background:#f3f7f8;color:#54717a;font-size:13px;margin:12px 0}
-    .teamob-mom-table{width:100%;border-collapse:collapse;font-size:13px}
-    .teamob-mom-table th,.teamob-mom-table td{padding:12px;border-bottom:1px solid #e7eef0;text-align:left}
-    .teamob-mom-table th{background:#f3f7f8;color:#42616b}
-
-
     @media(max-width:1100px){
       .teamob-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
       .teamob-freshness{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -1490,14 +1478,14 @@
   </div>
 
   <div class="teamob-kpis">
-    <div class="teamob-kpi teal" role="button" tabindex="0" aria-haspopup="dialog"><div class="teamob-kpi-label">Employees Analysed</div><div id="teamObKpiEmployees" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Combined Team OB population</div></div>
-    <div class="teamob-kpi green" role="button" tabindex="0" aria-haspopup="dialog"><div class="teamob-kpi-label">Avg Active Hours</div><div id="teamObKpiActive" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">System active time</div></div>
-    <div class="teamob-kpi blue" role="button" tabindex="0" aria-haspopup="dialog"><div class="teamob-kpi-label">Avg Work Hours</div><div id="teamObKpiWork" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">System work hours</div></div>
-    <div class="teamob-kpi violet" role="button" tabindex="0" aria-haspopup="dialog"><div class="teamob-kpi-label">Productivity vs Threshold</div><div id="teamObKpiProductivity" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Active time vs employee threshold</div></div>
-    <div class="teamob-kpi amber" role="button" tabindex="0" aria-haspopup="dialog"><div class="teamob-kpi-label">Avg Idle Time</div><div id="teamObKpiIdle" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Average idle hours</div></div>
-    <div class="teamob-kpi red" role="button" tabindex="0" aria-haspopup="dialog"><div class="teamob-kpi-label">Email Response</div><div id="teamObKpiEmail" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Response compliance</div></div>
-    <div class="teamob-kpi red" role="button" tabindex="0" aria-haspopup="dialog"><div class="teamob-kpi-label">Missed / Rejected Calls</div><div id="teamObKpiMissed" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Latest call-source period</div></div>
-    <div class="teamob-kpi teal" role="button" tabindex="0" aria-haspopup="dialog"><div class="teamob-kpi-label">Talk Time</div><div id="teamObKpiTalk" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Total minutes</div></div>
+    <div class="teamob-kpi teal"><div class="teamob-kpi-label">Employees Analysed</div><div id="teamObKpiEmployees" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Combined Team OB population</div></div>
+    <div class="teamob-kpi green"><div class="teamob-kpi-label">Avg Active Hours</div><div id="teamObKpiActive" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">System active time</div></div>
+    <div class="teamob-kpi blue"><div class="teamob-kpi-label">Avg Work Hours</div><div id="teamObKpiWork" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">System work hours</div></div>
+    <div class="teamob-kpi violet"><div class="teamob-kpi-label">Productivity vs Threshold</div><div id="teamObKpiProductivity" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Active time vs employee threshold</div></div>
+    <div class="teamob-kpi amber"><div class="teamob-kpi-label">Avg Idle Time</div><div id="teamObKpiIdle" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Average idle hours</div></div>
+    <div class="teamob-kpi red"><div class="teamob-kpi-label">Email Response</div><div id="teamObKpiEmail" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Response compliance</div></div>
+    <div class="teamob-kpi red"><div class="teamob-kpi-label">Missed / Rejected Calls</div><div id="teamObKpiMissed" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Latest call-source period</div></div>
+    <div class="teamob-kpi teal"><div class="teamob-kpi-label">Talk Time</div><div id="teamObKpiTalk" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Total minutes</div></div>
   </div>
 
   <div class="teamob-section-head">
@@ -1669,23 +1657,6 @@
             <div id="teamObCommunicationDetail"></div>
           </div>
         </div>
-      </div>
-    </div>
-  </div>
-
-
-  <!-- KPI MOM POPUP: independent from Employee 360 -->
-  <div id="teamObMomModal" class="teamob-modal" role="dialog" aria-modal="true" aria-labelledby="teamObMomTitle" onclick="if(event.target===this)teamObCloseMom()">
-    <div class="teamob-modal-card">
-      <div class="teamob-modal-head">
-        <div><h3 id="teamObMomTitle">Month-on-Month Trend</h3><p id="teamObMomSubtitle">Historical monthly performance</p></div>
-        <button type="button" class="teamob-modal-close" aria-label="Close trend" onclick="teamObCloseMom()">×</button>
-      </div>
-      <div class="teamob-modal-body">
-        <div id="teamObMomSummary" class="teamob-detail-grid"></div>
-        <div id="teamObMomNote" class="teamob-mom-note"></div>
-        <div id="teamObMomChartWrap" class="teamob-mom-chart"><canvas id="teamObMomChart"></canvas></div>
-        <div class="teamob-table-wrap"><table class="teamob-mom-table"><thead><tr><th>Month</th><th>Value</th><th>MoM Change</th></tr></thead><tbody id="teamObMomTable"></tbody></table></div>
       </div>
     </div>
   </div>
