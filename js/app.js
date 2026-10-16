@@ -7070,3 +7070,119 @@ if(document.readyState === 'loading'){
 }else{
   teamObInitialise();
 }
+
+
+
+/* =====================================================
+   TEAM OB - CLICKABLE KPI MONTHLY TRENDS (SAFE ADD-ON)
+   Does not modify existing Team OB loading / other modules.
+   Historical data contract: TEAM_OB_DATA.monthlyTrends = [
+     {month:'2026-07', employees:123, avgActiveHours:5.2,
+      avgWorkHours:7.3, productivityPct:89, avgIdleHours:1.1,
+      emailResponsePct:65, missedOrRejectedCalls:20, talkTimeMinutes:2000}
+   ]
+   Also accepts TEAM_OB_DATA.monthlyHistory or TEAM_OB_DATA.monthly.
+   Missing history is shown as unavailable, never fabricated.
+===================================================== */
+const TEAM_OB_MOM_METRICS = {
+  teamObKpiEmployees: {title:'Employees Analysed', key:'employees', aliases:['employeeCount','totalEmployees'],unit:'count'},
+  teamObKpiActive: {title:'Avg Active Hours',key:'avgActiveHours',unit:'hrs'},
+  teamObKpiWork: {title:'Avg Work Hours',key:'avgWorkHours',unit:'hrs'},
+  teamObKpiProductivity: {title:'Productivity vs Threshold',key:'productivityPct',unit:'%'},
+  teamObKpiIdle: {title:'Avg Idle Time',key:'avgIdleHours',unit:'hrs'},
+  teamObKpiEmail: {title:'Email Response',key:'emailResponsePct',unit:'%'},
+  teamObKpiMissed: {title:'Missed / Rejected Calls',key:'missedOrRejectedCalls',unit:'count'},
+  teamObKpiTalk: {title:'Talk Time',key:'talkTimeMinutes',unit:'min'}
+};
+let TEAM_OB_MOM_CHART = null;
+let TEAM_OB_MOM_LAST_FOCUS = null;
+function teamObDailySeries(metric){
+  const data=typeof TEAM_OB_DATA!=='undefined'?TEAM_OB_DATA:null;
+  if(!data)return {rows:[],latestDate:null,source:null};
+  const source=metric.key==='emailResponsePct'?'email':metric.key==='missedOrRejectedCalls'?'never':metric.key==='talkTimeMinutes'?'talk':'system';
+  const group=data.dailyTrends?.[source];
+  if(!group || !Array.isArray(group.points))return {rows:[],latestDate:null,source};
+  return {rows:group.points.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))),latestDate:group.latestDate,source};
+}
+function teamObDayLabel(date){
+  const [y,m,d]=String(date).split('-');return d+'/'+m+'/'+y;
+}
+function teamObMomFormat(n,unit){
+  if(n===null || !Number.isFinite(n))return '-';
+  const value=new Intl.NumberFormat('en-IN',{maximumFractionDigits:unit==='count'?0:2}).format(n);
+  return unit==='%'?value+'%':unit==='hrs'?value+' hrs':unit==='min'?value+' min':value;
+}
+function teamObCloseMom(){
+  const modal=document.getElementById('teamObMomModal');
+  if(modal)modal.classList.remove('open');
+  if(TEAM_OB_MOM_CHART){TEAM_OB_MOM_CHART.destroy();TEAM_OB_MOM_CHART=null;}
+  document.body.style.overflow='';
+  if(TEAM_OB_MOM_LAST_FOCUS && typeof TEAM_OB_MOM_LAST_FOCUS.focus==='function') TEAM_OB_MOM_LAST_FOCUS.focus();
+}
+function teamObOpenMom(id){
+  const metric=TEAM_OB_MOM_METRICS[id];
+  const modal=document.getElementById('teamObMomModal');
+  if(!metric||!modal)return;
+  TEAM_OB_MOM_LAST_FOCUS=document.activeElement;
+  document.getElementById('teamObMomTitle').textContent=metric.title+' — Last 7 Days Trend';
+  const selected=teamObDailySeries(metric);
+  const current=document.getElementById(id)?.textContent?.trim()||'-';
+  document.getElementById('teamObMomSubtitle').textContent='Daily performance · '+(selected.latestDate?'Latest source date: '+teamObDayLabel(selected.latestDate):'No dated source data');
+  const rows=selected.rows.map(r=>{
+    const keys=[metric.key,...(metric.aliases||[])];
+    const found=keys.map(k=>r[k]).find(v=>v!==undefined&&v!==null&&v!=='');
+    const num=found===undefined?null:Number(found);
+    return {date:r.date,value:Number.isFinite(num)?num:null};
+  });
+  const valid=rows.filter(r=>r.value!==null);
+  const summary=document.getElementById('teamObMomSummary');
+  summary.innerHTML='<div class="teamob-detail"><div class="teamob-detail-label">Current Filtered KPI</div><div class="teamob-detail-value"></div></div><div class="teamob-detail"><div class="teamob-detail-label">Days with Data</div><div class="teamob-detail-value"></div></div>';
+  summary.querySelectorAll('.teamob-detail-value')[0].textContent=current;
+  summary.querySelectorAll('.teamob-detail-value')[1].textContent=valid.length+' / '+rows.length;
+  const note=document.getElementById('teamObMomNote');
+  const chartWrap=document.getElementById('teamObMomChartWrap');
+  const tbody=document.getElementById('teamObMomTable');
+  const header=document.querySelector('#teamObMomModal .teamob-mom-table thead');
+  if(header)header.innerHTML='<tr><th>Date</th><th>Value</th><th>DoD Change</th></tr>';
+  if(TEAM_OB_MOM_CHART){TEAM_OB_MOM_CHART.destroy();TEAM_OB_MOM_CHART=null;}
+  note.style.display='block';
+  if(!valid.length){
+    note.textContent='No dated daily data available for this KPI. Check its source sheet and deploy the backend containing dailyTrends.';
+    chartWrap.style.display='none';
+    tbody.innerHTML='<tr><td colspan="3" class="teamob-empty">No daily history available.</td></tr>';
+  }else{
+    note.textContent='Last 7 calendar days ending '+teamObDayLabel(selected.latestDate)+'. Missing days are gaps, not zeroes. Other sources may have different latest dates.';
+    chartWrap.style.display='block';tbody.innerHTML='';
+    rows.forEach((r,i)=>{
+      const prev=i>0?rows[i-1].value:null;
+      const change=r.value!==null&&prev!==null&&prev!==0?((r.value-prev)/Math.abs(prev))*100:null;
+      const tr=document.createElement('tr');
+      [teamObDayLabel(r.date),teamObMomFormat(r.value,metric.unit),change===null?'—':(change>0?'+':'')+change.toFixed(1)+'%'].forEach(t=>{
+        const td=document.createElement('td');td.textContent=t;tr.appendChild(td);
+      });tbody.appendChild(tr);
+    });
+    const canvas=document.getElementById('teamObMomChart');
+    if(typeof Chart!=='undefined'&&canvas){
+      TEAM_OB_MOM_CHART=new Chart(canvas,{type:'line',data:{labels:rows.map(r=>teamObDayLabel(r.date)),datasets:[{label:metric.title,data:rows.map(r=>r.value),borderColor:'#17616e',backgroundColor:'rgba(23,97,110,.10)',fill:true,tension:.28,pointRadius:4,spanGaps:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:false}}}});
+    }
+  }
+  modal.classList.add('open');document.body.style.overflow='hidden';
+  modal.querySelector('.teamob-modal-close')?.focus();
+}
+function teamObBindMomCards(){
+  const section=document.getElementById('teamob');
+  if(!section)return;
+  Object.keys(TEAM_OB_MOM_METRICS).forEach(id=>{
+    const value=document.getElementById(id);
+    const card=value?.closest('.teamob-kpi');
+    if(!card || card.dataset.momBound==='1')return;
+    card.dataset.momBound='1';
+    card.setAttribute('role','button');card.setAttribute('tabindex','0');
+    card.setAttribute('aria-label',TEAM_OB_MOM_METRICS[id].title+' last 7 days trend');
+    card.addEventListener('click',()=>teamObOpenMom(id));
+    card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();teamObOpenMom(id);}});
+  });
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',teamObBindMomCards);
+else teamObBindMomCards();
+document.addEventListener('keydown',e=>{if(e.key==='Escape' && document.getElementById('teamObMomModal')?.classList.contains('open'))teamObCloseMom();});
