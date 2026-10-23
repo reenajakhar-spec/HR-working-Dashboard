@@ -73,12 +73,36 @@
     }
     return 'unsupported';
   }
+  // Match the selected KPI population BEFORE grouping, so a manager with
+  // zero new joiners does not appear in the New Joiners MTD drill-down.
+  function joiningDate(row){
+    const raw=field(row,['doj','DOJ','joiningDate','Joining Date','dateOfJoining','Date of Joining','date_of_joining','joining_date','joining','Joining']);
+    if(!raw)return null;
+    let d=null;
+    const match=raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+    if(match){d=new Date(Number(match[3]),Number(match[2])-1,Number(match[1]));
+      if(d.getFullYear()!==Number(match[3])||d.getMonth()!==Number(match[2])-1||d.getDate()!==Number(match[1]))return null;
+    }else{d=new Date(raw);}
+    return Number.isFinite(d.getTime())?d:null;
+  }
+  function qualifyingRows(rows,k){
+    if(k!=='joiner'&&k!=='probation')return rows;
+    const now=new Date();
+    return rows.filter(r=>{
+      const d=joiningDate(r);
+      if(!d||d>now)return false;
+      if(k==='joiner')return d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth();
+      const cutoff=new Date(now);cutoff.setMonth(cutoff.getMonth()-3);
+      return d>=cutoff;
+    });
+  }
   function compute(rows,k,m){
     if(!rows.length)return null;
     if(k==='count')return {value:rows.length,unit:'employees'};
+    if(k==='joiner'||k==='probation')return {value:qualifyingRows(rows,k).length,unit:'employees'};
     if(k==='active')return {value:rows.filter(r=>r.active===true||String(r.active).toLowerCase()==='true'||String(r.status).toLowerCase()==='active').length,unit:'employees'};
     if(k==='joiner'||k==='probation'||k==='tenure'||k==='netchange'){
-      const dated=rows.map(r=>({row:r,date:new Date(field(r,['doj','joiningDate','dateOfJoining','joining']))})).filter(x=>!isNaN(x.date.getTime()));
+      const dated=rows.map(r=>({row:r,date:joiningDate(r)})).filter(x=>x.date);
       if(!dated.length)return null;
       const now=new Date();
       if(k==='netchange')return null; // Exits must be provided to calculate net change.
@@ -113,6 +137,7 @@
     if(!rows){get('hrbdContent').innerHTML='<div class="hrbd-empty">Employee-level records are not available for this module yet. Connect its API with Department, Location, Reporting Manager and the KPI metric to enable a live breakdown.</div>';return;}
     if(k==='unsupported'){get('hrbdContent').innerHTML='<div class="hrbd-empty">This KPI requires its own employee-level metric or transaction records. A department split cannot be calculated reliably from headcount alone.</div>';return;}
     let filtered=rows;
+    filtered=qualifyingRows(filtered,k);
     for(const part of path)filtered=filtered.filter(r=>(groupField(r,part.key)||'Not mapped')===part.name);
     const level=path.length;
     const keys=['department','location','manager'];
@@ -128,7 +153,7 @@
     const key=keys[level],groups=new Map();
     filtered.forEach(r=>{const name=groupField(r,key)||'Not mapped';if(!groups.has(name))groups.set(name,[]);groups.get(name).push(r);});
     const entries=[...groups].map(([name,items])=>({name,items,metric:compute(items,k,m)})).sort((a,b)=>(b.metric?.value??-1)-(a.metric?.value??-1));
-    if(!entries.length){get('hrbdContent').innerHTML='<div class="hrbd-empty">No records found for this selection.</div>';return;}
+    if(!entries.length){get('hrbdContent').innerHTML='<div class="hrbd-empty">No matching employee records for this KPI in the selected period.</div>';return;}
     const available=entries.filter(x=>x.metric!==null);
     if(!available.length){get('hrbdContent').innerHTML='<div class="hrbd-empty">This KPI cannot be calculated from the available records. Its required date, status or metric fields are missing.</div>';return;}
     const max=Math.max(...available.map(x=>x.metric.value),1);
