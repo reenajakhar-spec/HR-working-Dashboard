@@ -151,6 +151,7 @@
   function render(){
     if(!current)return;
     const {rows,path,k,m,source}=current;
+    if(m.page==='learning'){renderLearningBreakdown();return;}
     if(m.page==='payroll'){renderPayrollAggregate();return;}
     const crumbs=['All Departments',...path.map(x=>x.name)];
     get('hrbdBreadcrumb').innerHTML=crumbs.map((v,i)=>`<button type="button" data-level="${i}">${esc(v)}</button>`).join('<span>›</span>');
@@ -181,6 +182,62 @@
     const max=Math.max(...available.map(x=>x.metric.value),1);
     get('hrbdContent').innerHTML=`<div class="hrbd-level">${['Department-wise','Location-wise','Reporting Manager-wise'][level]} breakdown <span>${entries.length} groups</span></div>`+entries.map((x,i)=>`<button class="hrbd-row" type="button" data-index="${i}"><div class="hrbd-row-top"><strong>${esc(x.name)}</strong><span>${x.metric?esc(format(x.metric)):'Unavailable'} <b>›</b></span></div><div class="hrbd-track"><div style="width:${x.metric?Math.max(0,Math.min(100,x.metric.value/max*100)):0}%"></div></div></button>`).join('');
     get('hrbdContent').querySelectorAll('.hrbd-row').forEach(b=>b.onclick=()=>{current.path.push({key,name:entries[Number(b.dataset.index)].name});render();});
+  }
+  // L&D: Region -> Branch -> Employee -> individual training sessions.
+  // Calculations use the same source rows and present/active conventions as app.js.
+  function renderLearningBreakdown(){
+    const state=current, path=state.path;
+    const raw=Array.isArray(state.rows)?state.rows:null;
+    get('hrbdDescription').textContent='Region → Branch → Employee → Training details';
+    get('hrbdFoot').textContent='Source: L&D live training records. Hours count attended sessions; averages exclude missing scores. Training rating is the Feedback Score (out of 5).';
+    const names=['All Regions',...path.map(p=>p.name)];
+    get('hrbdBreadcrumb').innerHTML=names.map((v,i)=>`<button type="button" data-level="${i}">${esc(v)}</button>`).join('<span>›</span>');
+    get('hrbdBreadcrumb').querySelectorAll('button').forEach(b=>b.onclick=()=>{state.path=path.slice(0,Number(b.dataset.level));render();});
+    if(!raw){get('hrbdContent').innerHTML='<div class="hrbd-empty">L&D live data has not loaded yet. Open L&D and wait for the Live status, then retry.</div>';return;}
+    const val=(r,keys)=>field(r,keys);
+    const region=r=>val(r,['Region','region'])||'Not mapped';
+    const branch=r=>val(r,['Branch Name','branch','Branch','location'])||'Not mapped';
+    const eid=r=>val(r,['Employee ID','Employee ID 2','employeeId','emp_code']);
+    const ename=r=>val(r,['Attendees','Employee Name','employeeName','name'])||'Name unavailable';
+    const identity=r=>eid(r)?'id:'+eid(r).toLowerCase():'name:'+ename(r).toLowerCase()+'|'+branch(r).toLowerCase();
+    const active=r=>val(r,['Status','status']).toLowerCase()!=='not active';
+    const present=r=>val(r,['Attendance','attendance']).toLowerCase()==='present';
+    const score=(r,keys)=>{const v=val(r,keys);return v===''?null:num(v);};
+    const duration=r=>score(r,['Duration (in hours)','Duration','Training Hours','duration']);
+    const feedback=r=>score(r,['Feedback Score','Training Rating','Rating','feedbackScore']);
+    const assessment=r=>score(r,['Assesment Score','Assessment Score','assessmentScore']);
+    const average=xs=>{const ok=xs.filter(x=>x!==null&&Number.isFinite(x));return ok.length?ok.reduce((a,b)=>a+b,0)/ok.length:null;};
+    const fmt=(n,d=1)=>n===null?'—':n.toLocaleString('en-IN',{minimumFractionDigits:d,maximumFractionDigits:d});
+    const metrics=rows=>{
+      const valid=rows.filter(active), attended=valid.filter(present);
+      const unique=new Set(attended.map(identity));
+      const hours=attended.reduce((sum,r)=>sum+(duration(r)||0),0);
+      return {employees:unique.size,sessions:attended.length,hours,avgHours:attended.length?hours/attended.length:null,avgPerEmployee:unique.size?hours/unique.size:null,rating:average(attended.map(feedback)),assessment:average(attended.map(assessment)),attendanceRate:valid.length?attended.length/valid.length*100:null};
+    };
+    let rows=raw;
+    if(path[0])rows=rows.filter(r=>region(r)===path[0].name);
+    if(path[1])rows=rows.filter(r=>branch(r)===path[1].name);
+    if(path[2])rows=rows.filter(r=>identity(r)===path[2].name);
+    const m=metrics(rows);
+    const statHtml=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:18px">${[
+      ['Employees Trained',String(m.employees)],['Sessions Attended',String(m.sessions)],['Total Training Hours',fmt(m.hours)],['Avg Training Hours / Session',fmt(m.avgHours)],['Avg Hours / Employee',fmt(m.avgPerEmployee)],['Avg Training Rating',m.rating===null?'—':fmt(m.rating)+' / 5'],['Avg Assessment Score',m.assessment===null?'—':fmt(m.assessment)+'%'],['Attendance Rate',m.attendanceRate===null?'—':fmt(m.attendanceRate)+'%']
+    ].map(([k,v])=>`<div style="border:1px solid #dce9ed;border-radius:10px;padding:12px;background:#f8fbfc"><div style="font-size:11px;color:#607985">${esc(k)}</div><strong style="display:block;margin-top:5px;font-size:17px;color:#164a55">${esc(v)}</strong></div>`).join('')}</div>`;
+    if(path.length===3){
+      const sorted=[...rows].sort((a,b)=>String(b.Date||'').localeCompare(String(a.Date||'')));
+      get('hrbdContent').innerHTML=`<div class="hrbd-level">${esc(ename(rows[0]||{}))} <span>${esc(eid(rows[0]||{}))}</span></div>${statHtml}<div class="hrbd-level">Employee-wise training details <span>${sorted.length} records</span></div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr>${['Date','Training Topic','Mode','Hours','Attendance','Training Rating','Assessment Score'].map(x=>`<th style="text-align:left;padding:10px 8px;border-bottom:1px solid #dce9ed;white-space:nowrap">${x}</th>`).join('')}</tr></thead><tbody>${sorted.map(r=>`<tr>${[val(r,['Date']),val(r,['Training Topic']),val(r,['Mode']),duration(r)===null?'—':fmt(duration(r)),val(r,['Attendance']),feedback(r)===null?'—':fmt(feedback(r))+' / 5',assessment(r)===null?'—':fmt(assessment(r))+'%'].map(x=>`<td style="padding:10px 8px;border-bottom:1px solid #edf1f3;white-space:nowrap">${esc(x)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+      return;
+    }
+    const key=path.length===0?region:path.length===1?branch:identity;
+    const groups=new Map();
+    rows.forEach(r=>{const k=key(r);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(r);});
+    const entries=[...groups].map(([name,items])=>({name,items,m:metrics(items)})).sort((a,b)=>b.m.hours-a.m.hours||a.name.localeCompare(b.name));
+    const title=['Region-wise training','Branch-wise training','Employee-wise training'][path.length];
+    get('hrbdContent').innerHTML=statHtml+`<div class="hrbd-level">${title} <span>${entries.length} groups</span></div>`+(entries.length?entries.map((x,i)=>{
+      const label=path.length===2?ename(x.items[0]):x.name;
+      const subtitle=path.length===2?eid(x.items[0]):x.m.employees+' employees trained';
+      return `<button class="hrbd-row" type="button" data-index="${i}"><div class="hrbd-row-top"><strong>${esc(label)} <small style="font-weight:400;color:#63818a">${esc(subtitle)}</small></strong><span>${fmt(x.m.hours)} hrs · ${x.m.sessions} sessions <b>›</b></span></div><div style="font-size:12px;color:#607985;margin-top:5px;text-align:left">Avg hours ${fmt(x.m.avgHours)} · Rating ${x.m.rating===null?'—':fmt(x.m.rating)+'/5'} · Assessment ${x.m.assessment===null?'—':fmt(x.m.assessment)+'%'}</div></button>`;
+    }).join(''):'<div class="hrbd-empty">No training records match this selection.</div>');
+    get('hrbdContent').querySelectorAll('.hrbd-row').forEach(b=>b.onclick=()=>{state.path.push({key:['region','branch','employee'][path.length],name:entries[Number(b.dataset.index)].name});render();});
   }
   // Payroll is aggregate-only. Never infer individual salaries or manager totals.
   function renderPayrollAggregate(){
