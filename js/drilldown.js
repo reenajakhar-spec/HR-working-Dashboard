@@ -75,31 +75,43 @@
   }
   // Match the selected KPI population BEFORE grouping, so a manager with
   // zero new joiners does not appear in the New Joiners MTD drill-down.
+  // Only the actual Date of Joining qualifies. Reject missing/ambiguous dates.
   function joiningDate(row){
-    const raw=field(row,['doj','DOJ','joiningDate','Joining Date','dateOfJoining','Date of Joining','date_of_joining','joining_date','joining','Joining']);
+    const raw=field(row,['doj','DOJ','dateOfJoining','Date of Joining','date_of_joining','joiningDate','Joining Date','joining_date','joining','Joining']);
     if(!raw)return null;
-    let d=null;
-    const match=raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
-    if(match){d=new Date(Number(match[3]),Number(match[2])-1,Number(match[1]));
-      if(d.getFullYear()!==Number(match[3])||d.getMonth()!==Number(match[2])-1||d.getDate()!==Number(match[1]))return null;
-    }else{d=new Date(raw);}
-    return Number.isFinite(d.getTime())?d:null;
+    let y,mo,day;
+    let match=raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:T|\s|$)/);
+    if(match){y=+match[1];mo=+match[2];day=+match[3];}
+    else {
+      match=raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+      if(!match)return null;
+      day=+match[1];mo=+match[2];y=+match[3]; // DD/MM/YYYY (India)
+    }
+    const d=new Date(y,mo-1,day);
+    return d.getFullYear()===y&&d.getMonth()===mo-1&&d.getDate()===day?d:null;
   }
   function qualifyingRows(rows,k){
     if(k!=='joiner'&&k!=='probation')return rows;
     const now=new Date();
+    const monthStart=new Date(now.getFullYear(),now.getMonth(),1);
+    const probationStart=new Date(now.getFullYear(),now.getMonth()-3,now.getDate());
+    const seen=new Set();
     return rows.filter(r=>{
       const d=joiningDate(r);
       if(!d||d>now)return false;
-      if(k==='joiner')return d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth();
-      const cutoff=new Date(now);cutoff.setMonth(cutoff.getMonth()-3);
-      return d>=cutoff;
+      if(k==='joiner' && (d<monthStart||d.getMonth()!==now.getMonth()||d.getFullYear()!==now.getFullYear()))return false;
+      if(k==='probation'&&d<probationStart)return false;
+      const id=field(r,['employeeId','Employee ID','emp_code','empCode','employee_code','employeeCode','employee_id']);
+      const key=id?('id:'+id.toLowerCase()):('person:'+field(r,['name','employeeName','Employee Name','emp_name']).toLowerCase()+'|'+d.toISOString().slice(0,10));
+      if(seen.has(key))return false;
+      seen.add(key);
+      return true;
     });
   }
   function compute(rows,k,m){
     if(!rows.length)return null;
     if(k==='count')return {value:rows.length,unit:'employees'};
-    if(k==='joiner'||k==='probation')return {value:qualifyingRows(rows,k).length,unit:'employees'};
+    if(k==='joiner'||k==='probation')return {value:rows.length,unit:'employees'};
     if(k==='active')return {value:rows.filter(r=>r.active===true||String(r.active).toLowerCase()==='true'||String(r.status).toLowerCase()==='active').length,unit:'employees'};
     if(k==='joiner'||k==='probation'||k==='tenure'||k==='netchange'){
       const dated=rows.map(r=>({row:r,date:joiningDate(r)})).filter(x=>x.date);
@@ -147,7 +159,7 @@
       const employeeId = r => field(r,['employeeId','Employee ID','emp_code','empCode','employee_code','employeeCode','employee_id','code']);
       const people = filtered.map((r,i)=>({name:employeeName(r),id:employeeId(r),role:field(r,['designation','Designation','role','Role','jobTitle','Job Title'])})).sort((a,b)=>a.name.localeCompare(b.name));
       const peopleHtml = people.map((person,i)=>`<div class="hrbd-person" style="display:flex;justify-content:space-between;gap:12px;padding:12px 4px;border-bottom:1px solid #e3edf0"><div><strong>${esc(person.name||'Name not provided by API')}</strong>${person.role?`<div style="font-size:12px;color:#72919a;margin-top:3px">${esc(person.role)}</div>`:''}</div><span style="color:#63818a;font-size:12px;white-space:nowrap">${esc(person.id)}</span></div>`).join('');
-      get('hrbdContent').innerHTML=`<div class="hrbd-total"><span>${esc(path[path.length-1].name)}</span><strong>${result?esc(format(result)):'Metric unavailable'}</strong></div><p class="hrbd-note">${filtered.length} source records in this selection.</p><div style="margin-top:20px"><div class="hrbd-level">Employees under ${esc(path[path.length-1].name)} <span>${people.length} records</span></div>${peopleHtml}</div>`;
+      get('hrbdContent').innerHTML=`<div class="hrbd-total"><span>${esc(path[path.length-1].name)}</span><strong>${result?esc(format(result)):'Metric unavailable'}</strong></div><p class="hrbd-note">${filtered.length} qualifying employee records in this selection.</p><div style="margin-top:20px"><div class="hrbd-level">Employees under ${esc(path[path.length-1].name)} <span>${people.length} records</span></div>${peopleHtml}</div>`;
       return;
     }
     const key=keys[level],groups=new Map();
