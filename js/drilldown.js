@@ -42,6 +42,15 @@
   }
   function kind(m){
     const l=m.label.toLowerCase();
+    if(m.page==='payroll'){
+      if(l.includes('deduction'))return 'totalDeduction';
+      if(l.includes('net'))return 'netPayroll';
+      if(l.includes('arrear'))return 'arrearIncrement';
+      if(l.includes('hold'))return 'salaryHoldCount';
+      if(l.includes('lop'))return 'lopDays';
+      if(l.includes('employee')||l.includes('headcount'))return 'employeeCount';
+      return 'payrollCost';
+    }
     if(m.page==='employees'){
       if(l.includes('active'))return 'active';
       if(l.includes('joiner'))return 'joiner';
@@ -142,6 +151,7 @@
   function render(){
     if(!current)return;
     const {rows,path,k,m,source}=current;
+    if(m.page==='payroll'){renderPayrollAggregate();return;}
     const crumbs=['All Departments',...path.map(x=>x.name)];
     get('hrbdBreadcrumb').innerHTML=crumbs.map((v,i)=>`<button type="button" data-level="${i}">${esc(v)}</button>`).join('<span>›</span>');
     get('hrbdBreadcrumb').querySelectorAll('button').forEach(b=>b.onclick=()=>{current.path=current.path.slice(0,Number(b.dataset.level));render();});
@@ -171,6 +181,45 @@
     const max=Math.max(...available.map(x=>x.metric.value),1);
     get('hrbdContent').innerHTML=`<div class="hrbd-level">${['Department-wise','Location-wise','Reporting Manager-wise'][level]} breakdown <span>${entries.length} groups</span></div>`+entries.map((x,i)=>`<button class="hrbd-row" type="button" data-index="${i}"><div class="hrbd-row-top"><strong>${esc(x.name)}</strong><span>${x.metric?esc(format(x.metric)):'Unavailable'} <b>›</b></span></div><div class="hrbd-track"><div style="width:${x.metric?Math.max(0,Math.min(100,x.metric.value/max*100)):0}%"></div></div></button>`).join('');
     get('hrbdContent').querySelectorAll('.hrbd-row').forEach(b=>b.onclick=()=>{current.path.push({key,name:entries[Number(b.dataset.index)].name});render();});
+  }
+  // Payroll is aggregate-only. Never infer individual salaries or manager totals.
+  function renderPayrollAggregate(){
+    const state=current;
+    const payload=typeof PAYROLL_DATA!=='undefined' ? PAYROLL_DATA : null;
+    const path=state.path;
+    const metric=state.k;
+    const supported=['payrollCost','totalDeduction','netPayroll','arrearIncrement','employeeCount','salaryHoldCount','lopDays'];
+    const label=state.m.label;
+    const crumbs=['All Departments',...path.map(p=>p.name)];
+    get('hrbdBreadcrumb').innerHTML=crumbs.map((v,i)=>`<button type="button" data-level="${i}">${esc(v)}</button>`).join('<span>›</span>');
+    get('hrbdBreadcrumb').querySelectorAll('button').forEach(b=>b.onclick=()=>{state.path=state.path.slice(0,Number(b.dataset.level));render();});
+    get('hrbdDescription').textContent='Department → Location · Latest payroll month';
+    get('hrbdFoot').textContent='Source: Payroll live API, '+(payload?.latestMonth||'latest available month')+'. Aggregated values only; no individual salary records.';
+    if(!payload || !Array.isArray(payload.latestDepartmentLocationBreakdown)){
+      get('hrbdContent').innerHTML='<div class="hrbd-empty">The deployed Payroll API has not returned the Department → Location breakdown. Deploy the updated Code.gs, then refresh Payroll.</div>';
+      return;
+    }
+    if(!supported.includes(metric)){
+      get('hrbdContent').innerHTML='<div class="hrbd-empty">This payroll metric is not available in the aggregate API.</div>';return;
+    }
+    const data=payload.latestDepartmentLocationBreakdown;
+    const money=['payrollCost','totalDeduction','netPayroll','arrearIncrement'].includes(metric);
+    const fmt=v=>money?'₹'+Number(v||0).toLocaleString('en-IN',{maximumFractionDigits:2,minimumFractionDigits:2}):Number(v||0).toLocaleString('en-IN',{maximumFractionDigits:metric==='lopDays'?1:0});
+    if(path.length>=2){
+      const rows=data.filter(r=>String(r.department||'Not mapped')===path[0].name&&String(r.location||'Not mapped')===path[1].name);
+      const total=rows.reduce((sum,r)=>sum+Number(r[metric]||0),0);
+      get('hrbdContent').innerHTML=`<div class="hrbd-total"><span>${esc(label)} · ${esc(path[1].name)}</span><strong>${fmt(total)}</strong></div><p class="hrbd-note">Reporting Manager breakdown is not available in the payroll source. No individual payroll records are exposed.</p>`;
+      return;
+    }
+    const key=path.length===0?'department':'location';
+    const rows=path.length===0?data:data.filter(r=>String(r.department||'Not mapped')===path[0].name);
+    const groups=new Map();
+    rows.forEach(r=>{const name=String(r[key]||'Not mapped');groups.set(name,(groups.get(name)||0)+Number(r[metric]||0));});
+    const entries=[...groups].map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value);
+    if(!entries.length){get('hrbdContent').innerHTML='<div class="hrbd-empty">No payroll breakdown records found.</div>';return;}
+    const max=Math.max(...entries.map(x=>Math.abs(x.value)),1);
+    get('hrbdContent').innerHTML=`<div class="hrbd-level">${path.length===0?'Department-wise':'Location-wise'} ${esc(label)} <span>${entries.length} groups</span></div>`+entries.map((x,i)=>`<button class="hrbd-row" type="button" data-index="${i}"><div class="hrbd-row-top"><strong>${esc(x.name)}</strong><span>${fmt(x.value)} <b>›</b></span></div><div class="hrbd-track"><div style="width:${Math.min(100,Math.abs(x.value)/max*100)}%"></div></div></button>`).join('');
+    get('hrbdContent').querySelectorAll('.hrbd-row').forEach(b=>b.onclick=()=>{state.path.push({key,name:entries[Number(b.dataset.index)].name});render();});
   }
   function enhance(){
     document.querySelectorAll(CARD_SELECTOR).forEach(card=>{
