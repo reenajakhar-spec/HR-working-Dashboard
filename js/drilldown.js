@@ -172,7 +172,7 @@
     if(m.page==='learning'){renderLearningBreakdown();return;}
     if(m.page==='teamob'){renderTeamObBreakdown();return;}
     if(m.page==='payroll'){renderPayrollAggregate();return;}
-     if(m.page==='overview' && (k==='whiteCollar'||k==='blueCollar')){renderCollarBreakdown();return;}
+     if(m.page==='overview' && k==='count'){renderHeadcountCollarBreakdown();return;}
     const crumbs=['All Departments',...path.map(x=>x.name)];
     get('hrbdBreadcrumb').innerHTML=crumbs.map((v,i)=>`<button type="button" data-level="${i}">${esc(v)}</button>`).join('<span>›</span>');
     get('hrbdBreadcrumb').querySelectorAll('button').forEach(b=>b.onclick=()=>{current.path=current.path.slice(0,Number(b.dataset.level));render();});
@@ -418,37 +418,37 @@
     get('hrbdContent').innerHTML=`<div class="hrbd-level">${path.length===0?'Department-wise':'Location-wise'} ${esc(label)} <span>${entries.length} groups</span></div>`+entries.map((x,i)=>`<button class="hrbd-row" type="button" data-index="${i}"><div class="hrbd-row-top"><strong>${esc(x.name)}</strong><span>${fmt(x.value)} <b>›</b></span></div><div class="hrbd-track"><div style="width:${Math.min(100,Math.abs(x.value)/max*100)}%"></div></div></button>`).join('');
     get('hrbdContent').querySelectorAll('.hrbd-row').forEach(b=>b.onclick=()=>{state.path.push({key,name:entries[Number(b.dataset.index)].name});render();});
   }
-   // White/Blue Collar: Department -> Location -> employee list. Only explicit Keka labels count.
-   function renderCollarBreakdown(){
+   // Executive Overview Total Headcount: Collar -> Department -> Employee details.
+   // No additional KPI cards are created.
+   function renderHeadcountCollarBreakdown(){
      const state=current,path=state.path;
      const raw=sources.employees();
-     const label=state.k==='whiteCollar'?'White Collar':'Blue Collar';
-     get('hrbdDescription').textContent='Department → Location → Employee details';
-     get('hrbdFoot').textContent='Source: Employee CRM / Keka live API. Only explicitly classified, unique active employees are counted; unclassified employees are excluded.';
-     const crumbs=[label,...path.map(p=>p.name)];
+     get('hrbdDescription').textContent='White / Blue Collar → Department → Employee details';
+     get('hrbdFoot').textContent='Source: Employee CRM / Keka live API. Counts use unique active employee records. Unclassified employees remain visible separately until the API mapping is provided.';
+     const crumbs=['All Employees',...path.map(p=>p.name)];
      get('hrbdBreadcrumb').innerHTML=crumbs.map((v,i)=>`<button type="button" data-level="${i}">${esc(v)}</button>`).join('<span>›</span>');
      get('hrbdBreadcrumb').querySelectorAll('button').forEach(b=>b.onclick=()=>{state.path=path.slice(0,Number(b.dataset.level));render();});
-     if(!Array.isArray(raw)){get('hrbdContent').innerHTML='<div class="hrbd-empty">Employee CRM live data has not loaded. Refresh Employee CRM and retry.</div>';return;}
-     const all=collarEmployees(raw);
-     const people=all.filter(r=>collarType(r)===label);
-     if(!people.length){get('hrbdContent').innerHTML='<div class="hrbd-empty">No explicitly classified '+esc(label)+' employees found. Check whether the Keka API provides Worker Type or Collar Type.</div>';return;}
-     const dept=r=>groupField(r,'department')||'Not mapped';
-     const loc=r=>groupField(r,'location')||'Not mapped';
-     const name=r=>field(r,['employeeName','Employee Name','name','emp_name','fullName'])||'Name unavailable';
-     const code=r=>field(r,['employeeCode','employeeId','Employee ID','emp_code','employeeNumber']);
-     let filtered=people;
-     if(path[0])filtered=filtered.filter(r=>dept(r)===path[0].name);
-     if(path[1])filtered=filtered.filter(r=>loc(r)===path[1].name);
-     const summary=`<div class="hrbd-total"><span>${esc(label)} Employees</span><strong>${filtered.length.toLocaleString('en-IN')}</strong></div>`;
-     if(path.length>=2){
-       const sorted=filtered.slice().sort((a,b)=>name(a).localeCompare(name(b)));
-       get('hrbdContent').innerHTML=summary+`<div class="hrbd-level" style="margin-top:18px">Employee Details <span>${sorted.length} employees</span></div>`+sorted.map(r=>`<div class="hrbd-person" style="padding:12px 4px;border-bottom:1px solid #e3edf0"><div style="display:flex;justify-content:space-between;gap:12px"><strong>${esc(name(r))}</strong><span style="font-size:12px;color:#63818a">${esc(code(r))}</span></div><div style="font-size:12px;color:#607985;margin-top:5px">${esc(field(r,['designation','Designation','jobTitle','role'])||'Designation not mapped')} · ${esc(field(r,['reportingManager','Reporting Manager','manager'])||'Manager not mapped')}</div></div>`).join('');
+     if(!Array.isArray(raw)){
+       get('hrbdContent').innerHTML='<div class="hrbd-empty">Employee CRM live records have not loaded. Open Employee CRM, refresh live data and retry.</div>';
        return;
      }
-     const by=path.length===0?dept:loc, groups=new Map();
-     filtered.forEach(r=>{const k=by(r);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(r);});
-     const entries=[...groups].map(([name,rows])=>({name,count:rows.length})).sort((a,b)=>b.count-a.count);
-     get('hrbdContent').innerHTML=summary+`<div class="hrbd-level" style="margin-top:18px">${path.length===0?'Department-wise':'Location-wise'} Breakdown <span>${entries.length} groups</span></div>`+entries.map((e,i)=>`<button class="hrbd-row" type="button" data-index="${i}"><div class="hrbd-row-top"><strong>${esc(e.name)}</strong><span>${e.count} employees <b>›</b></span></div></button>`).join('');
+     const all=collarEmployees(raw);
+     const dept=r=>groupField(r,'department')||'Not mapped';
+     const name=r=>field(r,['employeeName','Employee Name','name','emp_name','fullName'])||'Name unavailable';
+     const code=r=>field(r,['employeeCode','employeeId','Employee ID','emp_code','employeeNumber']);
+     let rows=all;
+     if(path[0])rows=rows.filter(r=>collarType(r)===path[0].name);
+     if(path[1])rows=rows.filter(r=>dept(r)===path[1].name);
+     const summary=`<div class="hrbd-total"><span>${esc(path.length?path[path.length-1].name:'Live Employee Headcount')}</span><strong>${rows.length.toLocaleString('en-IN')} employees</strong></div>`;
+     if(path.length>=2){
+       const sorted=rows.slice().sort((a,b)=>name(a).localeCompare(name(b)));
+       get('hrbdContent').innerHTML=summary+`<div class="hrbd-level" style="margin-top:18px">Employee Details <span>${sorted.length} employees</span></div>`+sorted.map(r=>`<div class="hrbd-person" style="padding:12px 4px;border-bottom:1px solid #e3edf0"><div style="display:flex;justify-content:space-between;gap:12px"><strong>${esc(name(r))}</strong><span style="font-size:12px;color:#63818a">${esc(code(r))}</span></div><div style="font-size:12px;color:#607985;margin-top:5px">${esc(field(r,['designation','Designation','jobTitle','role'])||'Designation not mapped')} · ${esc(field(r,['location','Location','branch','Branch'])||'Location not mapped')} · ${esc(field(r,['reportingManager','Reporting Manager','manager'])||'Manager not mapped')}</div></div>`).join('');
+       return;
+     }
+     const groups=new Map();
+     rows.forEach(r=>{const key=path.length===0?collarType(r):dept(r);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(r);});
+     const entries=[...groups].map(([name,items])=>({name,count:items.length})).sort((a,b)=>b.count-a.count);
+     get('hrbdContent').innerHTML=summary+`<div class="hrbd-level" style="margin-top:18px">${path.length===0?'Employee Category':'Department-wise Headcount'} <span>${entries.length} groups</span></div>`+entries.map((e,i)=>`<button class="hrbd-row" type="button" data-index="${i}"><div class="hrbd-row-top"><strong>${esc(e.name)}</strong><span>${e.count} employees <b>›</b></span></div></button>`).join('');
      get('hrbdContent').querySelectorAll('.hrbd-row').forEach(b=>b.onclick=()=>{state.path.push({name:entries[Number(b.dataset.index)].name});render();});
    }
 
