@@ -145,12 +145,13 @@
     const m=metricFor(card),data=rowsFor(m);
     current={m,source:data.source,rows:Array.isArray(data.rows)?data.rows:null,path:[],k:kind(m)};
     get('hrbdTitle').textContent=m.label;
-    get('hrbdDescription').textContent=m.page==='teamob'?'Department → Employee → Performance details':'Department → Location → Reporting Manager';
+    get('hrbdDescription').textContent=m.page==='teamob'?'Department → Employee → Performance details':m.page==='attendance'?'Department-wise live attendance breakdown':'Department → Location → Reporting Manager';
     popup.classList.add('open');render();
   }
   function render(){
     if(!current)return;
     const {rows,path,k,m,source}=current;
+    if(m.page==='attendance'){renderAttendanceDepartments();return;}
     if(m.page==='learning'){renderLearningBreakdown();return;}
     if(m.page==='teamob'){renderTeamObBreakdown();return;}
     if(m.page==='payroll'){renderPayrollAggregate();return;}
@@ -184,6 +185,47 @@
     get('hrbdContent').innerHTML=`<div class="hrbd-level">${['Department-wise','Location-wise','Reporting Manager-wise'][level]} breakdown <span>${entries.length} groups</span></div>`+entries.map((x,i)=>`<button class="hrbd-row" type="button" data-index="${i}"><div class="hrbd-row-top"><strong>${esc(x.name)}</strong><span>${x.metric?esc(format(x.metric)):'Unavailable'} <b>›</b></span></div><div class="hrbd-track"><div style="width:${x.metric?Math.max(0,Math.min(100,x.metric.value/max*100)):0}%"></div></div></button>`).join('');
     get('hrbdContent').querySelectorAll('.hrbd-row').forEach(b=>b.onclick=()=>{current.path.push({key,name:entries[Number(b.dataset.index)].name});render();});
   }
+  // Attendance API exposes department aggregates, not full employee attendance records.
+  // Use the real aggregates and never invent employee-level detail.
+  function renderAttendanceDepartments(){
+    const payload=typeof attendancePayload!=='undefined'?attendancePayload:null;
+    const departments=payload&&Array.isArray(payload.departments)?payload.departments:[];
+    const path=current.path;
+    const label=current.m.label.toLowerCase();
+    get('hrbdDescription').textContent='Department-wise attendance · Current dashboard period';
+    get('hrbdFoot').textContent='Source: Attendance live API, department aggregates. Attendance % uses present / (present + absent). Late instances and effective hours require department-level fields in the API.';
+    get('hrbdBreadcrumb').innerHTML='<button type="button" data-level="0">All Departments</button>'+(path.length?'<span>›</span><button type="button" data-level="1">'+esc(path[0].name)+'</button>':'');
+    get('hrbdBreadcrumb').querySelectorAll('button').forEach(b=>b.onclick=()=>{current.path=current.path.slice(0,Number(b.dataset.level));render();});
+    if(!departments.length){get('hrbdContent').innerHTML='<div class="hrbd-empty">Department attendance data has not loaded. Open Attendance, click Refresh Live Data and try again.</div>';return;}
+    function metric(r){
+      const present=num(r.present)||0,absent=num(r.absent)||0,other=num(r.other)||0;
+      if(label.includes('overall attendance'))return {value:present+absent?100*present/(present+absent):null,suffix:'%'};
+      if(label.includes('present'))return {value:present,suffix:''};
+      if(label.includes('absent'))return {value:absent,suffix:''};
+      if(label.includes('other'))return {value:other,suffix:''};
+      if(label.includes('total employees'))return {value:num(r.headcount),suffix:''};
+      if(label.includes('attendance records'))return {value:num(r.total)??present+absent+other,suffix:''};
+      if(label.includes('late'))return {value:num(r.lateCount??r.lateInstances),suffix:''};
+      if(label.includes('effective'))return {value:num(r.avgEffectiveHours),suffix:' hrs'};
+      return {value:null,suffix:''};
+    }
+    function fmt(v){return v.value===null?'Not available':v.value.toLocaleString('en-IN',{maximumFractionDigits:v.suffix==='%'?1:2})+v.suffix;}
+    function detail(r){
+      const stats=[['Employees',r.headcount],['Present Records',r.present],['Absent Records',r.absent],['Other Records',r.other],['Attendance Records',r.total??((num(r.present)||0)+(num(r.absent)||0)+(num(r.other)||0))],['Attendance Rate',metric({...r, present:r.present,absent:r.absent}).value]];
+      stats[5][1]=(num(r.present)||0)+(num(r.absent)||0)?(100*(num(r.present)||0)/((num(r.present)||0)+(num(r.absent)||0))).toFixed(1)+'%':'—';
+      return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:16px">'+stats.map(([name,value])=>'<div style="border:1px solid #dce9ed;border-radius:12px;padding:15px;background:#f8fbfc"><div style="color:#6d8790;font-size:12px">'+esc(name)+'</div><strong style="font-size:21px;color:#0e5260">'+esc(value??'—')+'</strong></div>').join('')+'</div>';
+    }
+    if(path.length){
+      const r=departments.find(x=>clean(x.department)===path[0].name);
+      if(!r){get('hrbdContent').innerHTML='<div class="hrbd-empty">Department not found in latest data.</div>';return;}
+      get('hrbdContent').innerHTML='<div class="hrbd-total"><span>'+esc(r.department)+'</span><strong>'+esc(fmt(metric(r)))+'</strong></div>'+detail(r)+'<p class="hrbd-note" style="margin-top:15px">Individual attendance entries are not included in this API response.</p>';
+      return;
+    }
+    const entries=departments.slice().sort((a,b)=>{const av=metric(a).value,bv=metric(b).value;return (bv??-Infinity)-(av??-Infinity);});
+    get('hrbdContent').innerHTML='<div class="hrbd-level">Department-wise '+esc(current.m.label)+' <span>'+entries.length+' departments</span></div>'+entries.map((r,i)=>'<button class="hrbd-row" type="button" data-index="'+i+'"><div class="hrbd-row-top"><strong>'+esc(r.department||'Not mapped')+'</strong><span>'+esc(fmt(metric(r)))+' <b>›</b></span></div><div style="font-size:12px;color:#6d8790;text-align:left;margin-top:6px">'+esc(r.headcount??'—')+' employees · '+esc(r.present??0)+' present · '+esc(r.absent??0)+' absent</div></button>').join('');
+    get('hrbdContent').querySelectorAll('.hrbd-row').forEach(b=>b.onclick=()=>{current.path=[{name:clean(entries[Number(b.dataset.index)].department)||'Not mapped'}];render();});
+  }
+
   // Team OB: Department -> Employee -> performance details.
   // Uses the department included in the deployed Team OB dashboard API.
   function renderTeamObBreakdown(){
