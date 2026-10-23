@@ -26,8 +26,12 @@
        MAIN CSS
   ====================================================== -->
 
-  <link rel="stylesheet" href="./styles.css?v=20261016-4">
+  <link
+    rel="stylesheet"
+    href="./styles.css?v=20261023-2"
+  >
 
+  <link rel="stylesheet" href="./drilldown.css?v=20261023-2">
 </head>
 
 
@@ -786,7 +790,7 @@
       </div>
 
       <div
-        id="attKpiAvgEffectiveHours"
+        id="attKpiAvg. Effective Hours"
         class="attendance-kpi-value"
       >
         98
@@ -2440,35 +2444,14 @@
    overlay.classList.add('is-open');close.focus();
  }
  function hide(){overlay.classList.remove('is-open');if(chart){chart.destroy();chart=null}previousFocus?.focus?.()}
- // Event delegation also supports KPI cards rendered later by app.js.
-  function cardIndex(target){
-    const card=target.closest('.kpi-card');
-    if(!card||!cards.contains(card))return -1;
-    return Array.prototype.indexOf.call(cards.querySelectorAll('.kpi-card'),card);
-  }
-  cards.addEventListener('click',e=>{
-    const i=cardIndex(e.target);
-    if(i>=0&&i<metrics.length)openMetric(i);
-  });
-  cards.addEventListener('keydown',e=>{
-    if(e.key!=='Enter'&&e.key!==' ')return;
-    const i=cardIndex(e.target);
-    if(i>=0&&i<metrics.length){e.preventDefault();openMetric(i)}
-  });
-  const markCards=()=>cards.querySelectorAll('.kpi-card').forEach((card,i)=>{
-    if(i>=metrics.length)return;
-    card.tabIndex=0;
-    card.setAttribute('role','button');
-    card.setAttribute('aria-label','View '+metrics[i].name+' historical trend');
-  });
-  markCards();
-  new MutationObserver(markCards).observe(cards,{childList:true});
+ cards.querySelectorAll('.kpi-card').forEach((card,i)=>{if(i>=metrics.length)return;card.tabIndex=0;card.setAttribute('role','button');card.setAttribute('aria-label','View '+metrics[i].name+' historical trend');card.addEventListener('click',()=>openMetric(i));card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openMetric(i)}})});
  close.addEventListener('click',hide);
  overlay.addEventListener('click',e=>{if(e.target===overlay)hide()});
  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&overlay.classList.contains('is-open'))hide()});
 })();
 </script>
 
+<script src="./js/drilldown.js?v=20261023-2"></script>
 </body>
 
 </html>
