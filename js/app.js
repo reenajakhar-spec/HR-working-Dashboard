@@ -5828,6 +5828,7 @@ function loadPayrollLive(forceRefresh = false) {
       PAYROLL_LOADED = true;
       setPayrollStatus('● Live', 'live');
       renderPayrollDashboard(payload);
+      document.dispatchEvent(new CustomEvent('euronics:payroll-loaded', { detail: { latestMonth: payload.latestMonth } }));
       console.log('Payroll live loaded:', payload);
     } catch (error) {
       console.error('Payroll response processing failed:', error, payload);
