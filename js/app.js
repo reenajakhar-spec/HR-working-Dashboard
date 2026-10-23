@@ -144,8 +144,6 @@ function kpi(label, value, sub = '', cls = '') {
 
 document.getElementById('overviewKpis').innerHTML = [
   kpi('Total Headcount', '612', '▲ +6 vs June'),
-  kpi('White Collar', '—', 'Awaiting live Keka classification', 'white-collar-kpi'),
-  kpi('Blue Collar', '—', 'Awaiting live Keka classification', 'blue-collar-kpi'),
   kpi('Attendance Rate', '93.4%', 'Jul MTD avg'),
   kpi('Open Positions', '18', '3 aged >8 weeks', 'warn'),
   kpi(
@@ -3389,7 +3387,6 @@ function receiveEmployeeCrmData(data) {
 
   renderEmployeeCrmDashboard(data);
   initialiseEmployeeCrmFilters(data);
-  updateOverviewCollarCards(data);
 }
 
 function renderEmployeeCrmDashboard(data) {
@@ -7204,43 +7201,6 @@ function teamObBindMomCards(){
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',teamObBindMomCards);
 else teamObBindMomCards();
 document.addEventListener('keydown',e=>{if(e.key==='Escape' && document.getElementById('teamObMomModal')?.classList.contains('open'))teamObCloseMom();});
-
-/* LIVE KEKA WHITE/BLUE COLLAR OVERVIEW - explicit classification only */
-function updateOverviewCollarCards(payload) {
-  const employees = payload && Array.isArray(payload.employees) ? payload.employees : null;
-  const root = document.getElementById('overviewKpis');
-  if (!employees || !root) return;
-  const norm = value => String(value == null ? '' : value).trim().toLowerCase().replace(/[\s_-]+/g, '');
-  const pick = (row, names) => {
-    for (const name of names) if (row[name] != null && String(row[name]).trim()) return row[name];
-    return '';
-  };
-  const unique = new Map();
-  employees.forEach((row, index) => {
-    const id = pick(row, ['employeeCode','employeeId','Employee ID','emp_code','employeeNumber','employee_id']);
-    const key = id ? 'id:' + norm(id) : 'row:' + index;
-    if (!unique.has(key)) unique.set(key, row);
-  });
-  const counts = { white: 0, blue: 0, unknown: 0 };
-  unique.forEach(row => {
-    const status = norm(pick(row, ['employmentStatus','Employment Status','employeeStatus','status','Status']));
-    if (['inactive','exited','resigned','terminated','relieved','separated'].includes(status)) return;
-    const type = norm(pick(row, ['workerType','Worker Type','worker_type','collarType','Collar Type','employeeType','Employee Type','employee_type','employmentCategory']));
-    if (type === 'whitecollar' || type === 'white') counts.white++;
-    else if (type === 'bluecollar' || type === 'blue') counts.blue++;
-    else counts.unknown++;
-  });
-  for (const [cls, type] of [['white-collar-kpi','white'],['blue-collar-kpi','blue']]) {
-    const card = root.querySelector('.' + cls);
-    if (!card) continue;
-    const value = card.querySelector('.value');
-    const sub = card.querySelector('.sub');
-    if (value) value.textContent = counts.white + counts.blue ? counts[type].toLocaleString('en-IN') : '—';
-    if (sub) sub.textContent = counts.white + counts.blue
-      ? 'Keka live · ' + counts.unknown + ' unclassified'
-      : 'Keka worker type not mapped';
-  }
-}
 
 // Overview loads from the existing Employee CRM JSONP endpoint; no API keys exposed.
 document.addEventListener('DOMContentLoaded', function () {
