@@ -152,6 +152,7 @@
     if(!current)return;
     const {rows,path,k,m,source}=current;
     if(m.page==='learning'){renderLearningBreakdown();return;}
+    if(m.page==='teamob'){renderTeamObBreakdown();return;}
     if(m.page==='payroll'){renderPayrollAggregate();return;}
     const crumbs=['All Departments',...path.map(x=>x.name)];
     get('hrbdBreadcrumb').innerHTML=crumbs.map((v,i)=>`<button type="button" data-level="${i}">${esc(v)}</button>`).join('<span>›</span>');
@@ -182,6 +183,53 @@
     const max=Math.max(...available.map(x=>x.metric.value),1);
     get('hrbdContent').innerHTML=`<div class="hrbd-level">${['Department-wise','Location-wise','Reporting Manager-wise'][level]} breakdown <span>${entries.length} groups</span></div>`+entries.map((x,i)=>`<button class="hrbd-row" type="button" data-index="${i}"><div class="hrbd-row-top"><strong>${esc(x.name)}</strong><span>${x.metric?esc(format(x.metric)):'Unavailable'} <b>›</b></span></div><div class="hrbd-track"><div style="width:${x.metric?Math.max(0,Math.min(100,x.metric.value/max*100)):0}%"></div></div></button>`).join('');
     get('hrbdContent').querySelectorAll('.hrbd-row').forEach(b=>b.onclick=()=>{current.path.push({key,name:entries[Number(b.dataset.index)].name});render();});
+  }
+  // Team OB: Department -> Employee. Uses the same employee aggregates and
+  // active-day eligibility as the Team OB KPI renderer in app.js.
+  function renderTeamObBreakdown(){
+    const state=current, path=state.path;
+    const data=typeof TEAM_OB_DATA!=='undefined'?TEAM_OB_DATA:null;
+    const raw=data&&Array.isArray(data.employees)?data.employees:null;
+    get('hrbdDescription').textContent='Department → Employee → Daily OB details';
+    get('hrbdFoot').textContent='Source: Team OB live API. Department is taken from the Team OB employee mapping; daily values are available only when provided by the API.';
+    const crumbs=['All Departments',...path.map(p=>p.name)];
+    get('hrbdBreadcrumb').innerHTML=crumbs.map((v,i)=>`<button type="button" data-level="${i}">${esc(v)}</button>`).join('<span>›</span>');
+    get('hrbdBreadcrumb').querySelectorAll('button').forEach(b=>b.onclick=()=>{state.path=path.slice(0,Number(b.dataset.level));render();});
+    if(!raw){get('hrbdContent').innerHTML='<div class="hrbd-empty">Team OB employee data has not loaded. Open Team OB, wait for the live data, and retry.</div>';return;}
+    const dept=r=>field(r,['department','Department','dept'])||'Not mapped';
+    const code=r=>field(r,['employeeCode','emp_code','employeeId','Employee ID']);
+    const name=r=>field(r,['name','emp_name','employeeName'])||'Name unavailable';
+    const identity=r=>code(r)?'id:'+code(r).toLowerCase():'name:'+name(r).toLowerCase();
+    const metricKeys={avgActiveHours:'avgActiveHours',avgWorkHours:'avgWorkHours',productivityPct:'productivityPct',avgIdleHours:'avgIdleHours',emailResponsePct:'emailResponsePct',missedCalls:'missedOrRejectedCalls',talkTime:'talkTimeMinutes'};
+    const key=metricKeys[state.k];
+    const number=(r,k)=>{const v=r[k];return v===null||v===undefined||String(v).trim()===''?null:num(v);};
+    const eligible=rows=>['avgActiveHours','avgWorkHours','productivityPct','avgIdleHours'].includes(state.k)?rows.filter(r=>(number(r,'systemDays')||0)>0):rows;
+    const metric=rows=>{
+      if(state.k==='count')return {value:rows.length,unit:'employees'};
+      if(!key)return null;
+      const values=eligible(rows).map(r=>number(r,key)).filter(v=>v!==null);
+      if(!values.length)return null;
+      const total=values.reduce((a,b)=>a+b,0);
+      const isSum=state.k==='missedCalls'||state.k==='talkTime';
+      return {value:isSum?total:total/values.length,unit:['productivityPct','emailResponsePct'].includes(state.k)?'%':['avgActiveHours','avgWorkHours','avgIdleHours'].includes(state.k)?'hours':state.k==='talkTime'?'minutes':state.k==='missedCalls'?'calls':'',decimal:isSum?0:2};
+    };
+    const fmt=(v,d=2)=>v===null?'—':v.toLocaleString('en-IN',{maximumFractionDigits:d,minimumFractionDigits:d});
+    const selected=path[0]?raw.filter(r=>dept(r)===path[0].name):raw;
+    const rows=path[1]?selected.filter(r=>identity(r)===path[1].name):selected;
+    const summary=metric(rows);
+    const metricLine=summary?format(summary):'Unavailable';
+    if(path.length===2){
+      const emp=rows[0];
+      if(!emp){get('hrbdContent').innerHTML='<div class="hrbd-empty">Employee not found.</div>';return;}
+      const fields=[['Employee Code',code(emp)||'—'],['Department',dept(emp)],['Reporting Manager',field(emp,['manager','reportingManager'])||'—'],['System Days',number(emp,'systemDays')===null?'—':fmt(number(emp,'systemDays'),0)],['Avg Work Hours',number(emp,'avgWorkHours')===null?'—':fmt(number(emp,'avgWorkHours'))+' hrs'],['Avg Active Hours',number(emp,'avgActiveHours')===null?'—':fmt(number(emp,'avgActiveHours'))+' hrs'],['Avg Idle Hours',number(emp,'avgIdleHours')===null?'—':fmt(number(emp,'avgIdleHours'))+' hrs'],['Productivity',number(emp,'productivityPct')===null?'—':fmt(number(emp,'productivityPct'))+'%'],['Email Response',number(emp,'emailResponsePct')===null?'—':fmt(number(emp,'emailResponsePct'))+'%'],['Missed / Rejected Calls',number(emp,'missedOrRejectedCalls')===null?'—':fmt(number(emp,'missedOrRejectedCalls'),0)],['Talk Time',number(emp,'talkTimeMinutes')===null?'—':fmt(number(emp,'talkTimeMinutes'))+' min'],['Status',field(emp,['status'])||'—']];
+      get('hrbdContent').innerHTML=`<div class="hrbd-level">${esc(name(emp))} <span>${esc(code(emp))}</span></div><div class="hrbd-total"><span>${esc(state.m.label)}</span><strong>${esc(metricLine)}</strong></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:10px;margin-top:18px">${fields.map(([label,value])=>`<div style="border:1px solid #dce9ed;border-radius:10px;padding:12px;background:#f8fbfc"><div style="font-size:12px;color:#607985">${esc(label)}</div><strong style="display:block;margin-top:5px;color:#164a55">${esc(value)}</strong></div>`).join('')}</div><p class="hrbd-note" style="margin-top:16px">These are employee-level summary values for the selected Team OB reporting period.</p>`;
+      return;
+    }
+    const groups=new Map();
+    rows.forEach(r=>{const group=path.length===0?dept(r):identity(r);if(!groups.has(group))groups.set(group,[]);groups.get(group).push(r);});
+    const entries=[...groups].map(([id,items])=>({id,items,metric:metric(items)})).sort((a,b)=>(b.metric?.value??-Infinity)-(a.metric?.value??-Infinity)||a.id.localeCompare(b.id));
+    get('hrbdContent').innerHTML=`<div class="hrbd-total"><span>${esc(state.m.label)}</span><strong>${esc(metricLine)}</strong></div><div class="hrbd-level" style="margin-top:16px">${path.length?'Employee-wise':'Department-wise'} Team OB <span>${entries.length} ${path.length?'employees':'departments'}</span></div>`+(entries.length?entries.map((x,i)=>`<button class="hrbd-row" type="button" data-index="${i}"><div class="hrbd-row-top"><strong>${esc(path.length?name(x.items[0]):x.id)} ${path.length?`<small style="font-weight:400;color:#63818a">${esc(code(x.items[0]))}</small>`:''}</strong><span>${x.metric?esc(format(x.metric)):'—'} <b>›</b></span></div>${path.length?'':`<div style="font-size:12px;color:#607985;text-align:left;margin-top:5px">${x.items.length} employees</div>`}</button>`).join(''):'<div class="hrbd-empty">No employee records found.</div>');
+    get('hrbdContent').querySelectorAll('.hrbd-row').forEach(b=>b.onclick=()=>{state.path.push({key:path.length?'employee':'department',name:entries[Number(b.dataset.index)].id});render();});
   }
   // L&D: Region -> Branch -> Employee -> individual training sessions.
   // Calculations use the same source rows and present/active conventions as app.js.
