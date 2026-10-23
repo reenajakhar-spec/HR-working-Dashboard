@@ -145,7 +145,7 @@
     const m=metricFor(card),data=rowsFor(m);
     current={m,source:data.source,rows:Array.isArray(data.rows)?data.rows:null,path:[],k:kind(m)};
     get('hrbdTitle').textContent=m.label;
-    get('hrbdDescription').textContent='Department → Location → Reporting Manager';
+    get('hrbdDescription').textContent=m.page==='teamob'?'Department → Employee → Performance details':'Department → Location → Reporting Manager';
     popup.classList.add('open');render();
   }
   function render(){
