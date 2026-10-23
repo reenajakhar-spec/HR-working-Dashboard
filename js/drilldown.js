@@ -17,6 +17,21 @@
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&popup.classList.contains('open'))close();});
   const field = (row,keys) => {for(const key of keys){if(row[key]!==undefined && clean(row[key]))return clean(row[key]);}return '';};
   const groupField = (r,key) => key==='department' ? field(r,['department','Department','dept','Dept']) : key==='location' ? field(r,['branch','Branch','location','Location','Branch Name','office','city']) : field(r,['manager','Manager','reportingManager','Reporting Manager','reporting_manager','L1']);
+  function collarType(r) {
+    const raw=field(r,['workerType','Worker Type','worker_type','collarType','Collar Type','employeeType','Employee Type','employee_type','employmentCategory']).toLowerCase().replace(/[\s_-]+/g,'');
+    return raw==='whitecollar'||raw==='white'?'White Collar':raw==='bluecollar'||raw==='blue'?'Blue Collar':'Not Classified';
+  }
+  function collarEmployees(rows) {
+    const unique=new Map();
+    rows.forEach((r,i)=>{
+      const status=field(r,['employmentStatus','Employment Status','employeeStatus','status','Status']).toLowerCase();
+      if(['inactive','exited','resigned','terminated','relieved','separated'].includes(status))return;
+      const id=field(r,['employeeCode','employeeId','Employee ID','emp_code','employeeNumber','employee_id']);
+      const key=id?'id:'+id.toLowerCase():'row:'+i;
+      if(!unique.has(key))unique.set(key,r);
+    });
+    return [...unique.values()];
+  }
   const sources = {
     employees: () => typeof EMPLOYEE_CRM_DATA!=='undefined' && EMPLOYEE_CRM_DATA && Array.isArray(EMPLOYEE_CRM_DATA.employees) ? EMPLOYEE_CRM_DATA.employees : null,
     teamob: () => typeof TEAM_OB_DATA!=='undefined' && TEAM_OB_DATA && Array.isArray(TEAM_OB_DATA.employees) ? TEAM_OB_DATA.employees : null,
@@ -75,6 +90,8 @@
       if(l.includes('yellow'))return 'yellow';
       if(l.includes('red')||l.includes('pip'))return 'pip';
     }
+     if(m.page==='overview' && l.includes('white collar'))return 'whiteCollar';
+     if(m.page==='overview' && l.includes('blue collar'))return 'blueCollar';
     if(m.page==='overview'){
       if(l.includes('headcount'))return 'count';
       if(l.includes('attendance'))return 'attendance';
@@ -155,6 +172,7 @@
     if(m.page==='learning'){renderLearningBreakdown();return;}
     if(m.page==='teamob'){renderTeamObBreakdown();return;}
     if(m.page==='payroll'){renderPayrollAggregate();return;}
+     if(m.page==='overview' && (k==='whiteCollar'||k==='blueCollar')){renderCollarBreakdown();return;}
     const crumbs=['All Departments',...path.map(x=>x.name)];
     get('hrbdBreadcrumb').innerHTML=crumbs.map((v,i)=>`<button type="button" data-level="${i}">${esc(v)}</button>`).join('<span>›</span>');
     get('hrbdBreadcrumb').querySelectorAll('button').forEach(b=>b.onclick=()=>{current.path=current.path.slice(0,Number(b.dataset.level));render();});
@@ -400,6 +418,40 @@
     get('hrbdContent').innerHTML=`<div class="hrbd-level">${path.length===0?'Department-wise':'Location-wise'} ${esc(label)} <span>${entries.length} groups</span></div>`+entries.map((x,i)=>`<button class="hrbd-row" type="button" data-index="${i}"><div class="hrbd-row-top"><strong>${esc(x.name)}</strong><span>${fmt(x.value)} <b>›</b></span></div><div class="hrbd-track"><div style="width:${Math.min(100,Math.abs(x.value)/max*100)}%"></div></div></button>`).join('');
     get('hrbdContent').querySelectorAll('.hrbd-row').forEach(b=>b.onclick=()=>{state.path.push({key,name:entries[Number(b.dataset.index)].name});render();});
   }
+   // White/Blue Collar: Department -> Location -> employee list. Only explicit Keka labels count.
+   function renderCollarBreakdown(){
+     const state=current,path=state.path;
+     const raw=sources.employees();
+     const label=state.k==='whiteCollar'?'White Collar':'Blue Collar';
+     get('hrbdDescription').textContent='Department → Location → Employee details';
+     get('hrbdFoot').textContent='Source: Employee CRM / Keka live API. Only explicitly classified, unique active employees are counted; unclassified employees are excluded.';
+     const crumbs=[label,...path.map(p=>p.name)];
+     get('hrbdBreadcrumb').innerHTML=crumbs.map((v,i)=>`<button type="button" data-level="${i}">${esc(v)}</button>`).join('<span>›</span>');
+     get('hrbdBreadcrumb').querySelectorAll('button').forEach(b=>b.onclick=()=>{state.path=path.slice(0,Number(b.dataset.level));render();});
+     if(!Array.isArray(raw)){get('hrbdContent').innerHTML='<div class="hrbd-empty">Employee CRM live data has not loaded. Refresh Employee CRM and retry.</div>';return;}
+     const all=collarEmployees(raw);
+     const people=all.filter(r=>collarType(r)===label);
+     if(!people.length){get('hrbdContent').innerHTML='<div class="hrbd-empty">No explicitly classified '+esc(label)+' employees found. Check whether the Keka API provides Worker Type or Collar Type.</div>';return;}
+     const dept=r=>groupField(r,'department')||'Not mapped';
+     const loc=r=>groupField(r,'location')||'Not mapped';
+     const name=r=>field(r,['employeeName','Employee Name','name','emp_name','fullName'])||'Name unavailable';
+     const code=r=>field(r,['employeeCode','employeeId','Employee ID','emp_code','employeeNumber']);
+     let filtered=people;
+     if(path[0])filtered=filtered.filter(r=>dept(r)===path[0].name);
+     if(path[1])filtered=filtered.filter(r=>loc(r)===path[1].name);
+     const summary=`<div class="hrbd-total"><span>${esc(label)} Employees</span><strong>${filtered.length.toLocaleString('en-IN')}</strong></div>`;
+     if(path.length>=2){
+       const sorted=filtered.slice().sort((a,b)=>name(a).localeCompare(name(b)));
+       get('hrbdContent').innerHTML=summary+`<div class="hrbd-level" style="margin-top:18px">Employee Details <span>${sorted.length} employees</span></div>`+sorted.map(r=>`<div class="hrbd-person" style="padding:12px 4px;border-bottom:1px solid #e3edf0"><div style="display:flex;justify-content:space-between;gap:12px"><strong>${esc(name(r))}</strong><span style="font-size:12px;color:#63818a">${esc(code(r))}</span></div><div style="font-size:12px;color:#607985;margin-top:5px">${esc(field(r,['designation','Designation','jobTitle','role'])||'Designation not mapped')} · ${esc(field(r,['reportingManager','Reporting Manager','manager'])||'Manager not mapped')}</div></div>`).join('');
+       return;
+     }
+     const by=path.length===0?dept:loc, groups=new Map();
+     filtered.forEach(r=>{const k=by(r);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(r);});
+     const entries=[...groups].map(([name,rows])=>({name,count:rows.length})).sort((a,b)=>b.count-a.count);
+     get('hrbdContent').innerHTML=summary+`<div class="hrbd-level" style="margin-top:18px">${path.length===0?'Department-wise':'Location-wise'} Breakdown <span>${entries.length} groups</span></div>`+entries.map((e,i)=>`<button class="hrbd-row" type="button" data-index="${i}"><div class="hrbd-row-top"><strong>${esc(e.name)}</strong><span>${e.count} employees <b>›</b></span></div></button>`).join('');
+     get('hrbdContent').querySelectorAll('.hrbd-row').forEach(b=>b.onclick=()=>{state.path.push({name:entries[Number(b.dataset.index)].name});render();});
+   }
+
   function enhance(){
     document.querySelectorAll(CARD_SELECTOR).forEach(card=>{
       if(card.dataset.hrbdEnhanced)return;
