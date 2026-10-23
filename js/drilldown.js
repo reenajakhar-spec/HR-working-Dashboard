@@ -193,8 +193,8 @@
     const crumbs=['All Departments',...path.map(p=>p.name)];
     get('hrbdBreadcrumb').innerHTML=crumbs.map((v,i)=>`<button type="button" data-level="${i}">${esc(v)}</button>`).join('<span>›</span>');
     get('hrbdBreadcrumb').querySelectorAll('button').forEach(b=>b.onclick=()=>{state.path=state.path.slice(0,Number(b.dataset.level));render();});
-    get('hrbdDescription').textContent='Department → Location · Latest payroll month';
-    get('hrbdFoot').textContent='Source: Payroll live API, '+(payload?.latestMonth||'latest available month')+'. Aggregated values only; no individual salary records.';
+    get('hrbdDescription').textContent='Department → Location → Employee · Latest payroll month';
+    get('hrbdFoot').textContent='Source: Payroll live API, '+(payload?.latestMonth||'latest available month')+'. Employee names and IDs are shown; individual salaries remain private.';
     if(!payload || !Array.isArray(payload.latestDepartmentLocationBreakdown)){
       get('hrbdContent').innerHTML='<div class="hrbd-empty">The deployed Payroll API has not returned the Department → Location breakdown. Deploy the updated Code.gs, then refresh Payroll.</div>';
       return;
@@ -208,7 +208,10 @@
     if(path.length>=2){
       const rows=data.filter(r=>String(r.department||'Not mapped')===path[0].name&&String(r.location||'Not mapped')===path[1].name);
       const total=rows.reduce((sum,r)=>sum+Number(r[metric]||0),0);
-      get('hrbdContent').innerHTML=`<div class="hrbd-total"><span>${esc(label)} · ${esc(path[1].name)}</span><strong>${fmt(total)}</strong></div><p class="hrbd-note">Reporting Manager breakdown is not available in the payroll source. No individual payroll records are exposed.</p>`;
+      const directory=Array.isArray(payload.latestPayrollEmployeeDirectory)?payload.latestPayrollEmployeeDirectory:[];
+      const people=directory.filter(r=>String(r.department||'Not mapped')===path[0].name&&String(r.location||'Not mapped')===path[1].name).sort((a,b)=>String(a.employeeName||'').localeCompare(String(b.employeeName||'')));
+      const peopleHtml=people.map(person=>`<div class="hrbd-person" style="display:flex;justify-content:space-between;gap:12px;padding:12px 4px;border-bottom:1px solid #e3edf0"><strong>${esc(person.employeeName||'Name unavailable')}</strong><span style="color:#63818a;font-size:12px;white-space:nowrap">${esc(person.employeeId||'')}</span></div>`).join('');
+      get('hrbdContent').innerHTML=`<div class="hrbd-total"><span>${esc(label)} · ${esc(path[1].name)}</span><strong>${fmt(total)}</strong></div><div style="margin-top:18px"><div class="hrbd-level">Employees in ${esc(path[1].name)} <span>${people.length} employees</span></div>${peopleHtml||'<p class="hrbd-note">Employee names are not available yet. Redeploy the updated payroll backend and refresh live data.</p>'}</div><p class="hrbd-note" style="margin-top:12px">Payroll total is for the selected department and location. Individual salary amounts are not published in this dashboard.</p>`;
       return;
     }
     const key=path.length===0?'department':'location';
