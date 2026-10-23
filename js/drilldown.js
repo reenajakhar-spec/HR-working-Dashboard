@@ -184,75 +184,82 @@
     get('hrbdContent').innerHTML=`<div class="hrbd-level">${['Department-wise','Location-wise','Reporting Manager-wise'][level]} breakdown <span>${entries.length} groups</span></div>`+entries.map((x,i)=>`<button class="hrbd-row" type="button" data-index="${i}"><div class="hrbd-row-top"><strong>${esc(x.name)}</strong><span>${x.metric?esc(format(x.metric)):'Unavailable'} <b>›</b></span></div><div class="hrbd-track"><div style="width:${x.metric?Math.max(0,Math.min(100,x.metric.value/max*100)):0}%"></div></div></button>`).join('');
     get('hrbdContent').querySelectorAll('.hrbd-row').forEach(b=>b.onclick=()=>{current.path.push({key,name:entries[Number(b.dataset.index)].name});render();});
   }
-  // Team OB: Department -> Employee. Uses the same employee aggregates and
-  // active-day eligibility as the Team OB KPI renderer in app.js.
+  // Team OB: Department -> Employee -> performance details.
+  // Uses the department included in the deployed Team OB dashboard API.
   function renderTeamObBreakdown(){
     const state=current, path=state.path;
     const data=typeof TEAM_OB_DATA!=='undefined'?TEAM_OB_DATA:null;
     const raw=data&&Array.isArray(data.employees)?data.employees:null;
-    get('hrbdDescription').textContent='Department → Location → Reporting Manager → Employee';
-    get('hrbdFoot').textContent='Source: Team OB live API. Department is taken from the Team OB employee mapping; daily values are available only when provided by the API.';
-    const crumbs=['All Departments',...path.map(p=>p.name)];
+    get('hrbdDescription').textContent='Department → Employee → Performance details';
+    get('hrbdFoot').textContent='Source: Team OB live dashboard API. Department comes from the mapped Team OB records. Metrics reflect the current reporting period.';
+    const crumbs=['All Departments',...path.map(p=>p.label||p.name)];
     get('hrbdBreadcrumb').innerHTML=crumbs.map((v,i)=>`<button type="button" data-level="${i}">${esc(v)}</button>`).join('<span>›</span>');
     get('hrbdBreadcrumb').querySelectorAll('button').forEach(b=>b.onclick=()=>{state.path=path.slice(0,Number(b.dataset.level));render();});
-    if(!raw){get('hrbdContent').innerHTML='<div class="hrbd-empty">Team OB employee data has not loaded. Open Team OB, wait for the live data, and retry.</div>';return;}
-    const crm=typeof EMPLOYEE_CRM_DATA!=='undefined' && EMPLOYEE_CRM_DATA && Array.isArray(EMPLOYEE_CRM_DATA.employees)?EMPLOYEE_CRM_DATA.employees:[];
+    if(!raw){get('hrbdContent').innerHTML='<div class="hrbd-empty">Team OB data has not loaded. Open Team OB, wait for the live data, then retry.</div>';return;}
+
+    const valid=v=>clean(v)&&!/^(unknown|not mapped|unassigned|n\/a|null|undefined)$/i.test(clean(v));
+    const norm=v=>clean(v).toLowerCase().replace(/\s+/g,'');
+    const crm=typeof EMPLOYEE_CRM_DATA!=='undefined'&&EMPLOYEE_CRM_DATA&&Array.isArray(EMPLOYEE_CRM_DATA.employees)?EMPLOYEE_CRM_DATA.employees:[];
     const crmById=new Map(),crmByEmail=new Map();
-    const normalize=v=>clean(v).toLowerCase().replace(/\s+/g,'');
     crm.forEach(e=>{
       const id=field(e,['employeeCode','employeeId','employeeNumber','Employee ID','emp_code','empCode','employee_id']);
       const email=field(e,['email','Email','emailId','email_id']);
-      if(id)crmById.set(normalize(id),e);
-      if(email)crmByEmail.set(normalize(email),e);
+      if(id)crmById.set(norm(id),e);
+      if(email)crmByEmail.set(norm(email),e);
     });
-    const matched=r=>crmById.get(normalize(field(r,['employeeCode','emp_code','employeeId','Employee ID'])))||crmByEmail.get(normalize(field(r,['email','Email'])))||null;
-    const mapped=(r,keys,crmKeys)=>{
-      const value=field(r,keys);
-      if(value&&!/^(unknown|not mapped|unassigned|n\/a)$/i.test(value))return value;
-      const fallback=matched(r);
-      return fallback?field(fallback,crmKeys):'';
+    const code=r=>field(r,['employeeCode','emp_code','employeeId','Employee ID','employeeNumber']);
+    const name=r=>field(r,['name','emp_name','employeeName','Employee Name'])||'Name unavailable';
+    const identity=r=>code(r)?'id:'+norm(code(r)):'name:'+norm(name(r))+'|'+norm(field(r,['email','Email']));
+    const department=r=>{
+      const direct=field(r,['department','Department','dept','Dept']);
+      if(valid(direct))return direct;
+      const fallback=crmById.get(norm(code(r)))||crmByEmail.get(norm(field(r,['email','Email'])));
+      const fromCrm=fallback?field(fallback,['department','Department','dept','Dept']):'';
+      return valid(fromCrm)?fromCrm:'Not mapped';
     };
-    const dept=r=>mapped(r,['department','Department','dept'],['department','Department','dept'])||'Not mapped';
-    const loc=r=>mapped(r,['location','Location','branch','Branch','city'],['location','Location','branch','Branch','city'])||'Not mapped';
-    const manager=r=>mapped(r,['manager','reportingManager','Reporting Manager'],['manager','reportingManager','Reporting Manager'])||'Unassigned';
-    const code=r=>field(r,['employeeCode','emp_code','employeeId','Employee ID']);
-    const name=r=>field(r,['name','emp_name','employeeName'])||'Name unavailable';
-    const identity=r=>code(r)?'id:'+code(r).toLowerCase():'name:'+name(r).toLowerCase();
+    // Consolidate employee records so headcount and employee groups never double count.
+    const people=new Map();
+    raw.forEach(r=>{
+      const id=identity(r);
+      if(!people.has(id))people.set(id,{...r});
+      else {
+        const previous=people.get(id);
+        // Preserve populated fields from earlier rows, prefer latest populated fields.
+        Object.keys(r).forEach(k=>{if(r[k]!==null&&r[k]!==undefined&&clean(r[k])!=='')previous[k]=r[k];});
+      }
+    });
+    const all=[...people.values()];
     const metricKeys={avgActiveHours:'avgActiveHours',avgWorkHours:'avgWorkHours',productivityPct:'productivityPct',avgIdleHours:'avgIdleHours',emailResponsePct:'emailResponsePct',missedCalls:'missedOrRejectedCalls',talkTime:'talkTimeMinutes'};
     const key=metricKeys[state.k];
-    const number=(r,k)=>{const v=r[k];return v===null||v===undefined||String(v).trim()===''?null:num(v);};
-    const eligible=rows=>['avgActiveHours','avgWorkHours','productivityPct','avgIdleHours'].includes(state.k)?rows.filter(r=>(number(r,'systemDays')||0)>0):rows;
+    const number=(r,k)=>{const v=r[k];return v===null||v===undefined||clean(v)===''?null:num(v);};
     const metric=rows=>{
       if(state.k==='count')return {value:rows.length,unit:'employees'};
       if(!key)return null;
-      const values=eligible(rows).map(r=>number(r,key)).filter(v=>v!==null);
+      const eligible=['avgActiveHours','avgWorkHours','productivityPct','avgIdleHours'].includes(state.k)?rows.filter(r=>(number(r,'systemDays')||0)>0):rows;
+      const values=eligible.map(r=>number(r,key)).filter(v=>v!==null);
       if(!values.length)return null;
       const total=values.reduce((a,b)=>a+b,0);
       const isSum=state.k==='missedCalls'||state.k==='talkTime';
       return {value:isSum?total:total/values.length,unit:['productivityPct','emailResponsePct'].includes(state.k)?'%':['avgActiveHours','avgWorkHours','avgIdleHours'].includes(state.k)?'hours':state.k==='talkTime'?'minutes':state.k==='missedCalls'?'calls':'',decimal:isSum?0:2};
     };
     const fmt=(v,d=2)=>v===null?'—':v.toLocaleString('en-IN',{maximumFractionDigits:d,minimumFractionDigits:d});
-    const selected=path[0]?raw.filter(r=>dept(r)===path[0].name):raw;
-    const byLocation=path[1]?selected.filter(r=>loc(r)===path[1].name):selected;
-    const byManager=path[2]?byLocation.filter(r=>manager(r)===path[2].name):byLocation;
-    const rows=path[3]?byManager.filter(r=>identity(r)===path[3].name):byManager;
+    const selected=path[0]?all.filter(r=>department(r)===path[0].name):all;
+    const rows=path[1]?selected.filter(r=>identity(r)===path[1].name):selected;
     const summary=metric(rows);
-    const metricLine=summary?format(summary):'Unavailable';
-    if(path.length===4){
+    if(path.length===2){
       const emp=rows[0];
       if(!emp){get('hrbdContent').innerHTML='<div class="hrbd-empty">Employee not found.</div>';return;}
-      const fields=[['Employee Code',code(emp)||'—'],['Department',dept(emp)],['Location',loc(emp)],['Reporting Manager',manager(emp)],['System Days',number(emp,'systemDays')===null?'—':fmt(number(emp,'systemDays'),0)],['Avg Work Hours',number(emp,'avgWorkHours')===null?'—':fmt(number(emp,'avgWorkHours'))+' hrs'],['Avg Active Hours',number(emp,'avgActiveHours')===null?'—':fmt(number(emp,'avgActiveHours'))+' hrs'],['Avg Idle Hours',number(emp,'avgIdleHours')===null?'—':fmt(number(emp,'avgIdleHours'))+' hrs'],['Productivity',number(emp,'productivityPct')===null?'—':fmt(number(emp,'productivityPct'))+'%'],['Email Response',number(emp,'emailResponsePct')===null?'—':fmt(number(emp,'emailResponsePct'))+'%'],['Missed / Rejected Calls',number(emp,'missedOrRejectedCalls')===null?'—':fmt(number(emp,'missedOrRejectedCalls'),0)],['Talk Time',number(emp,'talkTimeMinutes')===null?'—':fmt(number(emp,'talkTimeMinutes'))+' min'],['Status',field(emp,['status'])||'—']];
-      get('hrbdContent').innerHTML=`<div class="hrbd-level">${esc(name(emp))} <span>${esc(code(emp))}</span></div><div class="hrbd-total"><span>${esc(state.m.label)}</span><strong>${esc(metricLine)}</strong></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:10px;margin-top:18px">${fields.map(([label,value])=>`<div style="border:1px solid #dce9ed;border-radius:10px;padding:12px;background:#f8fbfc"><div style="font-size:12px;color:#607985">${esc(label)}</div><strong style="display:block;margin-top:5px;color:#164a55">${esc(value)}</strong></div>`).join('')}</div><p class="hrbd-note" style="margin-top:16px">Employee summary for the selected Team OB reporting period.</p>`;
+      const fields=[['Employee Code',code(emp)||'—'],['Department',department(emp)],['System Days',number(emp,'systemDays')===null?'—':fmt(number(emp,'systemDays'),0)],['Avg Work Hours',number(emp,'avgWorkHours')===null?'—':fmt(number(emp,'avgWorkHours'))+' hrs'],['Avg Active Hours',number(emp,'avgActiveHours')===null?'—':fmt(number(emp,'avgActiveHours'))+' hrs'],['Avg Idle Hours',number(emp,'avgIdleHours')===null?'—':fmt(number(emp,'avgIdleHours'))+' hrs'],['Productivity',number(emp,'productivityPct')===null?'—':fmt(number(emp,'productivityPct'))+'%'],['Email Response',number(emp,'emailResponsePct')===null?'—':fmt(number(emp,'emailResponsePct'))+'%'],['Missed / Rejected Calls',number(emp,'missedOrRejectedCalls')===null?'—':fmt(number(emp,'missedOrRejectedCalls'),0)],['Talk Time',number(emp,'talkTimeMinutes')===null?'—':fmt(number(emp,'talkTimeMinutes'))+' min'],['Status',field(emp,['status'])||'—']];
+      get('hrbdContent').innerHTML=`<div class="hrbd-level">${esc(name(emp))} <span>${esc(code(emp))}</span></div><div class="hrbd-total"><span>${esc(state.m.label)}</span><strong>${summary?esc(format(summary)):'Unavailable'}</strong></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:10px;margin-top:18px">${fields.map(([label,value])=>`<div style="border:1px solid #dce9ed;border-radius:10px;padding:12px;background:#f8fbfc"><div style="font-size:12px;color:#607985">${esc(label)}</div><strong style="display:block;margin-top:5px;color:#164a55">${esc(value)}</strong></div>`).join('')}</div>`;
       return;
     }
-    const groupers=[dept,loc,manager,identity];
-    const labels=['Department-wise','Location-wise','Reporting Manager-wise','Employee-wise'];
     const groups=new Map();
-    rows.forEach(r=>{const group=groupers[path.length](r);if(!groups.has(group))groups.set(group,[]);groups.get(group).push(r);});
+    rows.forEach(r=>{const group=path.length===0?department(r):identity(r);if(!groups.has(group))groups.set(group,[]);groups.get(group).push(r);});
     const entries=[...groups].map(([id,items])=>({id,items,metric:metric(items)})).sort((a,b)=>(b.metric?.value??-Infinity)-(a.metric?.value??-Infinity)||a.id.localeCompare(b.id));
-    get('hrbdContent').innerHTML=`<div class="hrbd-total"><span>${esc(state.m.label)}</span><strong>${esc(metricLine)}</strong></div><div class="hrbd-level" style="margin-top:16px">${labels[path.length]} Team OB <span>${entries.length} groups</span></div>`+(entries.length?entries.map((x,i)=>`<button class="hrbd-row" type="button" data-index="${i}"><div class="hrbd-row-top"><strong>${esc(path.length===3?name(x.items[0]):x.id)} ${path.length===3?`<small style="font-weight:400;color:#63818a">${esc(code(x.items[0]))}</small>`:''}</strong><span>${x.metric?esc(format(x.metric)):'—'} <b>›</b></span></div><div style="font-size:12px;color:#607985;text-align:left;margin-top:5px">${x.items.length} employees</div></button>`).join(''):'<div class="hrbd-empty">No employee records found.</div>');
-    get('hrbdContent').querySelectorAll('.hrbd-row').forEach(b=>b.onclick=()=>{state.path.push({key:['department','location','manager','employee'][path.length],name:entries[Number(b.dataset.index)].id});render();});
+    get('hrbdContent').innerHTML=`<div class="hrbd-total"><span>${esc(state.m.label)}</span><strong>${summary?esc(format(summary)):'Unavailable'}</strong></div><div class="hrbd-level" style="margin-top:16px">${path.length===0?'Department-wise':'Employee-wise'} Team OB <span>${entries.length} ${path.length===0?'departments':'employees'}</span></div>`+(entries.length?entries.map((x,i)=>`<button class="hrbd-row" type="button" data-index="${i}"><div class="hrbd-row-top"><strong>${esc(path.length===1?name(x.items[0]):x.id)} ${path.length===1?`<small style="font-weight:400;color:#63818a">${esc(code(x.items[0]))}</small>`:''}</strong><span>${x.metric?esc(format(x.metric)):'—'} <b>›</b></span></div><div style="font-size:12px;color:#607985;text-align:left;margin-top:5px">${path.length===0?x.items.length+' employees':esc(department(x.items[0]))}</div></button>`).join(''):'<div class="hrbd-empty">No employee records found.</div>');
+    get('hrbdContent').querySelectorAll('.hrbd-row').forEach(b=>b.onclick=()=>{const x=entries[Number(b.dataset.index)];state.path.push({key:path.length===0?'department':'employee',name:x.id,label:path.length===0?x.id:name(x.items[0])});render();});
   }
+
   // L&D: Region -> Branch -> Employee -> individual training sessions.
   // Calculations use the same source rows and present/active conventions as app.js.
   function renderLearningBreakdown(){
@@ -358,7 +365,7 @@
       card.dataset.hrbdEnhanced='1';
       const button=document.createElement('button');
       button.type='button';button.className='hrbd-trigger';button.textContent='View Breakdown ↗';
-      button.setAttribute('aria-label','View department, location and manager breakdown');
+      button.setAttribute('aria-label','View KPI breakdown');
       button.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();open(card);});
       card.appendChild(button);
     });
