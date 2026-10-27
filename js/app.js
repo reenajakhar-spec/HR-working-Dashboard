@@ -143,16 +143,11 @@ function kpi(label, value, sub = '', cls = '') {
 ========================= */
 
 document.getElementById('overviewKpis').innerHTML = [
-  kpi('Total Headcount', '612', '▲ +6 vs June'),
-  kpi('Attendance Rate', '93.4%', 'Jul MTD avg'),
-  kpi('Open Positions', '18', '3 aged >8 weeks', 'warn'),
-  kpi(
-    'Attrition (Rolling 12M)',
-    '14.2%',
-    'Sales 18.4% · Non-Sales 9.7%'
-  ),
-  kpi('PIP Cases', '4', '2 Sales · 1 Plant · 1 Corp'),
-  kpi('eNPS Score', '+32', '▲ +4 vs last survey', 'highlight')
+  kpi('Total Headcount', '—', 'Loading employee master...'),
+  kpi('Attendance Rate', '—', 'Waiting for attendance records'),
+  kpi('Attrition (Rolling 12M)', '—', 'Waiting for exit history'),
+  kpi('Open Positions', '—', 'Recruitment source not linked to overview', 'warn'),
+  kpi('eNPS Score', '—', 'Survey history not connected', 'highlight')
 ].join('');
 
 
@@ -3387,6 +3382,7 @@ function receiveEmployeeCrmData(data) {
 
   renderEmployeeCrmDashboard(data);
   initialiseEmployeeCrmFilters(data);
+  if (typeof window.refreshExecOverview === 'function') window.refreshExecOverview();
 }
 
 function renderEmployeeCrmDashboard(data) {
