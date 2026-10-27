@@ -7,16 +7,71 @@
  const names=['Total Headcount','Attendance Rate','Attrition (Rolling 12M)','Open Positions','eNPS Score'];
  const state={key:'headcount',period:'month',segment:'all',chart:null};
  const norm=v=>String(v==null?'':v).trim().toLowerCase().replace(/[\s_-]+/g,'');
- const get=(r,...keys)=>{for(const k of keys){if(r[k]!=null&&String(r[k]).trim())return r[k]}return ''};
+ const get = (row, ...keys) => {
+  if (!row) return '';
+
+  for (const key of keys) {
+    if (
+      row[key] !== undefined &&
+      row[key] !== null &&
+      String(row[key]).trim() !== ''
+    ) {
+      return row[key];
+    }
+  }
+
+  const normalized = {};
+  Object.keys(row).forEach(key => {
+    normalized[String(key).toLowerCase().replace(/[^a-z0-9]/g, '')] = row[key];
+  });
+
+  for (const key of keys) {
+    const normalizedKey = String(key)
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+
+    const value = normalized[normalizedKey];
+
+    if (value !== undefined && value !== null && String(value).trim() !== '') {
+      return value;
+    }
+  }
+
+  return '';
+};
  const employees=()=>typeof EMPLOYEE_CRM_DATA!=='undefined'&&EMPLOYEE_CRM_DATA&&Array.isArray(EMPLOYEE_CRM_DATA.employees)?EMPLOYEE_CRM_DATA.employees:null;
  const payload=()=>typeof EMPLOYEE_CRM_DATA!=='undefined'?EMPLOYEE_CRM_DATA:null;
- const classify=r=>{
-   const collar=norm(get(r,'employeeCategory','Employee Category','collarType','workerType','employeeType'));
-   if(collar==='bluecollar'||collar==='blue')return 'blue';
-   if(collar!=='whitecollar'&&collar!=='white')return 'unknown';
-   const sub=norm(get(r,'subDepartment','Sub-Department','sub_department'));
-   if(sub==='sales')return 'sales';if(sub==='nonsales')return 'nonsales';return 'unknown';
- };
+const classify = employee => {
+  const category = norm(get(
+    employee,
+    'employeeCategory',
+    'Employee Category',
+    'employee_category',
+    'collarType',
+    'workerType',
+    'employeeType'
+  ));
+
+  const subDepartment = norm(get(
+    employee,
+    'subDepartment',
+    'Sub-Department',
+    'sub_department',
+    'subDept'
+  ));
+
+  // Blue Collar always takes priority.
+  if (category === 'bluecollar' || category === 'blue') {
+    return 'blue';
+  }
+
+  if (category === 'whitecollar' || category === 'white') {
+    if (subDepartment === 'sales') return 'sales';
+    if (subDepartment === 'nonsales') return 'nonsales';
+  }
+
+  return 'unknown';
+};
  const active=r=>{const raw=get(r,'active','Active','status','employmentStatus');return raw===true||['yes','active','true','1'].includes(norm(raw))||raw===''};
  const date=v=>{
    if(v instanceof Date&&!isNaN(v))return new Date(v.getFullYear(),v.getMonth(),v.getDate());
