@@ -18,7 +18,7 @@
   const field = (row,keys) => {for(const key of keys){if(row[key]!==undefined && clean(row[key]))return clean(row[key]);}return '';};
   const groupField = (r,key) => key==='department' ? field(r,['department','Department','dept','Dept']) : key==='location' ? field(r,['branch','Branch','location','Location','Branch Name','office','city']) : field(r,['manager','Manager','reportingManager','Reporting Manager','reporting_manager','L1']);
   function collarType(r) {
-    const raw=field(r,['workerType','Worker Type','worker_type','collarType','Collar Type','employeeType','Employee Type','employee_type','employmentCategory']).toLowerCase().replace(/[\s_-]+/g,'');
+    const raw=field(r,['workerType','Worker Type','worker_type','collarType','Collar Type','employeeType','Employee Type','employee_type','employmentCategory','employeeCategory','Employee Category']).toLowerCase().replace(/[\s_-]+/g,'');
     return raw==='whitecollar'||raw==='white'?'White Collar':raw==='bluecollar'||raw==='blue'?'Blue Collar':'Not Classified';
   }
   function collarEmployees(rows) {
@@ -456,6 +456,7 @@
     document.querySelectorAll(CARD_SELECTOR).forEach(card=>{
       if(card.dataset.hrbdEnhanced)return;
       if(card.closest('#hrBreakdownOverlay'))return;
+      if(card.closest('#overview'))return;
       card.dataset.hrbdEnhanced='1';
       const button=document.createElement('button');
       button.type='button';button.className='hrbd-trigger';button.textContent='View Breakdown ↗';
