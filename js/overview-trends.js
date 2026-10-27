@@ -851,11 +851,16 @@
             }
           },
           scales: {
-            y: {
-              beginAtZero: false
-            }
-          }
-        }
+  y: {
+    beginAtZero: true,
+    min: 0,
+    suggestedMax: 500,
+    ticks: {
+      stepSize: 100,
+      precision: 0
+    }
+  }
+}
       });
     }
 
