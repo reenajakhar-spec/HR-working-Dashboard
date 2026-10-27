@@ -920,6 +920,8 @@ if (data.length && typeof Chart === 'function') {
   });
 }
 
+    canvas.style.display = data.length ? 'block' : 'none';
+  }
 
   /* =========================
      POPUP INTERACTIONS
