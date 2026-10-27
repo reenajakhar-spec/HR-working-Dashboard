@@ -827,46 +827,99 @@
 
     const canvas = $('execTrendChart');
 
-    if (data.length && typeof Chart === 'function') {
-      state.chart = new Chart(canvas, {
-        type: 'line',
-        data: {
-          labels: data.map(row => formatDate(row.date)),
-          datasets: [{
-            label: names[index],
-            data: values,
-            borderColor: '#147b8d',
-            backgroundColor: 'rgba(20,123,141,.12)',
-            fill: true,
-            tension: 0.25,
-            pointRadius: 3
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              display: false
-            }
-          },
-          scales: {
-  y: {
-    beginAtZero: true,
-    min: 0,
-    suggestedMax: 500,
-    ticks: {
-      stepSize: 100,
-      precision: 0
-    }
-  }
-}
-      });
-    }
+    
+if (data.length && typeof Chart === 'function') {
 
-    canvas.style.display =
-      data.length ? 'block' : 'none';
+  let yAxisConfig;
+
+  if (state.key === 'headcount') {
+    yAxisConfig = {
+      min: 0,
+      max: Math.max(
+        500,
+        Math.ceil(Math.max(...values) / 100) * 100
+      ),
+      ticks: {
+        stepSize: 100,
+        precision: 0
+      }
+    };
+
+  } else if (
+    state.key === 'attendance' ||
+    state.key === 'attrition'
+  ) {
+    yAxisConfig = {
+      min: 0,
+      max: 100,
+      ticks: {
+        stepSize: 20,
+        callback: value => value + '%'
+      }
+    };
+
+  } else if (state.key === 'enps') {
+    yAxisConfig = {
+      min: -100,
+      max: 100,
+      ticks: {
+        stepSize: 25
+      }
+    };
+
+  } else {
+    const maximum = Math.max(...values);
+
+    const step = maximum <= 20 ? 5 : 10;
+
+    yAxisConfig = {
+      min: 0,
+      max: Math.max(
+        step,
+        Math.ceil(maximum / step) * step
+      ),
+      ticks: {
+        stepSize: step,
+        precision: 0
+      }
+    };
   }
+
+  state.chart = new Chart($('execTrendChart'), {
+    type: 'line',
+    data: {
+      labels: data.map(row => formatDate(row.date)),
+      datasets: [{
+        label: names[index],
+        data: values,
+        borderColor: '#147b8d',
+        backgroundColor: 'rgba(20,123,141,.12)',
+        fill: true,
+        tension: 0.25,
+        pointRadius: 3,
+        borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: false
+        }
+      },
+      scales: {
+        y: yAxisConfig,
+        x: {
+          grid: {
+            display: false
+          }
+        }
+      }
+    }
+  });
+}
+
 
   /* =========================
      POPUP INTERACTIONS
