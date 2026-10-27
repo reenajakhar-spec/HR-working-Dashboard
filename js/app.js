@@ -153,16 +153,16 @@ document.getElementById('overviewKpis').innerHTML = [
 
 makeLineChart(
   'headcountChart',
-  ['Apr', 'May', 'Jun', 'Jul', 'Aug'],
-  [605, 606, 606, 612, 618],
+  [],
+  [],
   'Headcount'
 );
 
 
 makeLineChart(
   'attritionChart',
-  ['Apr', 'May', 'Jun', 'Jul', 'Aug'],
-  [15.4, 15.1, 14.8, 14.2, 13.9],
+  [],
+  [],
   'Attrition %'
 );
 
@@ -4058,6 +4058,11 @@ function loadAttendanceLive(
 
         attendanceLoaded =
           true;
+
+        // Update Executive Overview from the same verified live response.
+        if (typeof window.refreshExecOverview === 'function') {
+          window.refreshExecOverview();
+        }
 
 
         setAttendanceStatus(
