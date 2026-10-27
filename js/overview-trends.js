@@ -832,20 +832,29 @@ if (data.length && typeof Chart === 'function') {
 
   let yAxisConfig;
 
-  if (state.key === 'headcount') {
-    yAxisConfig = {
-      min: 0,
-      max: Math.max(
-        500,
-        Math.ceil(Math.max(...values) / 100) * 100
-      ),
-      ticks: {
-        stepSize: 100,
-        precision: 0
-      }
-    };
+  
+if (state.key === 'headcount') {
 
-  } else if (
+  // All = 100 gap
+  // Sales, Non-Sales, Blue Collar = 50 gap
+  const step = state.segment === 'all' ? 100 : 50;
+
+  const maximum = Math.max(...values, 0);
+
+  yAxisConfig = {
+    min: 0,
+    max: Math.max(
+      step,
+      Math.ceil(maximum / step) * step
+    ),
+    ticks: {
+      stepSize: step,
+      precision: 0
+    }
+  };
+
+}
+ else if (
     state.key === 'attendance' ||
     state.key === 'attrition'
   ) {
