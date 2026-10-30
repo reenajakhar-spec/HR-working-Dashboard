@@ -390,9 +390,8 @@ function parseDate(value) {
     );
   }
 
-  // Conservative estimate: only clearly completed separations are counted.
-  // HR must verify statuses and historical workforce snapshots before treating
-  // this as an official rolling-12-month attrition rate.
+  // Rolling-12-month estimate based solely on Last Working Day.
+  // No Final Status filtering. Historical headcount remains estimated.
   function getRollingAttritionEstimate() {
     const payload = getEmployeePayload();
     if (!payload || !Array.isArray(payload.employees) || !Array.isArray(payload.exits)) return null;
@@ -402,38 +401,24 @@ function parseDate(value) {
     const start = new Date(today);
     start.setFullYear(start.getFullYear() - 1);
 
-    const completedStatuses = new Set([
-      'released', 'relieved', 'exited', 'exitcompleted', 'separated',
-      'separationcompleted', 'fullandfinalcompleted', 'fnfcompleted',
-      'abscond', 'absconded', 'terminated'
-    ]);
-    const pendingStatuses = new Set([
-      'tobereleased', 'pending', 'inprogress', 'noticeperiod',
-      'resigned', 'resignationaccepted', 'onnotice'
-    ]);
     const seen = new Set();
     let exits = 0;
-    let unconfirmed = 0;
     let invalidDates = 0;
     let futureDated = 0;
+    let outsideWindow = 0;
+    let duplicates = 0;
 
     payload.exits.forEach((row, index) => {
       const rawDate = get(row, 'lastWorkingDay', 'Last working Day', 'dateOfExit');
       const d = parseDate(rawDate);
       if (!d) { invalidDates++; return; }
       if (d > today) { futureDated++; return; }
-      if (d <= start) return;
+      if (d <= start) { outsideWindow++; return; }
 
-      const status = norm(get(row, 'finalStatus', 'Final Status', 'Final status decided'));
-      if (!completedStatuses.has(status)) {
-        // Pending and blank/unknown statuses cannot establish an actual exit.
-        unconfirmed++;
-        return;
-      }
       const id = norm(get(row, 'employeeId', 'employeeCode', 'Employee ID'));
       const name = norm(get(row, 'employeeName', 'Employee Name'));
       const key = id || (name ? name + ':' + dateKey(d) : 'row:' + index);
-      if (seen.has(key)) return;
+      if (seen.has(key)) { duplicates++; return; }
       seen.add(key);
       exits++;
     });
@@ -447,7 +432,7 @@ function parseDate(value) {
     const estimatedStart = current.all - joiners + exits;
     const average = (estimatedStart + current.all) / 2;
     if (estimatedStart < 0 || average <= 0) return null;
-    return { rate: (exits / average) * 100, exits, unconfirmed, invalidDates, futureDated };
+    return { rate: (exits / average) * 100, exits, invalidDates, futureDated, outsideWindow, duplicates, estimatedAverageHeadcount: average };
   }
 
   window.checkHrAttritionData = function () {
@@ -503,11 +488,11 @@ function parseDate(value) {
 
     const history = getConnectedHistory();
     const attrition = getRollingAttritionEstimate();
-    if (attrition && (attrition.exits > 0 || attrition.unconfirmed === 0)) {
+    if (attrition) {
       setCard(2, attrition.rate.toFixed(1) + '%',
-        'Provisional · ' + attrition.exits + ' confirmed-status exits · ' + attrition.unconfirmed + ' unconfirmed · verify HR records');
+        'Provisional · ' + attrition.exits + ' exits by Last Working Day · estimated headcount');
     } else if (!Array.isArray(history.attrition) || !history.attrition.length) {
-      setCard(2, '—', attrition ? 'Exit statuses require HR verification' : 'Exit history or headcount data unavailable');
+      setCard(2, '—', 'Exit history or headcount data unavailable');
     }
     if (!Array.isArray(history.enps) || !history.enps.length) {
       setCard(4, '—', 'Employee eNPS survey data not connected');
