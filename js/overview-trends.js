@@ -366,6 +366,38 @@
     );
   }
 
+  // Indicative rolling-12-month attrition from the connected employee and exit sheets.
+  // This is an estimate, not a verified historical headcount snapshot.
+  function getRollingAttritionEstimate() {
+    const payload = getEmployeePayload();
+    if (!payload || !Array.isArray(payload.employees) || !Array.isArray(payload.exits)) return null;
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    const start = new Date(today);
+    start.setFullYear(start.getFullYear() - 1);
+    const seen = new Set();
+    let exits = 0;
+    payload.exits.forEach(row => {
+      const d = parseDate(get(row, 'lastWorkingDay', 'Last working Day', 'dateOfExit'));
+      const id = norm(get(row, 'employeeId', 'employeeCode', 'Employee ID'));
+      const key = id || norm(get(row, 'employeeName', 'Employee Name')) + ':' + (d ? dateKey(d) : '');
+      if (d && d > start && d <= today && key && !seen.has(key)) {
+        seen.add(key);
+        exits++;
+      }
+    });
+    const current = getHeadcount();
+    if (!current || !current.all) return null;
+    const joiners = payload.employees.filter(emp => {
+      const d = parseDate(get(emp, 'doj', 'dateOfJoining', 'Date of Joining'));
+      return d && d > start && d <= today && isActive(emp);
+    }).length;
+    const estimatedStart = current.all - joiners + exits;
+    const average = (estimatedStart + current.all) / 2;
+    if (estimatedStart < 0 || average <= 0) return null;
+    return { rate: (exits / average) * 100, exits };
+  }
+
   function refreshOverview() {
     const headcount = getHeadcount();
 
@@ -412,6 +444,16 @@
     }
 
     const history = getConnectedHistory();
+    const attrition = getRollingAttritionEstimate();
+    if (attrition) {
+      setCard(2, attrition.rate.toFixed(1) + '%',
+        'Estimated · ' + attrition.exits + ' exits in 12M · verify historical headcount');
+    } else if (!Array.isArray(history.attrition) || !history.attrition.length) {
+      setCard(2, '—', 'Exit history or headcount data unavailable');
+    }
+    if (!Array.isArray(history.enps) || !history.enps.length) {
+      setCard(4, '—', 'Employee eNPS survey data not connected');
+    }
 
     const mappings = [
       ['attrition', 2, '%'],
