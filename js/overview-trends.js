@@ -245,43 +245,67 @@
     return d;
   }
 
-  function parseDate(value) {
-    if (value instanceof Date && !isNaN(value)) {
-      return new Date(
-        value.getFullYear(),
-        value.getMonth(),
-        value.getDate()
-      );
-    }
-
-    const text = String(value || '').trim();
-
-    let match = text.match(
-      /^(\d{4})-(\d{2})-(\d{2})/
+  
+function parseDate(value) {
+  if (value instanceof Date && !isNaN(value)) {
+    return new Date(
+      value.getFullYear(),
+      value.getMonth(),
+      value.getDate()
     );
-
-    if (match) {
-      return validDate(
-        Number(match[1]),
-        Number(match[2]),
-        Number(match[3])
-      );
-    }
-
-    match = text.match(
-      /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/
-    );
-
-    if (match) {
-      return validDate(
-        Number(match[3]),
-        Number(match[2]),
-        Number(match[1])
-      );
-    }
-
-    return null;
   }
+
+  const text = String(value || '').trim();
+  if (!text) return null;
+
+  const months = {
+    jan: 0, feb: 1, mar: 2, apr: 3,
+    may: 4, jun: 5, jul: 6, aug: 7,
+    sep: 8, sept: 8, oct: 9,
+    nov: 10, dec: 11
+  };
+
+  let match = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+
+  if (match) {
+    return validDate(
+      Number(match[1]),
+      Number(match[2]),
+      Number(match[3])
+    );
+  }
+
+  match = text.match(
+    /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/
+  );
+
+  if (match) {
+    return validDate(
+      Number(match[3]),
+      Number(match[2]),
+      Number(match[1])
+    );
+  }
+
+  match = text.match(
+    /^(\d{1,2})[\s-]+([a-zA-Z]+)[\s,-]+(\d{4})$/
+  );
+
+  if (match) {
+    const month = months[match[2].toLowerCase()];
+
+    if (month === undefined) return null;
+
+    return validDate(
+      Number(match[3]),
+      month + 1,
+      Number(match[1])
+    );
+  }
+
+  return null;
+}
+
 
   function dateKey(date) {
     return [
