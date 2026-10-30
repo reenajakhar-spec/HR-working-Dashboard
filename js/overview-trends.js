@@ -390,26 +390,54 @@ function parseDate(value) {
     );
   }
 
-  // Indicative rolling-12-month attrition from the connected employee and exit sheets.
-  // This is an estimate, not a verified historical headcount snapshot.
+  // Conservative estimate: only clearly completed separations are counted.
+  // HR must verify statuses and historical workforce snapshots before treating
+  // this as an official rolling-12-month attrition rate.
   function getRollingAttritionEstimate() {
     const payload = getEmployeePayload();
     if (!payload || !Array.isArray(payload.employees) || !Array.isArray(payload.exits)) return null;
+
     const today = new Date();
     today.setHours(23, 59, 59, 999);
     const start = new Date(today);
     start.setFullYear(start.getFullYear() - 1);
+
+    const completedStatuses = new Set([
+      'released', 'relieved', 'exited', 'exitcompleted', 'separated',
+      'separationcompleted', 'fullandfinalcompleted', 'fnfcompleted',
+      'abscond', 'absconded', 'terminated'
+    ]);
+    const pendingStatuses = new Set([
+      'tobereleased', 'pending', 'inprogress', 'noticeperiod',
+      'resigned', 'resignationaccepted', 'onnotice'
+    ]);
     const seen = new Set();
     let exits = 0;
-    payload.exits.forEach(row => {
-      const d = parseDate(get(row, 'lastWorkingDay', 'Last working Day', 'dateOfExit'));
-      const id = norm(get(row, 'employeeId', 'employeeCode', 'Employee ID'));
-      const key = id || norm(get(row, 'employeeName', 'Employee Name')) + ':' + (d ? dateKey(d) : '');
-      if (d && d > start && d <= today && key && !seen.has(key)) {
-        seen.add(key);
-        exits++;
+    let unconfirmed = 0;
+    let invalidDates = 0;
+    let futureDated = 0;
+
+    payload.exits.forEach((row, index) => {
+      const rawDate = get(row, 'lastWorkingDay', 'Last working Day', 'dateOfExit');
+      const d = parseDate(rawDate);
+      if (!d) { invalidDates++; return; }
+      if (d > today) { futureDated++; return; }
+      if (d <= start) return;
+
+      const status = norm(get(row, 'finalStatus', 'Final Status', 'Final status decided'));
+      if (!completedStatuses.has(status)) {
+        // Pending and blank/unknown statuses cannot establish an actual exit.
+        unconfirmed++;
+        return;
       }
+      const id = norm(get(row, 'employeeId', 'employeeCode', 'Employee ID'));
+      const name = norm(get(row, 'employeeName', 'Employee Name'));
+      const key = id || (name ? name + ':' + dateKey(d) : 'row:' + index);
+      if (seen.has(key)) return;
+      seen.add(key);
+      exits++;
     });
+
     const current = getHeadcount();
     if (!current || !current.all) return null;
     const joiners = payload.employees.filter(emp => {
@@ -419,8 +447,14 @@ function parseDate(value) {
     const estimatedStart = current.all - joiners + exits;
     const average = (estimatedStart + current.all) / 2;
     if (estimatedStart < 0 || average <= 0) return null;
-    return { rate: (exits / average) * 100, exits };
+    return { rate: (exits / average) * 100, exits, unconfirmed, invalidDates, futureDated };
   }
+
+  window.checkHrAttritionData = function () {
+    const result = getRollingAttritionEstimate();
+    console.log('HR ATTRITION DIAGNOSTIC', result);
+    return result;
+  };
 
   function refreshOverview() {
     const headcount = getHeadcount();
@@ -469,11 +503,11 @@ function parseDate(value) {
 
     const history = getConnectedHistory();
     const attrition = getRollingAttritionEstimate();
-    if (attrition) {
+    if (attrition && (attrition.exits > 0 || attrition.unconfirmed === 0)) {
       setCard(2, attrition.rate.toFixed(1) + '%',
-        'Estimated · ' + attrition.exits + ' exits in 12M · verify historical headcount');
+        'Provisional · ' + attrition.exits + ' confirmed-status exits · ' + attrition.unconfirmed + ' unconfirmed · verify HR records');
     } else if (!Array.isArray(history.attrition) || !history.attrition.length) {
-      setCard(2, '—', 'Exit history or headcount data unavailable');
+      setCard(2, '—', attrition ? 'Exit statuses require HR verification' : 'Exit history or headcount data unavailable');
     }
     if (!Array.isArray(history.enps) || !history.enps.length) {
       setCard(4, '—', 'Employee eNPS survey data not connected');
