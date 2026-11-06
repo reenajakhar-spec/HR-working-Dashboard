@@ -1265,6 +1265,37 @@ if (state.key === 'headcount') {
   ========================= */
 
   refreshOverview();
+   
+  // Automatically refresh Executive Overview after
+  // employee and attendance API data has loaded.
+
+  let lastOverviewSignature = '';
+
+  const overviewRefreshTimer = setInterval(() => {
+    const employees = getEmployeePayload();
+    const attendance = getAttendancePayload();
+
+    if (
+      !employees?.ok ||
+      !attendance?.ok
+    ) {
+      return;
+    }
+
+    const signature = JSON.stringify({
+      employeeCount: employees.employees?.length,
+      exitCount: employees.exits?.length,
+      employeeUpdated: employees.generatedAt,
+      attendanceUpdated: attendance.generatedAt,
+      attendanceRate: attendance.summary?.attendancePercent
+    });
+
+    if (signature !== lastOverviewSignature) {
+      lastOverviewSignature = signature;
+      refreshOverview();
+    }
+  }, 1000);
+
 
   if (
     typeof loadEmployeeCrmLive === 'function' &&
