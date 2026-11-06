@@ -1,311 +1,196 @@
-
-/* EURONICS HR Command Centre - Month-on-Month KPI Popups */
+/* Euronics HR Command Centre: MoM popups for Employee CRM, Attendance, L&D.
+   Payroll and Team OB retain their existing dedicated popups.
+   No invented historical values. */
 (function () {
   'use strict';
-
+  if (window.__euronicsHrMomInstalled) return;
+  window.__euronicsHrMomInstalled = true;
   const MODULES = {
-    employees: '.employee-kpi-card',
-    attendance: '.attendance-kpi-card',
-    learning: '.lnd-kpi-card'
+    employees: '#employees .employee-kpi-card',
+    attendance: '#attendance .attendance-kpi-card',
+    learning: '#learning .lnd-kpi-card,#learning .lnd-kpi,#learning #learningKpis > div'
   };
-
-  const esc = x => String(x ?? '').replace(
-    /[&<>"']/g,
-    c => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;',
-      '"': '&quot;', "'": '&#39;'
-    }[c])
-  );
-
-  function checked(y, m, d) {
+  const esc = x => String(x ?? '').replace(/[&<>"']/g, c => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  }[c]));
+  function checked(y,m,d) {
     if (!m) return null;
-    const v = new Date(y, m - 1, d);
-    return v.getFullYear() === y &&
-      v.getMonth() === m - 1 &&
-      v.getDate() === d ? v : null;
+    const x = new Date(y,m-1,d);
+    return x.getFullYear()===y && x.getMonth()===m-1 && x.getDate()===d ? x : null;
   }
-
   function dateOf(v) {
     if (v instanceof Date) return isNaN(v) ? null : v;
-    const s = String(v ?? '').trim();
+    if (typeof v === 'number' && v > 20000 && v < 100000) {
+      const d = new Date(Date.UTC(1899,11,30) + v*86400000);
+      return checked(d.getUTCFullYear(),d.getUTCMonth()+1,d.getUTCDate());
+    }
+    const s=String(v??'').trim();
     if (!s) return null;
-
-    let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-    if (m) return checked(+m[1], +m[2], +m[3]);
-
-    m = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})$/);
-    if (m) return checked(+m[3], +m[2], +m[1]);
-
-    m = s.match(/^(\d{1,2})[\s-]+([a-z]+)[\s,-]+(\d{4})$/i);
-    if (m) {
-      const months = {
-        jan: 1, feb: 2, mar: 3, apr: 4,
-        may: 5, jun: 6, jul: 7, aug: 8,
-        sep: 9, sept: 9, oct: 10, nov: 11, dec: 12
-      };
-      return checked(+m[3], months[m[2].toLowerCase()], +m[1]);
+    let m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if(m) return checked(+m[1],+m[2],+m[3]);
+    m=s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})$/);
+    if(m) return checked(+m[3],+m[2],+m[1]);
+    m=s.match(/^(\d{1,2})[\s-]+([a-z]+)[\s,-]+(\d{4})$/i);
+    if(m) {
+      const months={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,sept:9,oct:10,nov:11,dec:12};
+      return checked(+m[3],months[m[2].toLowerCase()],+m[1]);
     }
     return null;
   }
-
-  const key = d => d.getFullYear() + '-' +
-    String(d.getMonth() + 1).padStart(2, '0');
-
-  const number = x => {
-    if (x === null || x === undefined || x === '') return null;
-    const n = Number(String(x).replace(/[, %]/g, ''));
-    return Number.isFinite(n) ? n : null;
+  const key=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  function monthShift(k,offset) {
+    const [y,m]=k.split('-').map(Number);
+    return key(new Date(y,m-1+offset,1));
+  }
+  const number=x=>{
+    if(x===null || x===undefined || x==='') return null;
+    const n=Number(String(x).replace(/[, %]/g,''));
+    return Number.isFinite(n)?n:null;
   };
-
-  function monthlyCount(rows, dateFields, filter) {
-    const m = new Map();
-    for (const r of rows) {
-      if (filter && !filter(r)) continue;
-      const d = dateOf(dateFields.map(f => r[f]).find(v => v));
-      if (!d || d > new Date()) continue;
-      const k = key(d);
-      m.set(k, (m.get(k) || 0) + 1);
+  function getGlobal(name) { try { return window[name] ?? eval(name); } catch(e) { return null; } }
+  function selected(id) { return document.getElementById(id)?.value || 'all'; }
+  function normalized(v) { return String(v??'').trim().toLowerCase(); }
+  function monthCount(rows,fields,filter) {
+    const values=new Map(), now=new Date();
+    for(const r of rows) {
+      if(filter && !filter(r)) continue;
+      const d=dateOf(fields.map(f=>r[f]).find(v=>v!==null && v!==undefined && v!==''));
+      if(!d || d>now) continue;
+      const k=key(d);
+      values.set(k,(values.get(k)||0)+1);
     }
-    return m;
+    return values;
   }
-
   function employeeSeries(label) {
-    const p = typeof EMPLOYEE_CRM_DATA === 'undefined'
-      ? null : EMPLOYEE_CRM_DATA;
-    if (!p) return null;
-
-    const employees = Array.isArray(p.employees) ? p.employees : [];
-    const exits = Array.isArray(p.exits) ? p.exits : [];
-
-    const dept = document.getElementById('employeeDeptFilter')
-      ?.value || 'all';
-
-    const match = r =>
-      dept === 'all' ||
-      String(r.department || r.Department || '')
-        .toLowerCase() === dept.toLowerCase();
-
-    const joins = monthlyCount(
-      employees,
-      ['doj', 'joiningDate', 'dateOfJoining', 'joining', 'joinDate'],
-      match
-    );
-
-    // Exit classification uses Last Working Day only.
-    // Final Status is intentionally ignored.
-    const left = monthlyCount(
-      exits,
-      ['lastWorkingDay'],
-      match
-    );
-
-    const allKeys = [...new Set([
-      ...joins.keys(), ...left.keys()
-    ])].sort();
-
-    if (/New Joiners/i.test(label)) {
+    const p=getGlobal('EMPLOYEE_CRM_DATA');
+    if(!p || !Array.isArray(p.employees)) return null;
+    const rows=p.employees, exits=Array.isArray(p.exits)?p.exits:[];
+    const filters=[
+      ['employeeDeptFilter',['department','Department']],
+      ['employeeLocationFilter',['location','Location']],
+      ['employeeManagerFilter',['manager','reportingManager','managerName']]
+    ];
+    const match=r=>filters.every(([id,fields])=>{
+      const value=selected(id);
+      return value==='all' || fields.some(f=>normalized(r[f])===normalized(value));
+    });
+    // Search/status filters must not be silently ignored for historical series.
+    const search=normalized(document.getElementById('employeeCrmSearch')?.value);
+    const status=selected('employeeStatusFilter');
+    if(search || status!=='all') return {
+      values:new Map(),
+      note:'Historical employee-level search/status snapshots are not available. Clear the search and select All Status to view supported monthly trends.'
+    };
+    const joins=monthCount(rows,['doj','joiningDate','dateOfJoining','joining','joinDate'],match);
+    // Exit department/location/manager fields may be incomplete; do not imply a filtered exit count is accurate.
+    const scoped=filters.some(([id])=>selected(id)!=='all');
+    const left=scoped ? new Map() : monthCount(exits,['lastWorkingDay'],null);
+    if(/New Joiners/i.test(label)) return {
+      values:joins,
+      note:'Monthly joiners by joining date from the employee master; selected workforce filters applied.'
+    };
+    if(/Net Change/i.test(label)) {
+      if(scoped) return {values:new Map(),note:'Filtered historical exits cannot be verified from the available exit records. Department/location/manager dropdowns remain unchanged.'};
+      const keys=[...new Set([...joins.keys(),...left.keys()])].sort();
       return {
-        values: joins,
-        note: 'Joining dates from employee master. Current department filter applied.'
+        values:new Map(keys.map(k=>[k,(joins.get(k)||0)-(left.get(k)||0)])),
+        note:'Provisional: joiners minus exit records by Last Working Day. Exit completion status, duplicates and missing historical records must be validated.'
       };
     }
-
-    if (/Net Change/i.test(label)) {
-      const values = new Map(
-        allKeys.map(k => [
-          k, (joins.get(k) || 0) - (left.get(k) || 0)
-        ])
-      );
-      return {
-        values,
-        note: 'Joiners minus exit records by Last Working Day. Historical department mapping and duplicate exit records require verification.'
-      };
-    }
-
     return {
-      values: new Map(),
-      note: 'Reliable monthly historical snapshots are required for this KPI. Current employee master alone cannot establish past headcount, tenure or probation totals.'
+      values:new Map(),
+      note:'This KPI requires verified month-end workforce snapshots. Current employee records cannot establish accurate past headcount, active population, under-3-month population or average tenure.'
     };
   }
-
   function attendanceSeries(label) {
-    const p = typeof attendancePayload === 'undefined'
-      ? null : attendancePayload;
-
-    if (!p || !Array.isArray(p.daily)) return null;
-
-    const dept =
-      document.getElementById('attendanceDepartmentFilter')?.value ||
-      document.getElementById('attendanceDeptFilter')?.value ||
-      'all';
-
-    // Overall daily history is not department-specific.
-    if (dept !== 'all') {
-      return {
-        values: new Map(),
-        note: 'The current daily API series is company-wide. Department-specific historical attendance requires employee-level dated records.'
-      };
-    }
-
-    const field = /Overall Attendance/i.test(label)
-      ? 'attendancePercent'
-      : /Present Records/i.test(label)
-      ? 'present'
-      : /Absent Records/i.test(label)
-      ? 'absent'
-      : /Other|Leave/i.test(label)
-      ? 'other'
-      : /Late/i.test(label)
-      ? 'lateCount'
-      : null;
-
-    if (!field) {
-      return {
-        values: new Map(),
-        note: 'This KPI requires a dated monthly historical source.'
-      };
-    }
-
-    const grouped = new Map();
-
-    for (const r of p.daily) {
-      const d = dateOf(r.date);
-      const n = number(r[field]);
-      if (!d || n === null) continue;
-
-      const k = key(d);
-      if (!grouped.has(k)) grouped.set(k, []);
-
-      const present = number(r.present) || 0;
-      const absent = number(r.absent) || 0;
-
-      grouped.get(k).push({
-        n,
-        w: present + absent,
-        present,
-        absent
-      });
-    }
-
-    const values = new Map();
-
-    for (const [k, a] of grouped) {
-      if (field === 'attendancePercent') {
-        const present = a.reduce((s, x) => s + x.present, 0);
-        const absent = a.reduce((s, x) => s + x.absent, 0);
-        if (present + absent > 0) {
-          values.set(k, 100 * present / (present + absent));
-        }
-      } else {
-        values.set(k, a.reduce((s, x) => s + x.n, 0));
-      }
-    }
-
-    return {
-      values,
-      note: field === 'attendancePercent'
-        ? 'Monthly attendance = Present / (Present + Absent) × 100. Other states excluded.'
-        : 'Monthly totals calculated from available daily attendance records.'
+    const p=getGlobal('attendancePayload');
+    if(!p || !Array.isArray(p.daily)) return null;
+    const filters=['attendanceDeptFilter','attendanceLocationFilter','attendanceManagerFilter','attendanceStatusFilter'];
+    if(filters.some(id=>selected(id)!=='all')) return {
+      values:new Map(),
+      note:'Historical attendance is company-wide in the available daily feed. A filtered month-on-month view requires dated employee-level attendance records.'
     };
-  }
-
-  function learningSeries(label) {
-    if (typeof lndRows === 'undefined' || !Array.isArray(lndRows)) {
-      return null;
-    }
-
-    const rows = typeof getFilteredLndRows === 'function'
-      ? getFilteredLndRows() : lndRows;
-
-    const grouped = new Map();
-
-    for (const r of rows) {
-      const d = dateOf(r.Date);
-      if (!d) continue;
-
-      const k = key(d);
-      if (!grouped.has(k)) grouped.set(k, []);
+    let field=null;
+    if(/Overall Attendance/i.test(label)) field='attendancePercent';
+    else if(/Present Records/i.test(label)) field='present';
+    else if(/Absent Records/i.test(label)) field='absent';
+    else if(/Other Records/i.test(label)) field='other';
+    else if(/Late Instances/i.test(label)) field='lateCount';
+    if(!field) return {
+      values:new Map(),
+      note:'The available dated attendance feed does not establish this KPI month by month. No historical value has been fabricated.'
+    };
+    const grouped=new Map();
+    for(const r of p.daily) {
+      const d=dateOf(r.date);
+      if(!d || d>new Date()) continue;
+      const k=key(d);
+      if(!grouped.has(k)) grouped.set(k,[]);
       grouped.get(k).push(r);
     }
-
-    const values = new Map();
-
-    for (const [k, a] of grouped) {
-      const present = a.filter(r =>
-        String(r.Attendance || '').toLowerCase() === 'present'
-      );
-
-      const active = a.filter(r =>
-        String(r.Status || '').toLowerCase() !== 'not active'
-      );
-
-      const ids = arr => new Set(arr.map(r =>
-        String(
-          r['Employee ID'] ||
-          r['Employee ID 2'] ||
-          r.Attendees || ''
-        ).trim()
-      ).filter(Boolean));
-
-      const trained = ids(present).size;
-      const total = ids(active).size;
-
-      const hours = present.reduce(
-        (s, r) => s + (number(r['Duration (in hours)']) || 0),
-        0
-      );
-
-      const programs = new Set(present.map(r =>
-        [r['Training Topic'], r.Date, r['Branch Name']].join('|')
-      )).size;
-
-      const attended = present.length;
-      const absent = a.filter(r =>
-        String(r.Attendance || '').toLowerCase() === 'absent'
-      ).length;
-
-      const avg = field => {
-        const nums = a.map(r => number(r[field]))
-          .filter(x => x !== null);
-        return nums.length
-          ? nums.reduce((s, x) => s + x, 0) / nums.length
-          : null;
-      };
-
-      let v = null;
-
-      if (/Total Employees/i.test(label)) v = total;
-      else if (/Employees Trained/i.test(label)) v = trained;
-      else if (/Training Coverage/i.test(label))
-        v = total ? trained / total * 100 : null;
-      else if (/Total Learning Hours/i.test(label)) v = hours;
-      else if (/Avg. Hours/i.test(label))
-        v = trained ? hours / trained : null;
-      else if (/Programs Conducted/i.test(label)) v = programs;
-      else if (/Completion Rate/i.test(label))
-        v = attended + absent
-          ? attended / (attended + absent) * 100 : null;
-      else if (/Training Rating/i.test(label))
-        v = avg('Feedback Score');
-      else if (/Assessment Score/i.test(label))
-        v = avg('Assesment Score');
-
-      if (v !== null) values.set(k, v);
+    const values=new Map();
+    for(const [k,rs] of grouped) {
+      if(field==='attendancePercent') {
+        const valid=rs.filter(r=>number(r.present)!==null && number(r.absent)!==null);
+        const present=valid.reduce((a,r)=>a+number(r.present),0);
+        const absent=valid.reduce((a,r)=>a+number(r.absent),0);
+        if(present+absent>0) values.set(k,100*present/(present+absent));
+      } else {
+        const valid=rs.map(r=>number(r[field])).filter(x=>x!==null);
+        if(valid.length) values.set(k,valid.reduce((a,b)=>a+b,0));
+      }
     }
-
-    return {
-      values,
-      note: 'Based on dated training records with the currently selected L&D filters. Employee totals represent the recorded training population.'
-    };
+    return {values,note:field==='attendancePercent'
+      ? 'Monthly attendance: sum of present / sum of present and absent × 100, using available dated daily records.'
+      : 'Monthly totals from available dated daily attendance records. Incomplete months may not be comparable.'};
   }
-
+  function learningSeries(label) {
+    const all=getGlobal('lndRows');
+    if(!Array.isArray(all)) return null;
+    const fn=getGlobal('getFilteredLndRows');
+    const rows=typeof fn==='function'?fn():all;
+    const grouped=new Map();
+    for(const r of rows) {
+      const d=dateOf(r.Date);
+      if(!d || d>new Date()) continue;
+      const k=key(d);
+      if(!grouped.has(k)) grouped.set(k,[]);
+      grouped.get(k).push(r);
+    }
+    const values=new Map();
+    for(const [k,rs] of grouped) {
+      const present=rs.filter(r=>normalized(r.Attendance)==='present');
+      const absent=rs.filter(r=>normalized(r.Attendance)==='absent');
+      const ids=arr=>new Set(arr.map(r=>String(r['Employee ID']||r['Employee ID 2']||r.Attendees||'').trim()).filter(Boolean));
+      const trained=ids(present).size;
+      const active=ids(rs.filter(r=>normalized(r.Status)!=='not active')).size;
+      const hours=present.reduce((a,r)=>a+(number(r['Duration (in hours)'])||0),0);
+      const programs=new Set(present.map(r=>[r['Training Topic'],r.Date,r['Branch Name']].join('|'))).size;
+      const avg=field=>{
+        const nums=rs.map(r=>number(r[field])).filter(x=>x!==null);
+        return nums.length?nums.reduce((a,b)=>a+b,0)/nums.length:null;
+      };
+      let v=null;
+      if(/Total Employees/i.test(label)) v=active;
+      else if(/Employees Trained/i.test(label)) v=trained;
+      else if(/Training Coverage/i.test(label)) v=active?100*trained/active:null;
+      else if(/Total Learning Hours/i.test(label)) v=hours;
+      else if(/Avg\.?\s*Hours/i.test(label)) v=trained?hours/trained:null;
+      else if(/Programs Conducted/i.test(label)) v=programs;
+      else if(/Completion Rate/i.test(label)) v=present.length+absent.length?100*present.length/(present.length+absent.length):null;
+      else if(/Training Rating/i.test(label)) v=avg('Feedback Score');
+      else if(/Assessment Score/i.test(label)) v=avg('Assesment Score');
+      if(v!==null) values.set(k,v);
+    }
+    return {values,note:'Derived from dated L&D records using the existing L&D filters. Total Employees means employees represented in that month’s training records, not verified company headcount.'};
+  }
   let chart = null;
 
   function open(module, card) {
     const label = (
       card.querySelector(
-        '.employee-kpi-label,.attendance-kpi-label,.title'
-      )?.textContent || 'KPI'
+        '.employee-kpi-label,.attendance-kpi-label,.lnd-kpi-label,.lnd-card-label,.lnd-kpi-title,.lnd-kpi-name,.kpi-label,.title,h3,h4'
+      )?.textContent || card.firstElementChild?.textContent || 'KPI'
     ).trim();
 
     const result = module === 'employees'
@@ -328,7 +213,7 @@
     note.textContent = result?.note ||
       'Load live data first to view historical trends.';
 
-    const pct = /%|Attendance|Coverage|Rate/i.test(label);
+    const pct = /%|Overall Attendance|Coverage|Completion Rate/i.test(label);
 
     const fmt = v => v === null
       ? '—'
@@ -338,7 +223,8 @@
         ) + (pct ? '%' : '');
 
     const last = pairs.length ? pairs[pairs.length - 1][1] : null;
-    const prev = pairs.length > 1 ? pairs[pairs.length - 2][1] : null;
+    const previousKey = pairs.length ? monthShift(pairs[pairs.length - 1][0], -1) : null;
+    const prev = previousKey && result?.values.has(previousKey) ? result.values.get(previousKey) : null;
 
     document.getElementById('hrMomLatest').textContent = fmt(last);
 
@@ -353,7 +239,7 @@
 
     tbody.innerHTML = pairs.length
       ? pairs.slice().reverse().map(([k, v], i) => {
-          const previous = pairs[pairs.length - i - 2]?.[1];
+          const previous = result.values.get(monthShift(k, -1));
           const month = new Date(k + '-01T00:00:00')
             .toLocaleDateString('en-IN', {
               month: 'long', year: 'numeric'
@@ -369,6 +255,7 @@
         }).join('')
       : '<tr><td colspan="3">Historical data unavailable for this KPI.</td></tr>';
 
+    if (!overlay) return;
     overlay.classList.add('open');
     document.body.style.overflow = 'hidden';
 
@@ -377,8 +264,9 @@
       chart = null;
     }
 
-    if (pairs.length && typeof Chart !== 'undefined') {
-      chart = new Chart(document.getElementById('hrMomChart'), {
+    const canvas = document.getElementById('hrMomChart');
+    if (pairs.length && canvas && typeof Chart !== 'undefined') {
+      chart = new Chart(canvas, {
         type: 'line',
         data: {
           labels: pairs.map(([k]) =>
@@ -414,17 +302,18 @@
   const css = document.createElement('style');
 
   css.textContent = `
-    .employee-kpi-card,
-    .attendance-kpi-card,
-    .lnd-kpi-card {
+    #employees .employee-kpi-card,
+    #attendance .attendance-kpi-card,
+    #learning #learningKpis > div {
       cursor: pointer;
     }
-    .employee-kpi-card:hover,
-    .attendance-kpi-card:hover,
-    .lnd-kpi-card:hover {
+    #employees .employee-kpi-card:hover,
+    #attendance .attendance-kpi-card:hover,
+    #learning #learningKpis > div:hover {
       box-shadow: 0 12px 32px rgba(12,63,75,.16);
       transform: translateY(-2px);
     }
+    #employees .employee-kpi-card::after,#attendance .attendance-kpi-card::after,#learning #learningKpis > div::after {content:'View MoM ↗';display:block;margin-top:10px;font-size:11px;font-weight:800;color:#17616e;}
     .hr-mom-overlay {
       display: none;
       position: fixed;
@@ -558,7 +447,14 @@
     }
   });
 
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const card = e.target.closest?.(Object.values(MODULES).join(','));
+    if (card) { e.preventDefault(); card.click(); }
+  });
+
   document.addEventListener('click', e => {
+    if (!(e.target instanceof Element) || e.target.closest('#hrMomOverlay')) return;
     for (const [module, selector] of Object.entries(MODULES)) {
       const card = e.target.closest(selector);
       if (card) {
