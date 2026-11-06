@@ -734,127 +734,43 @@ function parseDate(value) {
   // Build actual attendance trends from the connected attendance API daily rows.
   // Aggregate PRESENT and ABSENT counts, never average daily percentages.
   function getAttendanceTrend() {
-    const payload = getAtten
-function getAttendanceTrend() {
-  const payload = getAttendancePayload();
-
-  if (!payload || payload.ok !== true) {
-    return {
-      data: [],
-      warning: 'Attendance API has not loaded.'
-    };
+    const payload = getAttendancePayload();
+    if (!payload || !Array.isArray(payload.daily)) {
+      return { data: [], warning: 'Attendance API daily records have not loaded.' };
+    }
+    if (state.segment !== 'all') {
+      return { data: [], warning: 'Sales / Non-Sales / Blue Collar attendance needs employee-level dated attendance records in the API. The current daily summary has no employee category.' };
+    }
+    const buckets = new Map();
+    const today = new Date(); today.setHours(23,59,59,999);
+    const earliest = new Date(2026, 3, 1);
+    payload.daily.forEach(row => {
+      const d = parseDate(get(row, 'date', 'Attendance Date'));
+      if (!d || d < earliest || d > today) return;
+      const present = Number(get(row, 'present'));
+      const absent = Number(get(row, 'absent'));
+      if (!Number.isFinite(present) || !Number.isFinite(absent) || present + absent <= 0) return;
+      let periodEnd;
+      let key;
+      if (state.period === 'month') {
+        periodEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+        key = d.getFullYear() + '-' + d.getMonth();
+      } else {
+        periodEnd = new Date(d);
+        periodEnd.setDate(d.getDate() + (7 - d.getDay()) % 7);
+        key = dateKey(periodEnd);
+      }
+      const bucket = buckets.get(key) || { date: periodEnd, present: 0, absent: 0 };
+      bucket.present += present;
+      bucket.absent += absent;
+      buckets.set(key, bucket);
+    });
+    const data = [...buckets.values()].map(b => ({
+      date: b.date > today ? today : b.date,
+      value: 100 * b.present / (b.present + b.absent)
+    })).sort((a,b) => a.date - b.date);
+    return { data, warning: data.length ? 'Live Attendance Sheet · Present / (Present + Absent), weighted by records. Only dates available from the API are shown.' : 'No dated attendance records found from 01 Apr 2026.' };
   }
-
-  const isAll = state.segment === 'all';
-
-  const rows = isAll
-    ? payload.daily
-    : payload.dailyByCategory;
-
-  if (!Array.isArray(rows)) {
-    return {
-      data: [],
-      warning: isAll
-        ? 'Overall attendance history is unavailable.'
-        : 'Category-wise attendance data is unavailable.'
-    };
-  }
-
-  const categoryMap = {
-    sales: 'sales',
-    nonsales: 'nonsales',
-    blue: 'bluecollar'
-  };
-
-  const requiredCategory = categoryMap[state.segment];
-
-  const today = new Date();
-  today.setHours(23, 59, 59, 999);
-
-  const earliest = new Date(2026, 3, 1);
-  const buckets = new Map();
-
-  rows.forEach(row => {
-    if (!isAll) {
-      const category = norm(get(row, 'category'));
-
-      if (category !== requiredCategory) return;
-    }
-
-    const d = parseDate(get(
-      row,
-      'date',
-      'Attendance Date'
-    ));
-
-    if (!d || d < earliest || d > today) return;
-
-    const present = Number(get(row, 'present'));
-    const absent = Number(get(row, 'absent'));
-
-    if (
-      !Number.isFinite(present) ||
-      !Number.isFinite(absent) ||
-      present < 0 ||
-      absent < 0 ||
-      present + absent <= 0
-    ) {
-      return;
-    }
-
-    let periodEnd;
-    let key;
-
-    if (state.period === 'month') {
-      periodEnd = new Date(
-        d.getFullYear(),
-        d.getMonth() + 1,
-        0
-      );
-
-      key = d.getFullYear() + '-' + d.getMonth();
-    } else {
-      periodEnd = new Date(d);
-
-      periodEnd.setDate(
-        d.getDate() + (7 - d.getDay()) % 7
-      );
-
-      key = dateKey(periodEnd);
-    }
-
-    const bucket = buckets.get(key) || {
-      date: periodEnd,
-      present: 0,
-      absent: 0
-    };
-
-    bucket.present += present;
-    bucket.absent += absent;
-
-    buckets.set(key, bucket);
-  });
-
-  const data = [...buckets.values()]
-    .map(bucket => ({
-      date: bucket.date > today ? today : bucket.date,
-      value:
-        100 * bucket.present /
-        (bucket.present + bucket.absent)
-    }))
-    .filter(row => Number.isFinite(row.value))
-    .sort((a, b) => a.date - b.date);
-
-  return {
-    data,
-    warning: data.length
-      ? 'Live Keka Attendance Sheet · ' +
-        'Present / (Present + Absent) × 100. ' +
-        'Other attendance states excluded.'
-      : 'No attendance records found for this ' +
-        'category and selected date range.'
-  };
-}
 
   // Use Last Working Day only. Historical headcount is reconstructed approximately
   // from CURRENT active employee master + dated joiners and exit records.
