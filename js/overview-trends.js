@@ -539,7 +539,7 @@ function parseDate(value) {
 
       const latest = valid[valid.length - 1];
 
-      if (latest) {
+      if (latest && key !== 'attrition') {
         setCard(
           index,
           String(latest.value) + unit,
@@ -731,6 +731,102 @@ function parseDate(value) {
      OTHER KPI HISTORY
   ========================= */
 
+  // Build actual attendance trends from the connected attendance API daily rows.
+  // Aggregate PRESENT and ABSENT counts, never average daily percentages.
+  function getAttendanceTrend() {
+    const payload = getAttendancePayload();
+    if (!payload || !Array.isArray(payload.daily)) {
+      return { data: [], warning: 'Attendance API daily records have not loaded.' };
+    }
+    if (state.segment !== 'all') {
+      return { data: [], warning: 'Sales / Non-Sales / Blue Collar attendance needs employee-level dated attendance records in the API. The current daily summary has no employee category.' };
+    }
+    const buckets = new Map();
+    const today = new Date(); today.setHours(23,59,59,999);
+    const earliest = new Date(2026, 3, 1);
+    payload.daily.forEach(row => {
+      const d = parseDate(get(row, 'date', 'Attendance Date'));
+      if (!d || d < earliest || d > today) return;
+      const present = Number(get(row, 'present'));
+      const absent = Number(get(row, 'absent'));
+      if (!Number.isFinite(present) || !Number.isFinite(absent) || present + absent <= 0) return;
+      let periodEnd;
+      let key;
+      if (state.period === 'month') {
+        periodEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+        key = d.getFullYear() + '-' + d.getMonth();
+      } else {
+        periodEnd = new Date(d);
+        periodEnd.setDate(d.getDate() + (7 - d.getDay()) % 7);
+        key = dateKey(periodEnd);
+      }
+      const bucket = buckets.get(key) || { date: periodEnd, present: 0, absent: 0 };
+      bucket.present += present;
+      bucket.absent += absent;
+      buckets.set(key, bucket);
+    });
+    const data = [...buckets.values()].map(b => ({
+      date: b.date > today ? today : b.date,
+      value: 100 * b.present / (b.present + b.absent)
+    })).sort((a,b) => a.date - b.date);
+    return { data, warning: data.length ? 'Live Attendance Sheet · Present / (Present + Absent), weighted by records. Only dates available from the API are shown.' : 'No dated attendance records found from 01 Apr 2026.' };
+  }
+
+  // Use Last Working Day only. Historical headcount is reconstructed approximately
+  // from CURRENT active employee master + dated joiners and exit records.
+  function getAttritionTrend() {
+    const payload = getEmployeePayload();
+    const employees = getEmployeeRows();
+    if (!payload || !employees || !Array.isArray(payload.exits)) {
+      return { data: [], warning: 'Employee master or Exit Employee Data Sheet has not loaded.' };
+    }
+    const today = new Date(); today.setHours(23,59,59,999);
+    const first = new Date(2026,3,1);
+    const byId = new Map(), byName = new Map();
+    employees.forEach(e => {
+      const id = norm(get(e,'employeeId','employeeCode','Employee ID'));
+      const name = norm(get(e,'employeeName','displayName','name','Employee Name'));
+      if (id) byId.set(id,e);
+      if (name && !byName.has(name)) byName.set(name,e);
+    });
+    const seen = new Set(), exits = [];
+    let unmatched = 0;
+    payload.exits.forEach((e,i) => {
+      const d = parseDate(get(e,'lastWorkingDay','Last working Day','dateOfExit'));
+      if (!d || d > today) return;
+      const id = norm(get(e,'employeeId','employeeCode','Employee ID'));
+      const name = norm(get(e,'employeeName','Employee Name'));
+      const unique = id || (name ? name + ':' + dateKey(d) : 'row:' + i);
+      if (seen.has(unique)) return;
+      seen.add(unique);
+      const employee = (id && byId.get(id)) || (name && byName.get(name));
+      if (!employee) unmatched++;
+      exits.push({ date: d, employee });
+    });
+    if (state.segment !== 'all' && unmatched) {
+      // Unmatched exits are not assigned to any segment; make limitation explicit.
+    }
+    const selected = employees.filter(e => state.segment === 'all' || classify(e) === state.segment);
+    const current = selected.filter(isActive).length;
+    if (!current) return { data: [], warning: 'No employee headcount available for this segment.' };
+    const relevantExits = exits.filter(e => state.segment === 'all' || (e.employee && classify(e.employee) === state.segment));
+    const joinDates = selected.filter(isActive).map(e => parseDate(get(e,'doj','dateOfJoining','Date of Joining'))).filter(Boolean);
+    const endpoints = getPeriodEndpoints();
+    const data = endpoints.filter(d => d >= first).map(end => {
+      const windowStart = new Date(end); windowStart.setFullYear(windowStart.getFullYear()-1);
+      const countExits = relevantExits.filter(e => e.date > windowStart && e.date <= end).length;
+      // Reconstruct approximate workforce at each historical point from current active count.
+      const futureJoins = joinDates.filter(d => d > end && d <= today).length;
+      const futureExits = relevantExits.filter(e => e.date > end && e.date <= today).length;
+      const endHeadcount = current - futureJoins + futureExits;
+      const windowJoins = joinDates.filter(d => d > windowStart && d <= end).length;
+      const startHeadcount = endHeadcount - windowJoins + countExits;
+      const avg = (startHeadcount + endHeadcount)/2;
+      return { date: end > today ? today : end, value: avg > 0 && startHeadcount >= 0 ? 100 * countExits / avg : null };
+    }).filter(p => p.value !== null && Number.isFinite(p.value));
+    return { data, warning: 'Provisional rolling-12-month attrition · Exit Sheet Last Working Day only; estimated historical average headcount.' + (state.segment !== 'all' ? ' Unmatched exit records cannot be categorized.' : '') + ' Historical Keka headcount snapshots are needed for verified rates.' };
+  }
+
   function getSourceHistory() {
     const history = getConnectedHistory();
     const rows = history[state.key];
@@ -833,7 +929,11 @@ function parseDate(value) {
 
     const result = state.key === 'headcount'
       ? getWorkforceHistory()
-      : getSourceHistory();
+      : state.key === 'attendance'
+        ? getAttendanceTrend()
+        : state.key === 'attrition'
+          ? getAttritionTrend()
+          : getSourceHistory();
 
     const data = result.data;
 
@@ -913,7 +1013,7 @@ function parseDate(value) {
     const canvas = $('execTrendChart');
 
     
-if (data.length && typeof Chart === 'function') {
+if (canvas && data.length && typeof Chart === 'function') {
 
   let yAxisConfig;
 
@@ -1014,7 +1114,7 @@ if (state.key === 'headcount') {
   });
 }
 
-    canvas.style.display = data.length ? 'block' : 'none';
+    if (canvas) canvas.style.display = data.length ? 'block' : 'none';
   }
 
   /* =========================
