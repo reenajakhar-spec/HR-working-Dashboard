@@ -74,33 +74,98 @@
       const value=selected(id);
       return value==='all' || fields.some(f=>normalized(r[f])===normalized(value));
     });
-    // Search/status filters must not be silently ignored for historical series.
     const search=normalized(document.getElementById('employeeCrmSearch')?.value);
     const status=selected('employeeStatusFilter');
     if(search || status!=='all') return {
       values:new Map(),
       note:'Historical employee-level search/status snapshots are not available. Clear the search and select All Status to view supported monthly trends.'
     };
-    const joins=monthCount(rows,['doj','joiningDate','dateOfJoining','joining','joinDate'],match);
-    // Exit department/location/manager fields may be incomplete; do not imply a filtered exit count is accurate.
     const scoped=filters.some(([id])=>selected(id)!=='all');
-    const left=scoped ? new Map() : monthCount(exits,['lastWorkingDay'],null);
+    const today=new Date();
+    const joinFields=['doj','joiningDate','dateOfJoining','joining','joinDate'];
+    const joinDate=r=>dateOf(joinFields.map(f=>r[f]).find(v=>v!==null && v!==undefined && v!==''));
+    const personId=r=>normalized(r.employeeId||r.employeeNumber||r.empCode||r.emp_code||r.id);
+    const personName=r=>normalized(r.employeeName||r.displayName||r.name||r.fullName);
+    const people=rows.filter(match);
+    const joiners=monthCount(people,joinFields);
+    // The exit sheet's Last Working Day is authoritative. Final Status is ignored.
+    // Do not count future exits or repeated exit rows for the same person/date.
+    const exitSeen=new Set(), exitRecords=[];
+    for(const r of exits) {
+      const end=dateOf(r.lastWorkingDay);
+      if(!end || end>today) continue;
+      const id=personId(r), name=personName(r);
+      const fingerprint=(id?'id:'+id:name?'name:'+name:'row:'+JSON.stringify(r))+'|'+key(end)+'-'+end.getDate();
+      if(exitSeen.has(fingerprint)) continue;
+      exitSeen.add(fingerprint);
+      exitRecords.push({row:r,end,id,name});
+    }
+    const left=scoped?new Map():monthCount(exitRecords.map(x=>({lastWorkingDay:x.end})),['lastWorkingDay']);
     if(/New Joiners/i.test(label)) return {
-      values:joins,
-      note:'Monthly joiners by joining date from the employee master; selected workforce filters applied.'
+      values:joiners,
+      note:'Monthly joiners by Date of Joining from employee master. Existing department/location/manager filters applied.'
     };
     if(/Net Change/i.test(label)) {
-      if(scoped) return {values:new Map(),note:'Filtered historical exits cannot be verified from the available exit records. Department/location/manager dropdowns remain unchanged.'};
-      const keys=[...new Set([...joins.keys(),...left.keys()])].sort();
-      return {
-        values:new Map(keys.map(k=>[k,(joins.get(k)||0)-(left.get(k)||0)])),
-        note:'Provisional: joiners minus exit records by Last Working Day. Exit completion status, duplicates and missing historical records must be validated.'
-      };
+      if(scoped) return {values:new Map(),note:'Filtered historical exits cannot be verified because some exit records lack department/location/manager information.'};
+      const keys=[...new Set([...joiners.keys(),...left.keys()])].sort();
+      return {values:new Map(keys.map(k=>[k,(joiners.get(k)||0)-(left.get(k)||0)])),
+        note:'Provisional monthly net change: joiners minus unique exits by Last Working Day; Final Status ignored. Missing joiners in historical employee master may affect totals.'};
     }
-    return {
-      values:new Map(),
-      note:'This KPI requires verified month-end workforce snapshots. Current employee records cannot establish accurate past headcount, active population, under-3-month population or average tenure.'
-    };
+    // Reconstruct only from employees with dated joining records. Exit-only
+    // employees are included only when their own joining date is known.
+    // Never assume an unknown joining date or invent an historical snapshot.
+    const indexed=new Map();
+    for(const r of rows) {
+      const id=personId(r), name=personName(r), doj=joinDate(r);
+      if(!doj || doj>today) continue;
+      const k=id?'id:'+id:name?'name:'+name:null;
+      if(id && !indexed.has('id:'+id)) indexed.set('id:'+id,r);
+      if(name && !indexed.has('name:'+name)) indexed.set('name:'+name,r);
+    }
+    const matchedEnd=new Map();
+    const historical=[];
+    let missingExitDoj=0;
+    for(const x of exitRecords) {
+      const matchKey=x.id && indexed.has('id:'+x.id)?'id:'+x.id:
+        x.name && indexed.has('name:'+x.name)?'name:'+x.name:null;
+      if(matchKey) {
+        const old=matchedEnd.get(matchKey);
+        if(!old || x.end<old) matchedEnd.set(matchKey,x.end);
+        continue;
+      }
+      const doj=joinDate(x.row);
+      if(!doj || doj>x.end) {missingExitDoj++;continue;}
+      historical.push({r:x.row,doj,end:x.end});
+    }
+    for(const r of rows) {
+      const doj=joinDate(r);
+      if(!doj || doj>today) continue;
+      const id=personId(r),name=personName(r);
+      const k=id && indexed.has('id:'+id)?'id:'+id:
+        name && indexed.has('name:'+name)?'name:'+name:null;
+      historical.push({r,doj,end:k?matchedEnd.get(k)||null:null});
+    }
+    const values=new Map();
+    const start=new Date(2026,3,1);
+    for(let month=new Date(start.getFullYear(),start.getMonth(),1);
+        month<=today;month=new Date(month.getFullYear(),month.getMonth()+1,1)) {
+      const lastDay=new Date(month.getFullYear(),month.getMonth()+1,0);
+      const asOf=lastDay>today?today:lastDay;
+      const active=historical.filter(x=>x.doj<=asOf && (!x.end || x.end>asOf) && match(x.r));
+      let v=null;
+      if(/Total Employees|Active Employees/i.test(label)) v=active.length;
+      else if(/Under 3 Months/i.test(label)) {
+        const threshold=new Date(asOf.getFullYear(),asOf.getMonth()-3,asOf.getDate());
+        v=active.filter(x=>x.doj>threshold).length;
+      } else if(/Avg\.?\s*Tenure/i.test(label)) {
+        v=active.length?active.reduce((sum,x)=>sum+(asOf-x.doj)/86400000/365.2425,0)/active.length:null;
+      }
+      if(v!==null) values.set(key(month),v);
+    }
+    const coverage=missingExitDoj
+      ? missingExitDoj+' exit records lack a usable joining date/match and are excluded from reconstructed headcount. '
+      : '';
+    return {values,note:'PROVISIONAL reconstructed workforce, not verified month-end snapshots. Based on available joining dates and Last Working Day (Final Status ignored). '+coverage+'Earlier months may undercount former employees; current-month value may differ from live KPI. Department/location/manager filters use present-day attributes.'};
   }
   function attendanceSeries(label) {
     const p=getGlobal('attendancePayload');
