@@ -349,11 +349,26 @@
             pointRadius: 4
           }]
         },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } }
-        }
+        
+options: {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { display: false }
+  },
+  scales: {
+    y: {
+      beginAtZero: true,
+      min: 0,
+      suggestedMax: 500,
+      ticks: {
+        stepSize: 100,
+        precision: 0
+      }
+    }
+  }
+}
+
       });
     }
   }
