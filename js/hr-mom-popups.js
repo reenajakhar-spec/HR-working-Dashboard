@@ -271,9 +271,30 @@
 
     title.textContent = label + ' · Month-on-Month';
 
-    const pairs = result
-      ? [...result.values].sort((a, b) => a[0].localeCompare(b[0]))
-      : [];
+    
+// Current Financial Year: April to March
+const today = new Date();
+const fyStartYear = today.getMonth() >= 3
+  ? today.getFullYear()
+  : today.getFullYear() - 1;
+
+const fyStart = `${fyStartYear}-04`;
+const fyEnd = `${fyStartYear + 1}-03`;
+
+const currentMonth = today.getFullYear() + '-' +
+  String(today.getMonth() + 1).padStart(2, '0');
+
+// Show only current FY, excluding future months
+const pairs = result
+  ? [...result.values]
+      .filter(([month]) =>
+        month >= fyStart &&
+        month <= fyEnd &&
+        month <= currentMonth
+      )
+      .sort((a, b) => a[0].localeCompare(b[0]))
+  : [];
+
 
     note.textContent = result?.note ||
       'Load live data first to view historical trends.';
@@ -356,17 +377,17 @@ options: {
   plugins: {
     legend: { display: false }
   },
-  scales: {
-    y: {
-      beginAtZero: true,
-      min: 0,
-      suggestedMax: 500,
-      ticks: {
-        stepSize: 100,
-        precision: 0
-      }
+  
+scales: {
+  y: {
+    beginAtZero: true,
+    min: 0,
+    ticks: {
+      precision: 0,
+      maxTicksLimit: 7
     }
   }
+}
 }
 
       });
