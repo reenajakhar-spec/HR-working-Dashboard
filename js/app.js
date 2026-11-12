@@ -7108,15 +7108,28 @@ function teamObMonthlySeries(metric){
     const grouped=data.monthlyTrends?.[source]||data.monthlyHistory?.[source]||data.monthly?.[source];
     input=Array.isArray(grouped)?grouped:Array.isArray(grouped?.points)?grouped.points:[];
   }
-  const monthKey=r=>{
-    const raw=String(r.month||r.monthKey||r.period||r.yearMonth||r.date||r.monthStart||'').trim();
-    const iso=raw.match(/^(\d{4})[-/](\d{1,2})/);
-    if(iso)return iso[1]+'-'+iso[2].padStart(2,'0');
-    const d=new Date(raw);
-    return !Number.isNaN(d.getTime())?d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'):null;
-  };
-  return input.map(r=>({...r,__month:monthKey(r)})).filter(r=>r.__month).sort((a,b)=>a.__month.localeCompare(b.__month));
-}
+ 
+const today = new Date();
+const fyYear = today.getMonth() >= 3
+  ? today.getFullYear()
+  : today.getFullYear() - 1;
+
+const fyStart = fyYear + '-04';
+const fyEnd = (fyYear + 1) + '-03';
+const currentMonth =
+  today.getFullYear() + '-' +
+  String(today.getMonth() + 1).padStart(2, '0');
+
+return input
+  .map(r => ({ ...r, __month: monthKey(r) }))
+  .filter(r =>
+    r.__month &&
+    r.__month >= fyStart &&
+    r.__month <= fyEnd &&
+    r.__month <= currentMonth
+  )
+  .sort((a, b) => a.__month.localeCompare(b.__month));
+
 function teamObMonthLabel(month){
   const parts=String(month).split('-');
   return new Date(Number(parts[0]),Number(parts[1])-1,1).toLocaleDateString('en-IN',{month:'short',year:'numeric'});
@@ -7165,7 +7178,25 @@ function teamObOpenMom(id){
     chartWrap.style.display='none';
     tbody.innerHTML='<tr><td colspan="3" class="teamob-empty">No monthly history available.</td></tr>';
   }else{
-    note.textContent='Actual monthly history from the Team OB API. Missing metrics are shown as gaps, not zeroes. MoM compares with the immediately preceding month when both values are available.';
+    
+const latestMonth = valid[valid.length - 1].month;
+const now = new Date();
+const thisMonth =
+  now.getFullYear() + '-' +
+  String(now.getMonth() + 1).padStart(2, '0');
+
+note.textContent =
+  'Actual monthly history from the Team OB API. ' +
+  'Latest available month: ' +
+  teamObMonthLabel(latestMonth) + '. ' +
+  (latestMonth < thisMonth
+    ? 'No ' + teamObMonthLabel(thisMonth) +
+      ' history was returned by the API for this metric. ' +
+      'Check the Team OB Live sheet and backend monthlyTrends builder. '
+    : '') +
+  'Missing values are gaps, not zeroes. ' +
+  'Current KPI uses the selected reporting days ' +
+  'and may differ from monthly totals.';
     chartWrap.style.display='block';tbody.innerHTML='';
     rows.forEach((r,i)=>{
       const prev=i>0?rows[i-1].value:null;
@@ -7179,7 +7210,14 @@ function teamObOpenMom(id){
     });
     const canvas=document.getElementById('teamObMomChart');
     if(typeof Chart!=='undefined'&&canvas){
-      TEAM_OB_MOM_CHART=new Chart(canvas,{type:'line',data:{labels:rows.map(r=>teamObMonthLabel(r.month)),datasets:[{label:metric.title,data:rows.map(r=>r.value),borderColor:'#17616e',backgroundColor:'rgba(23,97,110,.10)',fill:true,tension:.28,pointRadius:4,spanGaps:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:false}}}});
+      TEAM_OB_MOM_CHART=new Chart(canvas,{type:'line',data:{labels:rows.map(r=>teamObMonthLabel(r.month)),datasets:[{label:metric.title,data:rows.map(r=>r.value),borderColor:'#17616e',backgroundColor:'rgba(23,97,110,.10)',fill:true,tension:.28,pointRadius:4,spanGaps:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{
+  beginAtZero:true,
+  min:0,
+  ticks:{
+    precision:metric.unit==='count'?0:2,
+    maxTicksLimit:7
+  }
+}}}});
     }
   }
   modal.classList.add('open');document.body.style.overflow='hidden';
