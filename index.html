@@ -1492,54 +1492,24 @@
 
   <div class="teamob-kpis">
     <div class="teamob-kpi teal" role="button" tabindex="0" aria-haspopup="dialog"><div class="teamob-kpi-label">Employees Analysed</div><div id="teamObKpiEmployees" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Combined Team OB population</div></div>
-    <div class="teamob-kpi green" role="button" tabindex="0" aria-haspopup="dialog"><div class="teamob-kpi-label">Avg Active Hours</div><div id="teamObKpiActive" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">System active time</div></div>
     <div class="teamob-kpi blue" role="button" tabindex="0" aria-haspopup="dialog"><div class="teamob-kpi-label">Avg Work Hours</div><div id="teamObKpiWork" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">System work hours</div></div>
     <div class="teamob-kpi violet" role="button" tabindex="0" aria-haspopup="dialog"><div class="teamob-kpi-label">Productivity vs Threshold</div><div id="teamObKpiProductivity" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Active time vs employee threshold</div></div>
-    <div class="teamob-kpi amber" role="button" tabindex="0" aria-haspopup="dialog"><div class="teamob-kpi-label">Avg Idle Time</div><div id="teamObKpiIdle" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Average idle hours</div></div>
     <div class="teamob-kpi red" role="button" tabindex="0" aria-haspopup="dialog"><div class="teamob-kpi-label">Email Response</div><div id="teamObKpiEmail" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Response compliance</div></div>
-    <div class="teamob-kpi red" role="button" tabindex="0" aria-haspopup="dialog"><div class="teamob-kpi-label">Missed / Rejected Calls</div><div id="teamObKpiMissed" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Latest call-source period</div></div>
-    <div class="teamob-kpi teal" role="button" tabindex="0" aria-haspopup="dialog"><div class="teamob-kpi-label">Talk Time</div><div id="teamObKpiTalk" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Total minutes</div></div>
   </div>
 
   <div class="teamob-section-head">
-    <div><h3>System Productivity</h3><p>Employee productivity and daily operating trend</p></div>
+    <div><h3>Productivity & Email Performance</h3><p>Threshold comparison and email responsiveness</p></div>
   </div>
-
   <div class="teamob-grid-2">
     <div class="teamob-panel">
       <h4>Active Hours vs Threshold</h4>
-      <p>Lowest productivity employees first</p>
+      <p>Employee productivity compared with assigned threshold</p>
       <div class="teamob-chart-tall"><canvas id="teamObThresholdChart"></canvas></div>
     </div>
-
-    <div class="teamob-panel">
-      <h4>Work / Active / Idle Hours</h4>
-      <p>Average hours for the current filtered population</p>
-      <div class="teamob-chart"><canvas id="teamObHoursChart"></canvas></div>
-    </div>
-  </div>
-
-  <div class="teamob-panel" style="margin-top:18px">
-    <h4>Daily Productivity Trend</h4>
-    <p>System source only; uses its own latest available period</p>
-    <div class="teamob-chart"><canvas id="teamObDailyChart"></canvas></div>
-  </div>
-
-  <div class="teamob-section-head">
-    <div><h3>Communication Discipline</h3><p>Email and call behaviour from their latest available source periods</p></div>
-  </div>
-
-  <div class="teamob-grid-2">
     <div class="teamob-panel">
       <h4>Email Responsiveness</h4>
       <p>External and internal emails not replied</p>
       <div class="teamob-chart"><canvas id="teamObEmailChart"></canvas></div>
-    </div>
-
-    <div class="teamob-panel">
-      <h4>Call Behaviour</h4>
-      <p>Outgoing calls vs missed / rejected calls</p>
-      <div class="teamob-chart"><canvas id="teamObCallChart"></canvas></div>
     </div>
   </div>
 
