@@ -6213,7 +6213,7 @@ if (!window.__payrollEscapeBound) {
 ========================================================= */
 
 const TEAM_OB_API_URL =
-  'https://script.google.com/macros/s/AKfycbxWzFltc06j3OmPFG62gtuvbj_SumQe3dvbPCcc5BurhqyXeeqRTXJjutzNKStXSJl-/exec';
+  'https://script.google.com/macros/s/AKfycbz8nFzY8Pz6zHROc1MfwPI13qYs-beQFndI65Av3HS3rNNJ7V_7wVntUvHT2UdHkYy4/exec';
 
 let TEAM_OB_DATA = null;
 let TEAM_OB_LOADED = false;
@@ -6347,7 +6347,7 @@ function teamObLoad(forceRefresh){
   }
 
   const daysEl = teamObEl('teamObDaysFilter');
-  const days = daysEl ? Number(daysEl.value || 7) : 7;
+  const days = daysEl ? Number(daysEl.value || 30) : 30;
 
   const script = document.createElement('script');
   script.id = 'teamObJsonpScript';
@@ -6364,17 +6364,13 @@ function teamObLoad(forceRefresh){
     console.error('Team OB API failed to load.');
   };
 
-  
-TEAM_OB_REQUEST_TIMER = setTimeout(function(){
-  if (TEAM_OB_LOADING) {
-    TEAM_OB_LOADING = false;
-    teamObSetStatus('API response timed out', 'error');
-    console.error(
-      'Team OB API did not respond within 180 seconds.'
-    );
-  }
-}, 180000);
-
+  TEAM_OB_REQUEST_TIMER = setTimeout(function(){
+    if(TEAM_OB_LOADING){
+      TEAM_OB_LOADING = false;
+      teamObSetStatus('Timeout','error');
+      console.error('Team OB API timeout.');
+    }
+  },45000);
 
   document.body.appendChild(script);
 }
@@ -6535,10 +6531,7 @@ function teamObRenderAll(){
 
   teamObRenderKpis(rows);
   teamObRenderThresholdChart(rows);
-  teamObRenderHoursChart(rows);
-  teamObRenderDailyChart();
   teamObRenderEmailChart(rows);
-  teamObRenderCallChart(rows);
   teamObRenderManagerTable(rows);
   teamObRenderDepartmentTable(rows);
   teamObRenderExceptions(rows);
@@ -6570,13 +6563,9 @@ function teamObRenderKpis(rows){
   const activeRows = rows.filter(r => teamObNum(r.systemDays) > 0);
 
   teamObSetText('teamObKpiEmployees', teamObFormatNum(rows.length,0));
-  teamObSetText('teamObKpiActive', teamObHours(teamObAverage(activeRows,'avgActiveHours')));
   teamObSetText('teamObKpiWork', teamObHours(teamObAverage(activeRows,'avgWorkHours')));
   teamObSetText('teamObKpiProductivity', teamObPct(teamObAverage(activeRows,'productivityPct')));
-  teamObSetText('teamObKpiIdle', teamObHours(teamObAverage(activeRows,'avgIdleHours')));
   teamObSetText('teamObKpiEmail', teamObPct(teamObAverage(rows,'emailResponsePct')));
-  teamObSetText('teamObKpiMissed', teamObFormatNum(teamObSum(rows,'missedOrRejectedCalls'),0));
-  teamObSetText('teamObKpiTalk', teamObMinutes(teamObSum(rows,'talkTimeMinutes')));
 }
 
 /* =========================
@@ -7092,13 +7081,9 @@ if(document.readyState === 'loading'){
 ===================================================== */
 const TEAM_OB_MOM_METRICS = {
   teamObKpiEmployees: {title:'Employees Analysed', key:'employees', aliases:['employeeCount','totalEmployees'],unit:'count'},
-  teamObKpiActive: {title:'Avg Active Hours',key:'avgActiveHours',unit:'hrs'},
   teamObKpiWork: {title:'Avg Work Hours',key:'avgWorkHours',unit:'hrs'},
   teamObKpiProductivity: {title:'Productivity vs Threshold',key:'productivityPct',unit:'%'},
-  teamObKpiIdle: {title:'Avg Idle Time',key:'avgIdleHours',unit:'hrs'},
   teamObKpiEmail: {title:'Email Response',key:'emailResponsePct',unit:'%'},
-  teamObKpiMissed: {title:'Missed / Rejected Calls',key:'missedOrRejectedCalls',unit:'count'},
-  teamObKpiTalk: {title:'Talk Time',key:'talkTimeMinutes',unit:'min'}
 };
 let TEAM_OB_MOM_CHART = null;
 let TEAM_OB_MOM_LAST_FOCUS = null;
@@ -7112,28 +7097,15 @@ function teamObMonthlySeries(metric){
     const grouped=data.monthlyTrends?.[source]||data.monthlyHistory?.[source]||data.monthly?.[source];
     input=Array.isArray(grouped)?grouped:Array.isArray(grouped?.points)?grouped.points:[];
   }
- 
-const today = new Date();
-const fyYear = today.getMonth() >= 3
-  ? today.getFullYear()
-  : today.getFullYear() - 1;
-
-const fyStart = fyYear + '-04';
-const fyEnd = (fyYear + 1) + '-03';
-const currentMonth =
-  today.getFullYear() + '-' +
-  String(today.getMonth() + 1).padStart(2, '0');
-
-return input
-  .map(r => ({ ...r, __month: monthKey(r) }))
-  .filter(r =>
-    r.__month &&
-    r.__month >= fyStart &&
-    r.__month <= fyEnd &&
-    r.__month <= currentMonth
-  )
-  .sort((a, b) => a.__month.localeCompare(b.__month));
-
+  const monthKey=r=>{
+    const raw=String(r.month||r.monthKey||r.period||r.yearMonth||r.date||r.monthStart||'').trim();
+    const iso=raw.match(/^(\d{4})[-/](\d{1,2})/);
+    if(iso)return iso[1]+'-'+iso[2].padStart(2,'0');
+    const d=new Date(raw);
+    return !Number.isNaN(d.getTime())?d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'):null;
+  };
+  return input.map(r=>({...r,__month:monthKey(r)})).filter(r=>r.__month && r.__month >= '2026-04').sort((a,b)=>a.__month.localeCompare(b.__month));
+}
 function teamObMonthLabel(month){
   const parts=String(month).split('-');
   return new Date(Number(parts[0]),Number(parts[1])-1,1).toLocaleDateString('en-IN',{month:'short',year:'numeric'});
@@ -7182,25 +7154,7 @@ function teamObOpenMom(id){
     chartWrap.style.display='none';
     tbody.innerHTML='<tr><td colspan="3" class="teamob-empty">No monthly history available.</td></tr>';
   }else{
-    
-const latestMonth = valid[valid.length - 1].month;
-const now = new Date();
-const thisMonth =
-  now.getFullYear() + '-' +
-  String(now.getMonth() + 1).padStart(2, '0');
-
-note.textContent =
-  'Actual monthly history from the Team OB API. ' +
-  'Latest available month: ' +
-  teamObMonthLabel(latestMonth) + '. ' +
-  (latestMonth < thisMonth
-    ? 'No ' + teamObMonthLabel(thisMonth) +
-      ' history was returned by the API for this metric. ' +
-      'Check the Team OB Live sheet and backend monthlyTrends builder. '
-    : '') +
-  'Missing values are gaps, not zeroes. ' +
-  'Current KPI uses the selected reporting days ' +
-  'and may differ from monthly totals.';
+    note.textContent='Actual monthly history from the Team OB API. Missing metrics are shown as gaps, not zeroes. MoM compares with the immediately preceding month when both values are available.';
     chartWrap.style.display='block';tbody.innerHTML='';
     rows.forEach((r,i)=>{
       const prev=i>0?rows[i-1].value:null;
@@ -7214,14 +7168,7 @@ note.textContent =
     });
     const canvas=document.getElementById('teamObMomChart');
     if(typeof Chart!=='undefined'&&canvas){
-      TEAM_OB_MOM_CHART=new Chart(canvas,{type:'line',data:{labels:rows.map(r=>teamObMonthLabel(r.month)),datasets:[{label:metric.title,data:rows.map(r=>r.value),borderColor:'#17616e',backgroundColor:'rgba(23,97,110,.10)',fill:true,tension:.28,pointRadius:4,spanGaps:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{
-  beginAtZero:true,
-  min:0,
-  ticks:{
-    precision:metric.unit==='count'?0:2,
-    maxTicksLimit:7
-  }
-}}}});
+      TEAM_OB_MOM_CHART=new Chart(canvas,{type:'line',data:{labels:rows.map(r=>teamObMonthLabel(r.month)),datasets:[{label:metric.title,data:rows.map(r=>r.value),borderColor:'#17616e',backgroundColor:'rgba(23,97,110,.10)',fill:true,tension:.28,pointRadius:4,spanGaps:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:false}}}});
     }
   }
   modal.classList.add('open');document.body.style.overflow='hidden';
