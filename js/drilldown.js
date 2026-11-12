@@ -1,471 +1,7252 @@
-/* Euronics HR Command Centre - non-destructive KPI drill-down */
-(function () {
-  'use strict';
-  const CARD_SELECTOR = '.kpi-card,.employee-kpi-card,.attendance-kpi-card,.teamob-kpi,.payroll-kpi,.lnd-kpi-card,.performance-kpi-card,.engagement-kpi-card,.compliance-kpi-card';
-  const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const clean = value => String(value == null ? '' : value).trim();
-  const num = value => { const n = Number(String(value == null ? '' : value).replace(/[,₹%]/g,'')); return Number.isFinite(n) ? n : null; };
-  let current = null;
-  const popup = document.createElement('div');
-  popup.id = 'hrBreakdownOverlay';
-  popup.innerHTML = '<section class="hrbd-panel" role="dialog" aria-modal="true" aria-labelledby="hrbdTitle"><header class="hrbd-head"><div><small>EURONICS · LIVE KPI DRILL-DOWN</small><h2 id="hrbdTitle"></h2><p id="hrbdDescription"></p></div><button type="button" id="hrbdClose" aria-label="Close popup">×</button></header><div id="hrbdBreadcrumb" class="hrbd-breadcrumb"></div><div id="hrbdContent" class="hrbd-content"></div><footer id="hrbdFoot" class="hrbd-foot"></footer></section>';
-  document.body.appendChild(popup);
-  const get = id => document.querySelector('#' + id);
-  function close(){popup.classList.remove('open');current=null;}
-  get('hrbdClose').addEventListener('click',close);
-  popup.addEventListener('click',e=>{if(e.target===popup)close();});
-  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&popup.classList.contains('open'))close();});
-  const field = (row,keys) => {for(const key of keys){if(row[key]!==undefined && clean(row[key]))return clean(row[key]);}return '';};
-  const groupField = (r,key) => key==='department' ? field(r,['department','Department','dept','Dept']) : key==='location' ? field(r,['branch','Branch','location','Location','Branch Name','office','city']) : field(r,['manager','Manager','reportingManager','Reporting Manager','reporting_manager','L1']);
-  function collarType(r) {
-    const raw=field(r,['workerType','Worker Type','worker_type','collarType','Collar Type','employeeType','Employee Type','employee_type','employmentCategory','employeeCategory','Employee Category']).toLowerCase().replace(/[\s_-]+/g,'');
-    return raw==='whitecollar'||raw==='white'?'White Collar':raw==='bluecollar'||raw==='blue'?'Blue Collar':'Not Classified';
-  }
-  function collarEmployees(rows) {
-    const unique=new Map();
-    rows.forEach((r,i)=>{
-      const status=field(r,['employmentStatus','Employment Status','employeeStatus','status','Status']).toLowerCase();
-      if(['inactive','exited','resigned','terminated','relieved','separated'].includes(status))return;
-      const id=field(r,['employeeCode','employeeId','Employee ID','emp_code','employeeNumber','employee_id']);
-      const key=id?'id:'+id.toLowerCase():'row:'+i;
-      if(!unique.has(key))unique.set(key,r);
-    });
-    return [...unique.values()];
-  }
-  const sources = {
-    employees: () => typeof EMPLOYEE_CRM_DATA!=='undefined' && EMPLOYEE_CRM_DATA && Array.isArray(EMPLOYEE_CRM_DATA.employees) ? EMPLOYEE_CRM_DATA.employees : null,
-    teamob: () => typeof TEAM_OB_DATA!=='undefined' && TEAM_OB_DATA && Array.isArray(TEAM_OB_DATA.employees) ? TEAM_OB_DATA.employees : null,
-    learning: () => typeof lndRows!=='undefined' && Array.isArray(lndRows) && lndRows.length ? lndRows : null,
-    payroll: () => typeof PAYROLL_DATA!=='undefined' && PAYROLL_DATA && (PAYROLL_DATA.employees || PAYROLL_DATA.rows || PAYROLL_DATA.records) || null,
-    attendance: () => typeof attendancePayload!=='undefined' && attendancePayload && (attendancePayload.employees || attendancePayload.records || attendancePayload.rows) || null,
-    sample: () => typeof HR_DATA!=='undefined' && HR_DATA && Array.isArray(HR_DATA.employees) ? HR_DATA.employees : null
-  };
-  function metricFor(card){
-    const label = clean(card.querySelector('[class*="label"],.title')?.textContent || card.querySelector('.label')?.textContent || card.textContent.split('\n')[0]);
-    const page = card.closest('.page')?.id || '';
-    const id = card.querySelector('[id*="Kpi"], [id*="kpi"]')?.id || '';
-    return {label,page,id};
-  }
-  function rowsFor(m){
-    if(m.page==='employees')return {rows:sources.employees(),source:'Employee CRM live API'};
-    if(m.page==='teamob')return {rows:sources.teamob(),source:'Team OB live API'};
-    if(m.page==='learning')return {rows:sources.learning(),source:'L&D live API'};
-    if(m.page==='payroll')return {rows:sources.payroll(),source:'Payroll live API'};
-    if(m.page==='attendance')return {rows:sources.attendance(),source:'Attendance live API'};
-    if(m.page==='overview'||m.page==='performance')return {rows:sources.employees(),source:'Employee CRM live API'};
-    return {rows:null,source:'This module'};
-  }
-  function kind(m){
-    const l=m.label.toLowerCase();
-    if(m.page==='payroll'){
-      if(l.includes('deduction'))return 'totalDeduction';
-      if(l.includes('net'))return 'netPayroll';
-      if(l.includes('arrear'))return 'arrearIncrement';
-      if(l.includes('hold'))return 'salaryHoldCount';
-      if(l.includes('lop'))return 'lopDays';
-      if(l.includes('employee')||l.includes('headcount'))return 'employeeCount';
-      return 'payrollCost';
-    }
-    if(m.page==='employees'){
-      if(l.includes('active'))return 'active';
-      if(l.includes('joiner'))return 'joiner';
-      if(l.includes('under 3')||l.includes('probation'))return 'probation';
-      if(l.includes('tenure'))return 'tenure';
-      if(l.includes('net change'))return 'netchange';
-      return 'count';
-    }
-    if(m.page==='teamob'){
-      if(l.includes('active hour'))return 'avgActiveHours';
-      if(l.includes('work hour'))return 'avgWorkHours';
-      if(l.includes('productivity'))return 'productivityPct';
-      if(l.includes('idle'))return 'avgIdleHours';
-      if(l.includes('email'))return 'emailResponsePct';
-      if(l.includes('missed'))return 'missedCalls';
-      if(l.includes('talk'))return 'talkTime';
-      return 'count';
-    }
-    if(m.page==='performance'){
-      if(l.includes('kra'))return 'kra';
-      if(l.includes('green'))return 'green';
-      if(l.includes('yellow'))return 'yellow';
-      if(l.includes('red')||l.includes('pip'))return 'pip';
-    }
-     if(m.page==='overview' && l.includes('white collar'))return 'whiteCollar';
-     if(m.page==='overview' && l.includes('blue collar'))return 'blueCollar';
-    if(m.page==='overview'){
-      if(l.includes('headcount'))return 'count';
-      if(l.includes('attendance'))return 'attendance';
-      if(l.includes('pip'))return 'pip';
-    }
-    return 'unsupported';
-  }
-  // Match the selected KPI population BEFORE grouping, so a manager with
-  // zero new joiners does not appear in the New Joiners MTD drill-down.
-  // Only the actual Date of Joining qualifies. Reject missing/ambiguous dates.
-  function joiningDate(row){
-    const raw=field(row,['doj','DOJ','dateOfJoining','Date of Joining','date_of_joining','joiningDate','Joining Date','joining_date','joining','Joining']);
-    if(!raw)return null;
-    let y,mo,day;
-    let match=raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:T|\s|$)/);
-    if(match){y=+match[1];mo=+match[2];day=+match[3];}
-    else {
-      match=raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
-      if(!match)return null;
-      day=+match[1];mo=+match[2];y=+match[3]; // DD/MM/YYYY (India)
-    }
-    const d=new Date(y,mo-1,day);
-    return d.getFullYear()===y&&d.getMonth()===mo-1&&d.getDate()===day?d:null;
-  }
-  function qualifyingRows(rows,k){
-    if(k!=='joiner'&&k!=='probation')return rows;
-    const now=new Date();
-    const monthStart=new Date(now.getFullYear(),now.getMonth(),1);
-    const probationStart=new Date(now.getFullYear(),now.getMonth()-3,now.getDate());
-    const seen=new Set();
-    return rows.filter(r=>{
-      const d=joiningDate(r);
-      if(!d||d>now)return false;
-      if(k==='joiner' && (d<monthStart||d.getMonth()!==now.getMonth()||d.getFullYear()!==now.getFullYear()))return false;
-      if(k==='probation'&&d<probationStart)return false;
-      const id=field(r,['employeeId','Employee ID','emp_code','empCode','employee_code','employeeCode','employee_id']);
-      const key=id?('id:'+id.toLowerCase()):('person:'+field(r,['name','employeeName','Employee Name','emp_name']).toLowerCase()+'|'+d.toISOString().slice(0,10));
-      if(seen.has(key))return false;
-      seen.add(key);
-      return true;
-    });
-  }
-  function compute(rows,k,m){
-    if(!rows.length)return null;
-    if(k==='count')return {value:rows.length,unit:'employees'};
-    if(k==='joiner'||k==='probation')return {value:rows.length,unit:'employees'};
-    if(k==='active')return {value:rows.filter(r=>r.active===true||String(r.active).toLowerCase()==='true'||String(r.status).toLowerCase()==='active').length,unit:'employees'};
-    if(k==='joiner'||k==='probation'||k==='tenure'||k==='netchange'){
-      const dated=rows.map(r=>({row:r,date:joiningDate(r)})).filter(x=>x.date);
-      if(!dated.length)return null;
-      const now=new Date();
-      if(k==='netchange')return null; // Exits must be provided to calculate net change.
-      if(k==='tenure')return {value:dated.reduce((s,x)=>s+(now-x.date)/31557600000,0)/dated.length,unit:'years',decimal:2};
-      const count=dated.filter(x=>k==='joiner'?(x.date.getMonth()===now.getMonth()&&x.date.getFullYear()===now.getFullYear()):((now-x.date)>=0&&(now-x.date)<92*86400000)).length;
-      return {value:count,unit:'employees'};
-    }
-    if(['green','yellow','pip'].includes(k))return {value:rows.filter(r=>{const s=field(r,['status','performanceStatus']).toLowerCase();return k==='pip'?(s==='pip'||s==='red'):s===k;}).length,unit:'employees'};
-    const map={kra:['kra','kraScore'],attendance:['attendance','attendancePct'],avgActiveHours:['avgActiveHours'],avgWorkHours:['avgWorkHours'],productivityPct:['productivityPct'],avgIdleHours:['avgIdleHours'],emailResponsePct:['emailResponsePct','emailResponse'],missedCalls:['missedCalls','missedRejectedCalls'],talkTime:['talkTime','talkTimeMinutes']};
-    if(!map[k])return null;
-    const values=rows.map(r=>{for(const f of map[k]){if(r[f]!==undefined&&r[f]!==null&&r[f]!==''){const v=num(r[f]);if(v!==null)return v;}}return null;}).filter(v=>v!==null);
-    if(!values.length)return null;
-    const total=values.reduce((a,b)=>a+b,0);
-    const sum=['missedCalls','talkTime'].includes(k);
-    return {value:sum?total:total/values.length,unit:['kra','attendance','productivityPct','emailResponsePct'].includes(k)?'%':['avgActiveHours','avgWorkHours','avgIdleHours'].includes(k)?'hours':k==='talkTime'?'minutes':k==='missedCalls'?'calls':'',decimal:sum?0:1};
-  }
-  function format(v){return v.value.toLocaleString('en-IN',{maximumFractionDigits:v.decimal??0,minimumFractionDigits:v.decimal??0})+(v.unit==='%'?'%':v.unit?' '+v.unit:'');}
-  function open(card){
-    const m=metricFor(card),data=rowsFor(m);
-    current={m,source:data.source,rows:Array.isArray(data.rows)?data.rows:null,path:[],k:kind(m)};
-    get('hrbdTitle').textContent=m.label;
-    get('hrbdDescription').textContent=m.page==='teamob'?'Department → Employee → Performance details':m.page==='attendance'?'Department-wise live attendance breakdown':'Department → Location → Reporting Manager';
-    popup.classList.add('open');render();
-  }
-  function render(){
-    if(!current)return;
-    const {rows,path,k,m,source}=current;
-    if(m.page==='attendance'){renderAttendanceDepartments();return;}
-    if(m.page==='learning'){renderLearningBreakdown();return;}
-    if(m.page==='teamob'){renderTeamObBreakdown();return;}
-    if(m.page==='payroll'){renderPayrollAggregate();return;}
-     if(m.page==='overview' && k==='count'){renderHeadcountCollarBreakdown();return;}
-    const crumbs=['All Departments',...path.map(x=>x.name)];
-    get('hrbdBreadcrumb').innerHTML=crumbs.map((v,i)=>`<button type="button" data-level="${i}">${esc(v)}</button>`).join('<span>›</span>');
-    get('hrbdBreadcrumb').querySelectorAll('button').forEach(b=>b.onclick=()=>{current.path=current.path.slice(0,Number(b.dataset.level));render();});
-    get('hrbdFoot').textContent='Source: '+source+'. Values are calculated from available employee-level records, not copied from headline KPI totals.';
-    if(!rows){get('hrbdContent').innerHTML='<div class="hrbd-empty">Employee-level records are not available for this module yet. Connect its API with Department, Location, Reporting Manager and the KPI metric to enable a live breakdown.</div>';return;}
-    if(k==='unsupported'){get('hrbdContent').innerHTML='<div class="hrbd-empty">This KPI requires its own employee-level metric or transaction records. A department split cannot be calculated reliably from headcount alone.</div>';return;}
-    let filtered=rows;
-    filtered=qualifyingRows(filtered,k);
-    for(const part of path)filtered=filtered.filter(r=>(groupField(r,part.key)||'Not mapped')===part.name);
-    const level=path.length;
-    const keys=['department','location','manager'];
-    if(level>=3){
-      const result=compute(filtered,k,m);
-      const employeeName = r => field(r,['employeeName','Employee Name','emp_name','empName','name','Name','fullName','Full Name','employee_name']);
-      const employeeId = r => field(r,['employeeId','Employee ID','emp_code','empCode','employee_code','employeeCode','employee_id','code']);
-      const people = filtered.map((r,i)=>({name:employeeName(r),id:employeeId(r),role:field(r,['designation','Designation','role','Role','jobTitle','Job Title'])})).sort((a,b)=>a.name.localeCompare(b.name));
-      const peopleHtml = people.map((person,i)=>`<div class="hrbd-person" style="display:flex;justify-content:space-between;gap:12px;padding:12px 4px;border-bottom:1px solid #e3edf0"><div><strong>${esc(person.name||'Name not provided by API')}</strong>${person.role?`<div style="font-size:12px;color:#72919a;margin-top:3px">${esc(person.role)}</div>`:''}</div><span style="color:#63818a;font-size:12px;white-space:nowrap">${esc(person.id)}</span></div>`).join('');
-      get('hrbdContent').innerHTML=`<div class="hrbd-total"><span>${esc(path[path.length-1].name)}</span><strong>${result?esc(format(result)):'Metric unavailable'}</strong></div><p class="hrbd-note">${filtered.length} qualifying employee records in this selection.</p><div style="margin-top:20px"><div class="hrbd-level">Employees under ${esc(path[path.length-1].name)} <span>${people.length} records</span></div>${peopleHtml}</div>`;
-      return;
-    }
-    const key=keys[level],groups=new Map();
-    filtered.forEach(r=>{const name=groupField(r,key)||'Not mapped';if(!groups.has(name))groups.set(name,[]);groups.get(name).push(r);});
-    const entries=[...groups].map(([name,items])=>({name,items,metric:compute(items,k,m)})).sort((a,b)=>(b.metric?.value??-1)-(a.metric?.value??-1));
-    if(!entries.length){get('hrbdContent').innerHTML='<div class="hrbd-empty">No matching employee records for this KPI in the selected period.</div>';return;}
-    const available=entries.filter(x=>x.metric!==null);
-    if(!available.length){get('hrbdContent').innerHTML='<div class="hrbd-empty">This KPI cannot be calculated from the available records. Its required date, status or metric fields are missing.</div>';return;}
-    const max=Math.max(...available.map(x=>x.metric.value),1);
-    get('hrbdContent').innerHTML=`<div class="hrbd-level">${['Department-wise','Location-wise','Reporting Manager-wise'][level]} breakdown <span>${entries.length} groups</span></div>`+entries.map((x,i)=>`<button class="hrbd-row" type="button" data-index="${i}"><div class="hrbd-row-top"><strong>${esc(x.name)}</strong><span>${x.metric?esc(format(x.metric)):'Unavailable'} <b>›</b></span></div><div class="hrbd-track"><div style="width:${x.metric?Math.max(0,Math.min(100,x.metric.value/max*100)):0}%"></div></div></button>`).join('');
-    get('hrbdContent').querySelectorAll('.hrbd-row').forEach(b=>b.onclick=()=>{current.path.push({key,name:entries[Number(b.dataset.index)].name});render();});
-  }
-  // Attendance API exposes department aggregates, not full employee attendance records.
-  // Use the real aggregates and never invent employee-level detail.
-  function renderAttendanceDepartments(){
-    const payload=typeof attendancePayload!=='undefined'?attendancePayload:null;
-    const departments=payload&&Array.isArray(payload.departments)?payload.departments:[];
-    const path=current.path;
-    const label=current.m.label.toLowerCase();
-    get('hrbdDescription').textContent='Department-wise attendance · Current dashboard period';
-    get('hrbdFoot').textContent='Source: Attendance live API, department aggregates. Attendance % uses present / (present + absent). Late instances and effective hours require department-level fields in the API.';
-    get('hrbdBreadcrumb').innerHTML='<button type="button" data-level="0">All Departments</button>'+(path.length?'<span>›</span><button type="button" data-level="1">'+esc(path[0].name)+'</button>':'');
-    get('hrbdBreadcrumb').querySelectorAll('button').forEach(b=>b.onclick=()=>{current.path=current.path.slice(0,Number(b.dataset.level));render();});
-    if(!departments.length){get('hrbdContent').innerHTML='<div class="hrbd-empty">Department attendance data has not loaded. Open Attendance, click Refresh Live Data and try again.</div>';return;}
-    function metric(r){
-      const present=num(r.present)||0,absent=num(r.absent)||0,other=num(r.other)||0;
-      if(label.includes('overall attendance'))return {value:present+absent?100*present/(present+absent):null,suffix:'%'};
-      if(label.includes('present'))return {value:present,suffix:''};
-      if(label.includes('absent'))return {value:absent,suffix:''};
-      if(label.includes('other'))return {value:other,suffix:''};
-      if(label.includes('total employees'))return {value:num(r.headcount),suffix:''};
-      if(label.includes('attendance records'))return {value:num(r.total)??present+absent+other,suffix:''};
-      if(label.includes('late'))return {value:num(r.lateCount??r.lateInstances),suffix:''};
-      if(label.includes('effective'))return {value:num(r.avgEffectiveHours),suffix:' hrs'};
-      return {value:null,suffix:''};
-    }
-    function fmt(v){return v.value===null?'Not available':v.value.toLocaleString('en-IN',{maximumFractionDigits:v.suffix==='%'?1:2})+v.suffix;}
-    function detail(r){
-      const stats=[['Employees',r.headcount],['Present Records',r.present],['Absent Records',r.absent],['Other Records',r.other],['Attendance Records',r.total??((num(r.present)||0)+(num(r.absent)||0)+(num(r.other)||0))],['Attendance Rate',metric({...r, present:r.present,absent:r.absent}).value]];
-      stats[5][1]=(num(r.present)||0)+(num(r.absent)||0)?(100*(num(r.present)||0)/((num(r.present)||0)+(num(r.absent)||0))).toFixed(1)+'%':'—';
-      return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:16px">'+stats.map(([name,value])=>'<div style="border:1px solid #dce9ed;border-radius:12px;padding:15px;background:#f8fbfc"><div style="color:#6d8790;font-size:12px">'+esc(name)+'</div><strong style="font-size:21px;color:#0e5260">'+esc(value??'—')+'</strong></div>').join('')+'</div>';
-    }
-    if(path.length){
-      const r=departments.find(x=>clean(x.department)===path[0].name);
-      if(!r){get('hrbdContent').innerHTML='<div class="hrbd-empty">Department not found in latest data.</div>';return;}
-      get('hrbdContent').innerHTML='<div class="hrbd-total"><span>'+esc(r.department)+'</span><strong>'+esc(fmt(metric(r)))+'</strong></div>'+detail(r)+'<p class="hrbd-note" style="margin-top:15px">Individual attendance entries are not included in this API response.</p>';
-      return;
-    }
-    const entries=departments.slice().sort((a,b)=>{const av=metric(a).value,bv=metric(b).value;return (bv??-Infinity)-(av??-Infinity);});
-    get('hrbdContent').innerHTML='<div class="hrbd-level">Department-wise '+esc(current.m.label)+' <span>'+entries.length+' departments</span></div>'+entries.map((r,i)=>'<button class="hrbd-row" type="button" data-index="'+i+'"><div class="hrbd-row-top"><strong>'+esc(r.department||'Not mapped')+'</strong><span>'+esc(fmt(metric(r)))+' <b>›</b></span></div><div style="font-size:12px;color:#6d8790;text-align:left;margin-top:6px">'+esc(r.headcount??'—')+' employees · '+esc(r.present??0)+' present · '+esc(r.absent??0)+' absent</div></button>').join('');
-    get('hrbdContent').querySelectorAll('.hrbd-row').forEach(b=>b.onclick=()=>{current.path=[{name:clean(entries[Number(b.dataset.index)].department)||'Not mapped'}];render();});
+const pageTitles = {
+  overview: ['Executive Overview', 'CEO & CHRO command view'],
+  employees: ['Employee CRM', 'Searchable employee 360° operating view'],
+  recruitment: ['Recruitment Pipeline', 'Requisition-to-joining funnel'],
+  attendance: ['Attendance & Leave', 'Attendance health and regularisation'],
+  performance: ['Performance Management', 'Green / Yellow / Red / PIP view'],
+  teamob: ['Team OB', 'Operating behaviour and communication discipline'],
+  payroll: ['Payroll & Compensation', 'Cost and compensation health'],
+  learning: ['L&D / EuroVersity', 'Training and certification'],
+  engagement: ['Engagement & Culture', 'Sentiment and recognition'],
+  compliance: ['Compliance & Statutory', 'Statutory readiness'],
+  alerts: ['Alerts & Action Centre', 'Ownership, due dates and follow-up']
+};
+
+/* =========================================================
+   DOM COMPATIBILITY SAFETY
+   Keeps the full app.js running even when a page section is
+   not present in the current index.html build. Real elements
+   are always returned when they exist.
+========================================================= */
+
+const __nativeGetElementById = document.getElementById.bind(document);
+const __missingElements = Object.create(null);
+
+document.getElementById = function(id) {
+  const real = __nativeGetElementById(id);
+  if (real) return real;
+
+  if (!__missingElements[id]) {
+    const dummy = document.createElement('div');
+    dummy.id = '__missing__' + id;
+    dummy.value = '';
+    __missingElements[id] = dummy;
   }
 
-  // Team OB: Department -> Employee -> performance details.
-  // Uses the department included in the deployed Team OB dashboard API.
-  function renderTeamObBreakdown(){
-    const state=current, path=state.path;
-    const data=typeof TEAM_OB_DATA!=='undefined'?TEAM_OB_DATA:null;
-    const raw=data&&Array.isArray(data.employees)?data.employees:null;
-    get('hrbdDescription').textContent='Department → Employee → Performance details';
-    get('hrbdFoot').textContent='Source: Team OB live dashboard API. Department comes from the mapped Team OB records. Metrics reflect the current reporting period.';
-    const crumbs=['All Departments',...path.map(p=>p.label||p.name)];
-    get('hrbdBreadcrumb').innerHTML=crumbs.map((v,i)=>`<button type="button" data-level="${i}">${esc(v)}</button>`).join('<span>›</span>');
-    get('hrbdBreadcrumb').querySelectorAll('button').forEach(b=>b.onclick=()=>{state.path=path.slice(0,Number(b.dataset.level));render();});
-    if(!raw){get('hrbdContent').innerHTML='<div class="hrbd-empty">Team OB data has not loaded. Open Team OB, wait for the live data, then retry.</div>';return;}
+  return __missingElements[id];
+};
 
-    const valid=v=>clean(v)&&!/^(unknown|not mapped|unassigned|n\/a|null|undefined)$/i.test(clean(v));
-    const norm=v=>clean(v).toLowerCase().replace(/\s+/g,'');
-    const crm=typeof EMPLOYEE_CRM_DATA!=='undefined'&&EMPLOYEE_CRM_DATA&&Array.isArray(EMPLOYEE_CRM_DATA.employees)?EMPLOYEE_CRM_DATA.employees:[];
-    const crmById=new Map(),crmByEmail=new Map();
-    crm.forEach(e=>{
-      const id=field(e,['employeeCode','employeeId','employeeNumber','Employee ID','emp_code','empCode','employee_id']);
-      const email=field(e,['email','Email','emailId','email_id']);
-      if(id)crmById.set(norm(id),e);
-      if(email)crmByEmail.set(norm(email),e);
-    });
-    const code=r=>field(r,['employeeCode','emp_code','employeeId','Employee ID','employeeNumber']);
-    const name=r=>field(r,['name','emp_name','employeeName','Employee Name'])||'Name unavailable';
-    const identity=r=>code(r)?'id:'+norm(code(r)):'name:'+norm(name(r))+'|'+norm(field(r,['email','Email']));
-    const department=r=>{
-      const direct=field(r,['department','Department','dept','Dept']);
-      if(valid(direct))return direct;
-      const fallback=crmById.get(norm(code(r)))||crmByEmail.get(norm(field(r,['email','Email'])));
-      const fromCrm=fallback?field(fallback,['department','Department','dept','Dept']):'';
-      return valid(fromCrm)?fromCrm:'Not mapped';
-    };
-    // Consolidate employee records so headcount and employee groups never double count.
-    const people=new Map();
-    raw.forEach(r=>{
-      const id=identity(r);
-      if(!people.has(id))people.set(id,{...r});
-      else {
-        const previous=people.get(id);
-        // Preserve populated fields from earlier rows, prefer latest populated fields.
-        Object.keys(r).forEach(k=>{if(r[k]!==null&&r[k]!==undefined&&clean(r[k])!=='')previous[k]=r[k];});
-      }
-    });
-    const all=[...people.values()];
-    const metricKeys={avgActiveHours:'avgActiveHours',avgWorkHours:'avgWorkHours',productivityPct:'productivityPct',avgIdleHours:'avgIdleHours',emailResponsePct:'emailResponsePct',missedCalls:'missedOrRejectedCalls',talkTime:'talkTimeMinutes'};
-    const key=metricKeys[state.k];
-    const number=(r,k)=>{const v=r[k];return v===null||v===undefined||clean(v)===''?null:num(v);};
-    const metric=rows=>{
-      if(state.k==='count')return {value:rows.length,unit:'employees'};
-      if(!key)return null;
-      const eligible=['avgActiveHours','avgWorkHours','productivityPct','avgIdleHours'].includes(state.k)?rows.filter(r=>(number(r,'systemDays')||0)>0):rows;
-      const values=eligible.map(r=>number(r,key)).filter(v=>v!==null);
-      if(!values.length)return null;
-      const total=values.reduce((a,b)=>a+b,0);
-      const isSum=state.k==='missedCalls'||state.k==='talkTime';
-      return {value:isSum?total:total/values.length,unit:['productivityPct','emailResponsePct'].includes(state.k)?'%':['avgActiveHours','avgWorkHours','avgIdleHours'].includes(state.k)?'hours':state.k==='talkTime'?'minutes':state.k==='missedCalls'?'calls':'',decimal:isSum?0:2};
-    };
-    const fmt=(v,d=2)=>v===null?'—':v.toLocaleString('en-IN',{maximumFractionDigits:d,minimumFractionDigits:d});
-    const selected=path[0]?all.filter(r=>department(r)===path[0].name):all;
-    const rows=path[1]?selected.filter(r=>identity(r)===path[1].name):selected;
-    const summary=metric(rows);
-    if(path.length===2){
-      const emp=rows[0];
-      if(!emp){get('hrbdContent').innerHTML='<div class="hrbd-empty">Employee not found.</div>';return;}
-      const fields=[['Employee Code',code(emp)||'—'],['Department',department(emp)],['System Days',number(emp,'systemDays')===null?'—':fmt(number(emp,'systemDays'),0)],['Avg Work Hours',number(emp,'avgWorkHours')===null?'—':fmt(number(emp,'avgWorkHours'))+' hrs'],['Avg Active Hours',number(emp,'avgActiveHours')===null?'—':fmt(number(emp,'avgActiveHours'))+' hrs'],['Avg Idle Hours',number(emp,'avgIdleHours')===null?'—':fmt(number(emp,'avgIdleHours'))+' hrs'],['Productivity',number(emp,'productivityPct')===null?'—':fmt(number(emp,'productivityPct'))+'%'],['Email Response',number(emp,'emailResponsePct')===null?'—':fmt(number(emp,'emailResponsePct'))+'%'],['Missed / Rejected Calls',number(emp,'missedOrRejectedCalls')===null?'—':fmt(number(emp,'missedOrRejectedCalls'),0)],['Talk Time',number(emp,'talkTimeMinutes')===null?'—':fmt(number(emp,'talkTimeMinutes'))+' min'],['Status',field(emp,['status'])||'—']];
-      get('hrbdContent').innerHTML=`<div class="hrbd-level">${esc(name(emp))} <span>${esc(code(emp))}</span></div><div class="hrbd-total"><span>${esc(state.m.label)}</span><strong>${summary?esc(format(summary)):'Unavailable'}</strong></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:10px;margin-top:18px">${fields.map(([label,value])=>`<div style="border:1px solid #dce9ed;border-radius:10px;padding:12px;background:#f8fbfc"><div style="font-size:12px;color:#607985">${esc(label)}</div><strong style="display:block;margin-top:5px;color:#164a55">${esc(value)}</strong></div>`).join('')}</div>`;
-      return;
-    }
-    const groups=new Map();
-    rows.forEach(r=>{const group=path.length===0?department(r):identity(r);if(!groups.has(group))groups.set(group,[]);groups.get(group).push(r);});
-    const entries=[...groups].map(([id,items])=>({id,items,metric:metric(items)})).sort((a,b)=>(b.metric?.value??-Infinity)-(a.metric?.value??-Infinity)||a.id.localeCompare(b.id));
-    get('hrbdContent').innerHTML=`<div class="hrbd-total"><span>${esc(state.m.label)}</span><strong>${summary?esc(format(summary)):'Unavailable'}</strong></div><div class="hrbd-level" style="margin-top:16px">${path.length===0?'Department-wise':'Employee-wise'} Team OB <span>${entries.length} ${path.length===0?'departments':'employees'}</span></div>`+(entries.length?entries.map((x,i)=>`<button class="hrbd-row" type="button" data-index="${i}"><div class="hrbd-row-top"><strong>${esc(path.length===1?name(x.items[0]):x.id)} ${path.length===1?`<small style="font-weight:400;color:#63818a">${esc(code(x.items[0]))}</small>`:''}</strong><span>${x.metric?esc(format(x.metric)):'—'} <b>›</b></span></div><div style="font-size:12px;color:#607985;text-align:left;margin-top:5px">${path.length===0?x.items.length+' employees':esc(department(x.items[0]))}</div></button>`).join(''):'<div class="hrbd-empty">No employee records found.</div>');
-    get('hrbdContent').querySelectorAll('.hrbd-row').forEach(b=>b.onclick=()=>{const x=entries[Number(b.dataset.index)];state.path.push({key:path.length===0?'department':'employee',name:x.id,label:path.length===0?x.id:name(x.items[0])});render();});
+function navigate(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+  const pageEl = document.getElementById(page);
+  if (pageEl) pageEl.classList.add('active');
+
+  const navBtn = document.querySelector(`.nav-item[data-page="${page}"]`);
+  if (navBtn) navBtn.classList.add('active');
+
+  if (pageTitles[page]) {
+    document.getElementById('pageTitle').textContent = pageTitles[page][0];
+    document.getElementById('pageSub').textContent = pageTitles[page][1];
   }
 
-  // L&D: Region -> Branch -> Employee -> individual training sessions.
-  // Calculations use the same source rows and present/active conventions as app.js.
-  function renderLearningBreakdown(){
-    const state=current, path=state.path;
-    const raw=Array.isArray(state.rows)?state.rows:null;
-    get('hrbdDescription').textContent='Region → Branch → Employee → Training details';
-    get('hrbdFoot').textContent='Source: L&D live training records. Hours count attended sessions; averages exclude missing scores. Training rating is the Feedback Score (out of 5).';
-    const names=['All Regions',...path.map(p=>p.name)];
-    get('hrbdBreadcrumb').innerHTML=names.map((v,i)=>`<button type="button" data-level="${i}">${esc(v)}</button>`).join('<span>›</span>');
-    get('hrbdBreadcrumb').querySelectorAll('button').forEach(b=>b.onclick=()=>{state.path=path.slice(0,Number(b.dataset.level));render();});
-    if(!raw){get('hrbdContent').innerHTML='<div class="hrbd-empty">L&D live data has not loaded yet. Open L&D and wait for the Live status, then retry.</div>';return;}
-    const val=(r,keys)=>field(r,keys);
-    const region=r=>val(r,['Region','region'])||'Not mapped';
-    const branch=r=>val(r,['Branch Name','branch','Branch','location'])||'Not mapped';
-    const eid=r=>val(r,['Employee ID','Employee ID 2','employeeId','emp_code']);
-    const ename=r=>val(r,['Attendees','Employee Name','employeeName','name'])||'Name unavailable';
-    const identity=r=>eid(r)?'id:'+eid(r).toLowerCase():'name:'+ename(r).toLowerCase()+'|'+branch(r).toLowerCase();
-    const active=r=>val(r,['Status','status']).toLowerCase()!=='not active';
-    const present=r=>val(r,['Attendance','attendance']).toLowerCase()==='present';
-    const score=(r,keys)=>{const v=val(r,keys);return v===''?null:num(v);};
-    const duration=r=>score(r,['Duration (in hours)','Duration','Training Hours','duration']);
-    const feedback=r=>score(r,['Feedback Score','Training Rating','Rating','feedbackScore']);
-    const assessment=r=>score(r,['Assesment Score','Assessment Score','assessmentScore']);
-    const average=xs=>{const ok=xs.filter(x=>x!==null&&Number.isFinite(x));return ok.length?ok.reduce((a,b)=>a+b,0)/ok.length:null;};
-    const fmt=(n,d=1)=>n===null?'—':n.toLocaleString('en-IN',{minimumFractionDigits:d,maximumFractionDigits:d});
-    const metrics=rows=>{
-      const valid=rows.filter(active), attended=valid.filter(present);
-      const unique=new Set(attended.map(identity));
-      const hours=attended.reduce((sum,r)=>sum+(duration(r)||0),0);
-      return {employees:unique.size,sessions:attended.length,hours,avgHours:attended.length?hours/attended.length:null,avgPerEmployee:unique.size?hours/unique.size:null,rating:average(attended.map(feedback)),assessment:average(attended.map(assessment)),attendanceRate:valid.length?attended.length/valid.length*100:null};
-    };
-    let rows=raw;
-    if(path[0])rows=rows.filter(r=>region(r)===path[0].name);
-    if(path[1])rows=rows.filter(r=>branch(r)===path[1].name);
-    if(path[2])rows=rows.filter(r=>identity(r)===path[2].name);
-    const m=metrics(rows);
-    const statHtml=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:18px">${[
-      ['Employees Trained',String(m.employees)],['Sessions Attended',String(m.sessions)],['Total Training Hours',fmt(m.hours)],['Avg Training Hours / Session',fmt(m.avgHours)],['Avg Hours / Employee',fmt(m.avgPerEmployee)],['Avg Training Rating',m.rating===null?'—':fmt(m.rating)+' / 5'],['Avg Assessment Score',m.assessment===null?'—':fmt(m.assessment)+'%'],['Attendance Rate',m.attendanceRate===null?'—':fmt(m.attendanceRate)+'%']
-    ].map(([k,v])=>`<div style="border:1px solid #dce9ed;border-radius:10px;padding:12px;background:#f8fbfc"><div style="font-size:11px;color:#607985">${esc(k)}</div><strong style="display:block;margin-top:5px;font-size:17px;color:#164a55">${esc(v)}</strong></div>`).join('')}</div>`;
-    if(path.length===3){
-      const sorted=[...rows].sort((a,b)=>String(b.Date||'').localeCompare(String(a.Date||'')));
-      get('hrbdContent').innerHTML=`<div class="hrbd-level">${esc(ename(rows[0]||{}))} <span>${esc(eid(rows[0]||{}))}</span></div>${statHtml}<div class="hrbd-level">Employee-wise training details <span>${sorted.length} records</span></div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr>${['Date','Training Topic','Mode','Hours','Attendance','Training Rating','Assessment Score'].map(x=>`<th style="text-align:left;padding:10px 8px;border-bottom:1px solid #dce9ed;white-space:nowrap">${x}</th>`).join('')}</tr></thead><tbody>${sorted.map(r=>`<tr>${[val(r,['Date']),val(r,['Training Topic']),val(r,['Mode']),duration(r)===null?'—':fmt(duration(r)),val(r,['Attendance']),feedback(r)===null?'—':fmt(feedback(r))+' / 5',assessment(r)===null?'—':fmt(assessment(r))+'%'].map(x=>`<td style="padding:10px 8px;border-bottom:1px solid #edf1f3;white-space:nowrap">${esc(x)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
-      return;
-    }
-    const key=path.length===0?region:path.length===1?branch:identity;
-    const groups=new Map();
-    rows.forEach(r=>{const k=key(r);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(r);});
-    const entries=[...groups].map(([name,items])=>({name,items,m:metrics(items)})).sort((a,b)=>b.m.hours-a.m.hours||a.name.localeCompare(b.name));
-    const title=['Region-wise training','Branch-wise training','Employee-wise training'][path.length];
-    get('hrbdContent').innerHTML=statHtml+`<div class="hrbd-level">${title} <span>${entries.length} groups</span></div>`+(entries.length?entries.map((x,i)=>{
-      const label=path.length===2?ename(x.items[0]):x.name;
-      const subtitle=path.length===2?eid(x.items[0]):x.m.employees+' employees trained';
-      return `<button class="hrbd-row" type="button" data-index="${i}"><div class="hrbd-row-top"><strong>${esc(label)} <small style="font-weight:400;color:#63818a">${esc(subtitle)}</small></strong><span>${fmt(x.m.hours)} hrs · ${x.m.sessions} sessions <b>›</b></span></div><div style="font-size:12px;color:#607985;margin-top:5px;text-align:left">Avg hours ${fmt(x.m.avgHours)} · Rating ${x.m.rating===null?'—':fmt(x.m.rating)+'/5'} · Assessment ${x.m.assessment===null?'—':fmt(x.m.assessment)+'%'}</div></button>`;
-    }).join(''):'<div class="hrbd-empty">No training records match this selection.</div>');
-    get('hrbdContent').querySelectorAll('.hrbd-row').forEach(b=>b.onclick=()=>{state.path.push({key:['region','branch','employee'][path.length],name:entries[Number(b.dataset.index)].name});render();});
-  }
-  // Payroll is aggregate-only. Never infer individual salaries or manager totals.
-  function renderPayrollAggregate(){
-    const state=current;
-    const payload=typeof PAYROLL_DATA!=='undefined' ? PAYROLL_DATA : null;
-    const path=state.path;
-    const metric=state.k;
-    const supported=['payrollCost','totalDeduction','netPayroll','arrearIncrement','employeeCount','salaryHoldCount','lopDays'];
-    const label=state.m.label;
-    const crumbs=['All Departments',...path.map(p=>p.name)];
-    get('hrbdBreadcrumb').innerHTML=crumbs.map((v,i)=>`<button type="button" data-level="${i}">${esc(v)}</button>`).join('<span>›</span>');
-    get('hrbdBreadcrumb').querySelectorAll('button').forEach(b=>b.onclick=()=>{state.path=state.path.slice(0,Number(b.dataset.level));render();});
-    get('hrbdDescription').textContent='Department → Location → Employee · Latest payroll month';
-    get('hrbdFoot').textContent='Source: Payroll live API, '+(payload?.latestMonth||'latest available month')+'. Employee names and IDs are shown; individual salaries remain private.';
-    if(!payload || !Array.isArray(payload.latestDepartmentLocationBreakdown)){
-      get('hrbdContent').innerHTML='<div class="hrbd-empty">The deployed Payroll API has not returned the Department → Location breakdown. Deploy the updated Code.gs, then refresh Payroll.</div>';
-      return;
-    }
-    if(!supported.includes(metric)){
-      get('hrbdContent').innerHTML='<div class="hrbd-empty">This payroll metric is not available in the aggregate API.</div>';return;
-    }
-    const data=payload.latestDepartmentLocationBreakdown;
-    const money=['payrollCost','totalDeduction','netPayroll','arrearIncrement'].includes(metric);
-    const fmt=v=>money?'₹'+Number(v||0).toLocaleString('en-IN',{maximumFractionDigits:2,minimumFractionDigits:2}):Number(v||0).toLocaleString('en-IN',{maximumFractionDigits:metric==='lopDays'?1:0});
-    if(path.length>=2){
-      const rows=data.filter(r=>String(r.department||'Not mapped')===path[0].name&&String(r.location||'Not mapped')===path[1].name);
-      const total=rows.reduce((sum,r)=>sum+Number(r[metric]||0),0);
-      const directory=Array.isArray(payload.latestPayrollEmployeeDirectory)?payload.latestPayrollEmployeeDirectory:[];
-      const people=directory.filter(r=>String(r.department||'Not mapped')===path[0].name&&String(r.location||'Not mapped')===path[1].name).sort((a,b)=>String(a.employeeName||'').localeCompare(String(b.employeeName||'')));
-      const peopleHtml=people.map(person=>`<div class="hrbd-person" style="display:flex;justify-content:space-between;gap:12px;padding:12px 4px;border-bottom:1px solid #e3edf0"><strong>${esc(person.employeeName||'Name unavailable')}</strong><span style="color:#63818a;font-size:12px;white-space:nowrap">${esc(person.employeeId||'')}</span></div>`).join('');
-      get('hrbdContent').innerHTML=`<div class="hrbd-total"><span>${esc(label)} · ${esc(path[1].name)}</span><strong>${fmt(total)}</strong></div><div style="margin-top:18px"><div class="hrbd-level">Employees in ${esc(path[1].name)} <span>${people.length} employees</span></div>${peopleHtml||'<p class="hrbd-note">Employee names are not available yet. Redeploy the updated payroll backend and refresh live data.</p>'}</div><p class="hrbd-note" style="margin-top:12px">Payroll total is for the selected department and location. Individual salary amounts are not published in this dashboard.</p>`;
-      return;
-    }
-    const key=path.length===0?'department':'location';
-    const rows=path.length===0?data:data.filter(r=>String(r.department||'Not mapped')===path[0].name);
-    const groups=new Map();
-    rows.forEach(r=>{const name=String(r[key]||'Not mapped');groups.set(name,(groups.get(name)||0)+Number(r[metric]||0));});
-    const entries=[...groups].map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value);
-    if(!entries.length){get('hrbdContent').innerHTML='<div class="hrbd-empty">No payroll breakdown records found.</div>';return;}
-    const max=Math.max(...entries.map(x=>Math.abs(x.value)),1);
-    get('hrbdContent').innerHTML=`<div class="hrbd-level">${path.length===0?'Department-wise':'Location-wise'} ${esc(label)} <span>${entries.length} groups</span></div>`+entries.map((x,i)=>`<button class="hrbd-row" type="button" data-index="${i}"><div class="hrbd-row-top"><strong>${esc(x.name)}</strong><span>${fmt(x.value)} <b>›</b></span></div><div class="hrbd-track"><div style="width:${Math.min(100,Math.abs(x.value)/max*100)}%"></div></div></button>`).join('');
-    get('hrbdContent').querySelectorAll('.hrbd-row').forEach(b=>b.onclick=()=>{state.path.push({key,name:entries[Number(b.dataset.index)].name});render();});
-  }
-   // Executive Overview Total Headcount: Collar -> Department -> Employee details.
-   // No additional KPI cards are created.
-   function renderHeadcountCollarBreakdown(){
-     const state=current,path=state.path;
-     const raw=sources.employees();
-     get('hrbdDescription').textContent='White / Blue Collar → Department → Employee details';
-     get('hrbdFoot').textContent='Source: Employee CRM / Keka live API. Counts use unique active employee records. Unclassified employees remain visible separately until the API mapping is provided.';
-     const crumbs=['All Employees',...path.map(p=>p.name)];
-     get('hrbdBreadcrumb').innerHTML=crumbs.map((v,i)=>`<button type="button" data-level="${i}">${esc(v)}</button>`).join('<span>›</span>');
-     get('hrbdBreadcrumb').querySelectorAll('button').forEach(b=>b.onclick=()=>{state.path=path.slice(0,Number(b.dataset.level));render();});
-     if(!Array.isArray(raw)){
-       get('hrbdContent').innerHTML='<div class="hrbd-empty">Employee CRM live records have not loaded. Open Employee CRM, refresh live data and retry.</div>';
-       return;
-     }
-     const all=collarEmployees(raw);
-     const dept=r=>groupField(r,'department')||'Not mapped';
-     const name=r=>field(r,['employeeName','Employee Name','name','emp_name','fullName'])||'Name unavailable';
-     const code=r=>field(r,['employeeCode','employeeId','Employee ID','emp_code','employeeNumber']);
-     let rows=all;
-     if(path[0])rows=rows.filter(r=>collarType(r)===path[0].name);
-     if(path[1])rows=rows.filter(r=>dept(r)===path[1].name);
-     const summary=`<div class="hrbd-total"><span>${esc(path.length?path[path.length-1].name:'Live Employee Headcount')}</span><strong>${rows.length.toLocaleString('en-IN')} employees</strong></div>`;
-     if(path.length>=2){
-       const sorted=rows.slice().sort((a,b)=>name(a).localeCompare(name(b)));
-       get('hrbdContent').innerHTML=summary+`<div class="hrbd-level" style="margin-top:18px">Employee Details <span>${sorted.length} employees</span></div>`+sorted.map(r=>`<div class="hrbd-person" style="padding:12px 4px;border-bottom:1px solid #e3edf0"><div style="display:flex;justify-content:space-between;gap:12px"><strong>${esc(name(r))}</strong><span style="font-size:12px;color:#63818a">${esc(code(r))}</span></div><div style="font-size:12px;color:#607985;margin-top:5px">${esc(field(r,['designation','Designation','jobTitle','role'])||'Designation not mapped')} · ${esc(field(r,['location','Location','branch','Branch'])||'Location not mapped')} · ${esc(field(r,['reportingManager','Reporting Manager','manager'])||'Manager not mapped')}</div></div>`).join('');
-       return;
-     }
-     const groups=new Map();
-     rows.forEach(r=>{const key=path.length===0?collarType(r):dept(r);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(r);});
-     const entries=[...groups].map(([name,items])=>({name,count:items.length})).sort((a,b)=>b.count-a.count);
-     get('hrbdContent').innerHTML=summary+`<div class="hrbd-level" style="margin-top:18px">${path.length===0?'Employee Category':'Department-wise Headcount'} <span>${entries.length} groups</span></div>`+entries.map((e,i)=>`<button class="hrbd-row" type="button" data-index="${i}"><div class="hrbd-row-top"><strong>${esc(e.name)}</strong><span>${e.count} employees <b>›</b></span></div></button>`).join('');
-     get('hrbdContent').querySelectorAll('.hrbd-row').forEach(b=>b.onclick=()=>{state.path.push({name:entries[Number(b.dataset.index)].name});render();});
-   }
+  /* Hide only the outer HR header while Recruitment is open. */
+  document.body.classList.toggle('recruitment-mode', page === 'recruitment');
 
-  function enhance(){
-    document.querySelectorAll(CARD_SELECTOR).forEach(card=>{
-      if(card.dataset.hrbdEnhanced)return;
-      if(card.closest('#hrBreakdownOverlay'))return;
-      if(card.closest('#overview'))return;
-      card.dataset.hrbdEnhanced='1';
-      const button=document.createElement('button');
-      button.type='button';button.className='hrbd-trigger';button.textContent='View Breakdown ↗';
-      button.setAttribute('aria-label','View KPI breakdown');
-      button.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();open(card);});
-      card.appendChild(button);
-    });
+  /* Keep menu compact after selection. */
+  if (window.innerWidth <= 760) {
+    document.body.classList.remove('mobile-menu-open');
+  } else {
+    document.body.classList.add('sidebar-collapsed');
   }
-  enhance();
-  const observer=new MutationObserver(()=>enhance());
-  observer.observe(document.body,{childList:true,subtree:true});
+
+  window.scrollTo({
+    top: 0,
+    behavior: 'smooth'
+  });
+
+  if (
+    page === 'employees' &&
+    typeof loadEmployeeCrmLive === 'function'
+  ) {
+    setTimeout(function() {
+      loadEmployeeCrmLive(false);
+    }, 50);
+  }
+
+  if (
+    page === 'attendance' &&
+    typeof loadAttendanceLive === 'function'
+  ) {
+    setTimeout(function() {
+      loadAttendanceLive(false);
+    }, 50);
+  }
+
+  if (
+    page === 'learning' &&
+    typeof loadLndLive === 'function'
+  ) {
+    setTimeout(function() {
+      loadLndLive(false);
+    }, 50);
+  }
+
+  if (
+    page === 'payroll' &&
+    typeof loadPayrollLive === 'function'
+  ) {
+    setTimeout(function() {
+      loadPayrollLive(false);
+    }, 50);
+  }
+
+  if (
+    page === 'teamob' &&
+    typeof teamObLoad === 'function'
+  ) {
+    setTimeout(function() {
+      teamObLoad(false);
+    }, 50);
+  }
+}
+
+document.querySelectorAll('.nav-item').forEach(btn => {
+  btn.addEventListener('click', () => {
+    navigate(btn.dataset.page);
+  });
+});
+
+document.querySelectorAll('[data-page-jump]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    navigate(btn.dataset.pageJump);
+  });
+});
+
+
+function kpi(label, value, sub = '', cls = '') {
+  return `
+    <div class="kpi-card ${cls}">
+      <div class="label">${label}</div>
+      <div class="value">${value}</div>
+      <div class="sub ${sub.includes('▲') ? 'good' : sub.includes('▼') ? 'bad' : ''}">
+        ${sub}
+      </div>
+    </div>
+  `;
+}
+
+
+/* =========================
+   OVERVIEW
+========================= */
+
+document.getElementById('overviewKpis').innerHTML = [
+  kpi('Total Headcount', '—', 'Loading employee master...'),
+  kpi('Attendance Rate', '—', 'Waiting for attendance records'),
+  kpi('Attrition (Rolling 12M)', '—', 'Waiting for exit history'),
+  kpi('Open Positions', '—', 'Recruitment source not linked to overview', 'warn'),
+  kpi('eNPS Score', '—', 'Survey history not connected', 'highlight')
+].join('');
+
+
+makeLineChart(
+  'headcountChart',
+  [],
+  [],
+  'Headcount'
+);
+
+
+makeLineChart(
+  'attritionChart',
+  [],
+  [],
+  'Attrition %'
+);
+
+
+const departments = [
+  ['Production', 89.1, 81, 'red'],
+  ['Sales & BD', 96.2, 74, 'amber'],
+  ['Quality', 94.8, 85, 'green'],
+  ['Supply Chain', 95.5, 79, 'green'],
+  ['Engineering/NPD', 97.1, 88, 'green']
+];
+
+
+document.getElementById('departmentHealth').innerHTML =
+  departments.map(d => `
+    <div class="health-row">
+
+      <div class="health-main">
+
+        <div class="health-dot ${d[3]}"></div>
+
+        <div>
+          <div class="health-name">
+            ${d[0]}
+          </div>
+
+          <div class="health-meta">
+            Attendance ${d[1]}% · Avg KRA ${d[2]}%
+          </div>
+        </div>
+
+      </div>
+
+      <div class="health-score">
+        ${d[2]}%
+      </div>
+
+    </div>
+  `).join('');
+
+
+function alertCard(a) {
+  const cls = a.priority.toLowerCase();
+
+  return `
+    <div class="alert-card">
+
+      <div class="alert-left">
+
+        <span class="priority-pill priority-${cls}">
+          ${a.priority}
+        </span>
+
+        <div>
+          <div class="alert-title">
+            ${a.action}
+          </div>
+
+          <div class="alert-meta">
+            ${a.owner} · Due ${a.due}
+          </div>
+        </div>
+
+      </div>
+
+      <span class="status-pill status-${a.status.toLowerCase().replaceAll(' ', '')}">
+        ${a.status}
+      </span>
+
+    </div>
+  `;
+}
+
+
+document.getElementById('priorityAlerts').innerHTML =
+  HR_DATA.alerts
+    .slice(0, 4)
+    .map(alertCard)
+    .join('');
+
+
+/* =========================
+   EMPLOYEE CRM
+========================= */
+
+function renderEmployees() {
+
+  const q =
+    document.getElementById('employeeSearch')
+      .value
+      .toLowerCase();
+
+  const globalQ =
+    document.getElementById('globalSearch')
+      .value
+      .toLowerCase();
+
+  const loc =
+    document.getElementById('filterLocation')
+      .value;
+
+  const dept =
+    document.getElementById('filterDepartment')
+      .value;
+
+  const manager =
+    document.getElementById('filterManager')
+      .value;
+
+  const status =
+    document.getElementById('filterStatus')
+      .value;
+
+
+  const rows = HR_DATA.employees.filter(e => {
+
+    const text =
+      `${e.name} ${e.role} ${e.department} ${e.manager} ${e.location}`
+        .toLowerCase();
+
+
+    return (
+
+      (!q || text.includes(q)) &&
+
+      (!globalQ || text.includes(globalQ)) &&
+
+      (loc === 'all' || e.location === loc) &&
+
+      (dept === 'all' || e.department === dept) &&
+
+      (manager === 'all' || e.manager === manager) &&
+
+      (status === 'all' || e.status === status)
+
+    );
+
+  });
+
+
+  document.getElementById('employeeCount').textContent =
+    rows.length;
+
+
+  document.getElementById('employeeTableBody').innerHTML =
+    rows.map(e => `
+
+      <tr>
+
+        <td>
+
+          <div class="emp-name">
+            ${e.name}
+          </div>
+
+          <div class="emp-role">
+            ${e.role}
+          </div>
+
+        </td>
+
+
+        <td>
+          ${e.department}
+        </td>
+
+
+        <td>
+          ${e.manager}
+        </td>
+
+
+        <td>
+          ${e.location}
+        </td>
+
+
+        <td>
+          ${e.attendance}%
+        </td>
+
+
+        <td>
+          ${e.kra}%
+        </td>
+
+
+        <td>
+
+          <span class="status-pill status-${e.status.toLowerCase()}">
+            ${e.status}
+          </span>
+
+        </td>
+
+
+        <td>
+
+          <button
+            class="view-btn"
+            onclick="openEmployee(${e.id})"
+          >
+            View 360°
+          </button>
+
+        </td>
+
+      </tr>
+
+    `).join('');
+
+}
+
+
+document
+  .getElementById('employeeSearch')
+  .addEventListener(
+    'input',
+    renderEmployees
+  );
+
+
+document
+  .getElementById('globalSearch')
+  .addEventListener(
+    'input',
+    renderEmployees
+  );
+
+
+[
+  'filterLocation',
+  'filterDepartment',
+  'filterManager',
+  'filterStatus'
+].forEach(id => {
+
+  document
+    .getElementById(id)
+    .addEventListener(
+      'change',
+      renderEmployees
+    );
+
+});
+
+
+document
+  .getElementById('resetFilters')
+  .addEventListener(
+    'click',
+    () => {
+
+      [
+        'filterLocation',
+        'filterDepartment',
+        'filterManager',
+        'filterStatus'
+      ].forEach(id => {
+
+        document
+          .getElementById(id)
+          .value = 'all';
+
+      });
+
+
+      document
+        .getElementById('globalSearch')
+        .value = '';
+
+
+      document
+        .getElementById('employeeSearch')
+        .value = '';
+
+
+      renderEmployees();
+
+    }
+  );
+
+
+renderEmployees();
+
+
+/* =========================
+   EMPLOYEE 360 DRAWER
+========================= */
+
+function openEmployee(id) {
+
+  const e =
+    HR_DATA.employees.find(
+      x => x.id === id
+    );
+
+
+  if (!e) return;
+
+
+  document
+    .getElementById('drawerName')
+    .textContent = e.name;
+
+
+  document
+    .getElementById('drawerRole')
+    .textContent =
+      `${e.role} · ${e.department}`;
+
+
+  document
+    .getElementById('drawerBody')
+    .innerHTML = `
+
+      <div class="profile-grid">
+
+        ${profileCard('Manager', e.manager)}
+
+        ${profileCard('Location', e.location)}
+
+        ${profileCard('Joining Date', e.joining)}
+
+        ${profileCard('Tenure', e.tenure)}
+
+        ${profileCard('Attendance', e.attendance + '%')}
+
+        ${profileCard('KRA Score', e.kra + '%')}
+
+        ${profileCard('Status', e.status)}
+
+        ${profileCard('Band', e.band)}
+
+        ${profileCard('Leave Balance', e.leave)}
+
+        ${profileCard('Training', e.training)}
+
+        ${profileCard('Recognition', e.recognition)}
+
+      </div>
+
+
+      <div class="profile-section">
+
+        <h4>
+          Employee Timeline
+        </h4>
+
+
+        ${e.timeline.map(t => {
+
+          const split =
+            t.split(' · ');
+
+
+          return `
+
+            <div class="timeline-item">
+
+              <strong>
+                ${split[0]}
+              </strong>
+
+              ${split[1] || ''}
+
+            </div>
+
+          `;
+
+        }).join('')}
+
+      </div>
+
+    `;
+
+
+  document
+    .getElementById('employeeDrawer')
+    .classList
+    .add('open');
+
+
+  document
+    .getElementById('drawerOverlay')
+    .classList
+    .add('open');
+
+}
+
+
+function profileCard(label, value) {
+
+  return `
+
+    <div class="profile-card">
+
+      <div class="profile-label">
+        ${label}
+      </div>
+
+      <div class="profile-value">
+        ${value}
+      </div>
+
+    </div>
+
+  `;
+
+}
+
+
+function closeDrawer() {
+
+  document
+    .getElementById('employeeDrawer')
+    .classList
+    .remove('open');
+
+
+  document
+    .getElementById('drawerOverlay')
+    .classList
+    .remove('open');
+
+}
+
+
+document
+  .getElementById('drawerClose')
+  .addEventListener(
+    'click',
+    closeDrawer
+  );
+
+
+document
+  .getElementById('drawerOverlay')
+  .addEventListener(
+    'click',
+    closeDrawer
+  );
+
+
+/* =========================
+   RECRUITMENT
+========================= */
+
+/* Recruitment is now the existing Apps Script TA Panel embedded in index.html.
+   No JSON/fetch layer is required here. */
+
+function toggleSidebar() {
+  if (window.innerWidth <= 760) {
+    document.body.classList.toggle('mobile-menu-open');
+    return;
+  }
+
+  document.body.classList.toggle('sidebar-collapsed');
+}
+
+function recruitmentFrameLoaded() {
+  /* Kept intentionally light: iframe itself is the live dashboard. */
+}
+
+function refreshRecruitmentDashboard() {
+  const frame = document.getElementById('recruitmentFrame');
+  if (!frame) return;
+
+  frame.src = 'https://script.google.com/a/macros/euronics.co.in/s/AKfycbxA8vc8YBnpl1u3lbi8L-K_jHOKVXJPc3j1h1Ggs7c_M2MhpUFxFSGZFDyy88zMLTPg/exec?refresh=' + Date.now();
+}
+
+/* Mobile hamburger remains available even when the sidebar is off canvas. */
+(function createMobileMenuButton() {
+  if (document.querySelector('.mobile-menu-fab')) return;
+
+  const btn = document.createElement('button');
+  btn.className = 'mobile-menu-fab';
+  btn.type = 'button';
+  btn.setAttribute('aria-label', 'Open navigation');
+  btn.innerHTML = '&#9776;';
+  btn.addEventListener('click', toggleSidebar);
+  document.body.appendChild(btn);
 })();
+
+/* Default desktop view: compact sidebar. */
+if (window.innerWidth > 760) {
+  document.body.classList.add('sidebar-collapsed');
+}
+
+/* =========================
+   PERFORMANCE
+========================= */
+
+document.getElementById('performanceKpis').innerHTML = [
+
+  kpi(
+    'Avg KRA Score',
+    '78%',
+    'Company-wide'
+  ),
+
+  kpi(
+    'Green',
+    '71%',
+    'Healthy workforce'
+  ),
+
+  kpi(
+    'Yellow',
+    '18%',
+    'Coaching required',
+    'warn'
+  ),
+
+  kpi(
+    'Red / PIP',
+    '11%',
+    'Immediate action'
+  )
+
+].join('');
+
+
+document.getElementById('performanceMatrix').innerHTML = `
+
+  <div class="matrix-row matrix-head">
+
+    <div>Employee</div>
+    <div>Attendance</div>
+    <div>KRA</div>
+    <div>Status</div>
+    <div>Manager</div>
+
+  </div>
+
+
+  ${HR_DATA.employees
+    .slice(0, 8)
+    .map(e => `
+
+      <div class="matrix-row">
+
+        <div class="matrix-name">
+          ${e.name}
+        </div>
+
+        <div>
+          ${e.attendance}%
+        </div>
+
+        <div>
+          ${e.kra}%
+        </div>
+
+        <div>
+
+          <span
+            class="status-pill
+            status-${e.status.toLowerCase()}"
+          >
+            ${e.status}
+          </span>
+
+        </div>
+
+        <div>
+          ${e.manager}
+        </div>
+
+      </div>
+
+    `)
+    .join('')}
+
+`;
+
+
+
+
+/* =========================================================
+   L&D / EUROVERSITY - LIVE PROFESSIONAL DASHBOARD
+========================================================= */
+
+const LND_API_URL =
+  'https://script.google.com/macros/s/AKfycbxqmkCfNuLBmohAKGlFR9W8R8rdqXqlJkHn5kt0xLio3n37J2JhGndSyhIJ2Mu3gqMw3Q/exec';
+
+
+let lndRows = [];
+let lndLoaded = false;
+let lndGroupFilter = 'all';
+
+const LND_CHARTS = {};
+
+
+const LND_COLORS = {
+
+  teal: '#17616E',
+
+  tealDeep: '#0F444E',
+
+  green: '#70AD47',
+
+  amber: '#FFC000',
+
+  navy: '#1F3864',
+
+  light: '#EEF1F4',
+
+  muted: '#5B6472'
+
+};
+
+
+/* =========================================================
+   HELPERS
+========================================================= */
+
+function lndClean(value){
+
+  return String(
+    value === undefined ||
+    value === null
+      ? ''
+      : value
+  ).trim();
+
+}
+
+
+function lndNumber(value){
+
+  const cleaned =
+    lndClean(value)
+      .replace(/,/g,'')
+      .replace(/%/g,'');
+
+  const num =
+    parseFloat(cleaned);
+
+  return Number.isFinite(num)
+    ? num
+    : null;
+
+}
+
+
+function lndEscape(value){
+
+  return lndClean(value)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#039;');
+
+}
+
+
+function lndDate(value){
+
+  let text =
+    lndClean(value);
+
+  if(!text){
+    return null;
+  }
+
+  text =
+    text
+      .replace(
+        /(\d+)(st|nd|rd|th)/gi,
+        '$1'
+      )
+      .replace(/\s+/g,' ')
+      .trim();
+
+  if(!/\b\d{4}\b/.test(text)){
+    text += ' 2026';
+  }
+
+  const d =
+    new Date(text);
+
+  return Number.isNaN(
+    d.getTime()
+  )
+    ? null
+    : d;
+
+}
+
+
+function lndIsPresent(row){
+
+  return (
+    lndClean(
+      row.Attendance
+    ).toLowerCase()
+    ===
+    'present'
+  );
+
+}
+
+
+function lndIsActive(row){
+
+  return (
+    lndClean(
+      row.Status
+    ).toLowerCase()
+    !==
+    'not active'
+  );
+
+}
+
+
+function lndEmployeeKey(row){
+
+  return (
+    lndClean(row['Employee ID']) ||
+    lndClean(row['Employee ID 2']) ||
+    lndClean(row.Attendees).toLowerCase()
+  );
+
+}
+
+
+function lndAverage(values){
+
+  const valid =
+    values.filter(
+      value =>
+        value !== null &&
+        Number.isFinite(value)
+    );
+
+  if(!valid.length){
+    return null;
+  }
+
+  return (
+    valid.reduce(
+      (sum,value) =>
+        sum + value,
+      0
+    )
+    /
+    valid.length
+  );
+
+}
+
+
+function lndUnique(values){
+
+  return [
+    ...new Set(
+      values
+        .map(lndClean)
+        .filter(Boolean)
+    )
+  ];
+
+}
+
+
+function destroyLndChart(id){
+
+  if(
+    LND_CHARTS[id]
+  ){
+
+    LND_CHARTS[id].destroy();
+
+    delete LND_CHARTS[id];
+
+  }
+
+}
+
+
+/* =========================================================
+   LIVE FETCH
+========================================================= */
+
+let lndRequestTimer = null;
+
+function setLndStatus(text, type = '') {
+  const status = __nativeGetElementById('learningLiveStatus');
+  if (!status) return;
+
+  status.textContent = text;
+  status.classList.remove('live', 'error');
+  if (type) status.classList.add(type);
+}
+
+function loadLndLive(force = false) {
+  if (lndLoaded && !force) {
+    renderLndDashboard();
+    return;
+  }
+
+  setLndStatus('Connecting...');
+
+  const recordCount = __nativeGetElementById('lndHeaderRecordCount');
+  if (recordCount) recordCount.textContent = '-';
+
+  const previous = __nativeGetElementById('lndJsonpScript');
+  if (previous) previous.remove();
+
+  if (lndRequestTimer) clearTimeout(lndRequestTimer);
+
+  window.receiveLndData = function(payload) {
+    console.log('L&D JSONP response:', payload);
+
+    if (lndRequestTimer) clearTimeout(lndRequestTimer);
+
+    try {
+      if (!payload || payload.ok !== true) {
+        throw new Error((payload && payload.error) || 'L&D API returned an invalid response');
+      }
+
+      if (!Array.isArray(payload.rows)) {
+        throw new Error('rows[] missing from L&D response');
+      }
+
+      lndRows = payload.rows;
+      lndLoaded = true;
+
+      if (recordCount) {
+        recordCount.textContent = payload.rowCount ?? lndRows.length;
+      }
+
+      setLndStatus('● Live', 'live');
+      initialiseLndFilters();
+      renderLndDashboard();
+
+      console.log('L&D dashboard loaded successfully:', lndRows.length, 'records');
+    } catch (error) {
+      console.error('L&D response processing failed:', error);
+      setLndStatus('Data Error', 'error');
+    }
+  };
+
+  const script = document.createElement('script');
+  script.id = 'lndJsonpScript';
+
+  const separator = LND_API_URL.includes('?') ? '&' : '?';
+  script.src =
+    LND_API_URL +
+    separator +
+    'callback=receiveLndData' +
+    '&_=' +
+    Date.now();
+
+  script.async = true;
+
+  script.onload = function() {
+    console.log('L&D JSONP script loaded:', script.src);
+  };
+
+  script.onerror = function(event) {
+    console.error('Unable to load L&D JSONP endpoint:', event, script.src);
+    if (lndRequestTimer) clearTimeout(lndRequestTimer);
+    setLndStatus('Connection Failed', 'error');
+  };
+
+  document.head.appendChild(script);
+
+  lndRequestTimer = setTimeout(function() {
+    if (!lndLoaded) {
+      console.error('L&D request timeout. URL:', script.src);
+      setLndStatus('Connection Timeout', 'error');
+    }
+  }, 15000);
+}
+
+
+/* =========================================================
+   FILTER SETUP
+========================================================= */
+
+function populateLndSelect(
+  id,
+  values,
+  firstLabel
+){
+
+  const el =
+    document.getElementById(id);
+
+
+  if(!el){
+    return;
+  }
+
+
+  el.innerHTML =
+
+    '<option value="all">' +
+    firstLabel +
+    '</option>' +
+
+    lndUnique(values)
+      .sort(
+        (a,b) =>
+          a.localeCompare(b)
+      )
+      .map(
+        value =>
+
+          '<option value="' +
+          lndEscape(value) +
+          '">' +
+
+          lndEscape(value) +
+
+          '</option>'
+
+      )
+      .join('');
+
+}
+
+
+function initialiseLndFilters(){
+
+  populateLndSelect(
+    'lndRegion',
+    lndRows.map(
+      row => row.Region
+    ),
+    'Region: All'
+  );
+
+
+  populateLndSelect(
+    'lndBranch',
+    lndRows.map(
+      row =>
+        row['Branch Name']
+    ),
+    'Branch: All'
+  );
+
+
+  populateLndSelect(
+    'lndMode',
+    lndRows.map(
+      row => row.Mode
+    ),
+    'Mode: All'
+  );
+
+
+  populateLndSelect(
+    'lndTopic',
+    lndRows.map(
+      row =>
+        row['Training Topic']
+    ),
+    'All Training Topics'
+  );
+
+}
+
+
+function setLndGroupFilter(
+  group,
+  button
+){
+
+  lndGroupFilter =
+    group;
+
+
+  document
+    .querySelectorAll(
+      '.lnd-chip'
+    )
+    .forEach(
+      el =>
+        el.classList.remove(
+          'active'
+        )
+    );
+
+
+  button.classList.add(
+    'active'
+  );
+
+
+  renderLndDashboard();
+
+}
+
+
+/* =========================================================
+   FILTER DATA
+========================================================= */
+
+function getFilteredLndRows(){
+
+  const search =
+    lndClean(
+      document.getElementById(
+        'lndSearch'
+      )?.value
+    ).toLowerCase();
+
+
+  const region =
+    document.getElementById(
+      'lndRegion'
+    )?.value ||
+    'all';
+
+
+  const branch =
+    document.getElementById(
+      'lndBranch'
+    )?.value ||
+    'all';
+
+
+  const mode =
+    document.getElementById(
+      'lndMode'
+    )?.value ||
+    'all';
+
+
+  const topic =
+    document.getElementById(
+      'lndTopic'
+    )?.value ||
+    'all';
+
+
+  const attendance =
+    document.getElementById(
+      'lndAttendance'
+    )?.value ||
+    'all';
+
+
+  return lndRows.filter(
+    row => {
+
+      const group =
+        lndClean(
+          row.Group
+        );
+
+
+      const text =
+        [
+
+          row.Attendees,
+
+          row[
+            'Training Topic'
+          ],
+
+          row[
+            'Branch Name'
+          ],
+
+          row.Region,
+
+          row.L1,
+
+          row.L2
+
+        ]
+        .map(lndClean)
+        .join(' ')
+        .toLowerCase();
+
+
+      return (
+
+        (
+          !search ||
+          text.includes(search)
+        )
+
+        &&
+
+        (
+          region === 'all' ||
+          lndClean(
+            row.Region
+          ) === region
+        )
+
+        &&
+
+        (
+          branch === 'all' ||
+          lndClean(
+            row[
+              'Branch Name'
+            ]
+          ) === branch
+        )
+
+        &&
+
+        (
+          mode === 'all' ||
+          lndClean(
+            row.Mode
+          ) === mode
+        )
+
+        &&
+
+        (
+          topic === 'all' ||
+          lndClean(
+            row[
+              'Training Topic'
+            ]
+          ) === topic
+        )
+
+        &&
+
+        (
+          attendance === 'all' ||
+          lndClean(
+            row.Attendance
+          ) === attendance
+        )
+
+        &&
+
+        (
+          lndGroupFilter === 'all' ||
+          group
+            .toLowerCase()
+            .includes(
+              lndGroupFilter
+                .toLowerCase()
+            )
+        )
+
+      );
+
+    }
+  );
+
+}
+
+
+/* =========================================================
+   KPI CARDS
+========================================================= */
+
+function renderProfessionalLndKpis(rows){
+
+  const active =
+    rows.filter(
+      lndIsActive
+    );
+
+
+  const present =
+    active.filter(
+      lndIsPresent
+    );
+
+
+  const employees =
+    new Set(
+      active
+        .map(
+          lndEmployeeKey
+        )
+        .filter(Boolean)
+    );
+
+
+  const trained =
+    new Set(
+      present
+        .map(
+          lndEmployeeKey
+        )
+        .filter(Boolean)
+    );
+
+
+  const totalEmployees =
+    employees.size;
+
+
+  const employeesTrained =
+    trained.size;
+
+
+  const coverage =
+    totalEmployees
+      ?
+        employeesTrained /
+        totalEmployees *
+        100
+      :
+        0;
+
+
+  const hours =
+    present.reduce(
+      (sum,row) =>
+
+        sum +
+        (
+          lndNumber(
+            row[
+              'Duration (in hours)'
+            ]
+          )
+          || 0
+        ),
+
+      0
+    );
+
+
+  const avgHours =
+    employeesTrained
+      ?
+        hours /
+        employeesTrained
+      :
+        0;
+
+
+  const programs =
+    new Set(
+
+      present.map(
+        row =>
+
+          [
+
+            row[
+              'Training Topic'
+            ],
+
+            row.Date,
+
+            row[
+              'Branch Name'
+            ]
+
+          ]
+          .map(lndClean)
+          .join('|')
+
+      )
+
+    ).size;
+
+
+  const attended =
+    rows.filter(
+      lndIsPresent
+    ).length;
+
+
+  const absent =
+    rows.filter(
+      row =>
+        lndClean(
+          row.Attendance
+        ).toLowerCase()
+        ===
+        'absent'
+    ).length;
+
+
+  const completion =
+    attended + absent
+      ?
+        attended /
+        (
+          attended +
+          absent
+        )
+        *
+        100
+      :
+        0;
+
+
+  const feedback =
+    lndAverage(
+      rows.map(
+        row =>
+          lndNumber(
+            row[
+              'Feedback Score'
+            ]
+          )
+      )
+    );
+
+
+  const assessment =
+    lndAverage(
+      rows.map(
+        row =>
+          lndNumber(
+            row[
+              'Assesment Score'
+            ]
+          )
+      )
+    );
+
+
+  const data = [
+
+    {
+      title:
+        'Total Employees',
+
+      value:
+        totalEmployees,
+
+      sub:
+        'Active employee population',
+
+      accent:
+        LND_COLORS.teal
+    },
+
+    {
+      title:
+        'Employees Trained',
+
+      value:
+        employeesTrained,
+
+      sub:
+        'Unique employees attended training',
+
+      accent:
+        LND_COLORS.teal
+    },
+
+    {
+      title:
+        'Training Coverage %',
+
+      value:
+        coverage.toFixed(1) +
+        '%',
+
+      sub:
+        'Trained ÷ active employees',
+
+      accent:
+        LND_COLORS.green
+    },
+
+    {
+      title:
+        'Total Learning Hours',
+
+      value:
+        hours.toFixed(1),
+
+      sub:
+        'Aggregate learning hours',
+
+      accent:
+        LND_COLORS.teal
+    },
+
+    {
+      title:
+        'Avg. Hours / Employee',
+
+      value:
+        avgHours.toFixed(1),
+
+      sub:
+        'Learning hours per employee',
+
+      accent:
+        LND_COLORS.navy
+    },
+
+    {
+      title:
+        'Programs Conducted',
+
+      value:
+        programs,
+
+      sub:
+        'Unique training sessions',
+
+      accent:
+        LND_COLORS.amber
+    },
+
+    {
+      title:
+        'Completion Rate %',
+
+      value:
+        completion.toFixed(1) +
+        '%',
+
+      sub:
+        attended +
+        ' present · ' +
+        absent +
+        ' absent',
+
+      accent:
+        LND_COLORS.green
+    },
+
+    {
+      title:
+        'Avg. Training Rating',
+
+      value:
+        feedback === null
+          ? '-'
+          : feedback.toFixed(1) +
+            ' / 5',
+
+      sub:
+        'Participant feedback',
+
+      accent:
+        LND_COLORS.amber
+    },
+
+    {
+      title:
+        'Assessment Score',
+
+      value:
+        assessment === null
+          ? '-'
+          : assessment.toFixed(1) +
+            '%',
+
+      sub:
+        'Average assessment score',
+
+      accent:
+        LND_COLORS.navy
+    }
+
+  ];
+
+
+  const target =
+    document.getElementById(
+      'learningKpis'
+    );
+
+
+  if(!target){
+    return;
+  }
+
+
+  target.innerHTML =
+    data.map(
+      item => `
+
+        <div
+          class="lnd-kpi-card"
+          style="--accent:${item.accent}"
+        >
+
+          <div class="title">
+            ${item.title}
+          </div>
+
+          <div class="value">
+            ${item.value}
+          </div>
+
+          <div class="sub">
+            ${item.sub}
+          </div>
+
+        </div>
+
+      `
+    )
+    .join('');
+
+}
+
+
+/* =========================================================
+   MONTHLY DATA
+========================================================= */
+
+function getLndMonthly(rows){
+
+  const map = {};
+
+
+  rows.forEach(
+    row => {
+
+      const date =
+        lndDate(
+          row.Date
+        );
+
+
+      if(!date){
+        return;
+      }
+
+
+      const key =
+        date.getFullYear() +
+        '-' +
+        String(
+          date.getMonth() + 1
+        ).padStart(
+          2,
+          '0'
+        );
+
+
+      if(!map[key]){
+
+        map[key] = {
+
+          hours:0,
+
+          sessions:
+            new Set(),
+
+          employees:
+            new Set(),
+
+          activeEmployees:
+            new Set(),
+
+          assessment:[]
+
+        };
+
+      }
+
+
+      const item =
+        map[key];
+
+
+      if(
+        lndIsActive(row)
+      ){
+
+        item.activeEmployees.add(
+          lndEmployeeKey(row)
+        );
+
+      }
+
+
+      if(
+        lndIsPresent(row)
+      ){
+
+        item.employees.add(
+          lndEmployeeKey(row)
+        );
+
+
+        item.hours +=
+
+          lndNumber(
+            row[
+              'Duration (in hours)'
+            ]
+          )
+          || 0;
+
+
+        item.sessions.add(
+
+          [
+
+            row[
+              'Training Topic'
+            ],
+
+            row.Date,
+
+            row[
+              'Branch Name'
+            ]
+
+          ]
+          .map(lndClean)
+          .join('|')
+
+        );
+
+      }
+
+
+      const assessment =
+        lndNumber(
+          row[
+            'Assesment Score'
+          ]
+        );
+
+
+      if(
+        assessment !== null
+      ){
+
+        item.assessment.push(
+          assessment
+        );
+
+      }
+
+    }
+  );
+
+
+  return Object
+    .keys(map)
+    .sort()
+    .map(
+      key => {
+
+        const [
+          year,
+          month
+        ] =
+          key.split('-');
+
+
+        const item =
+          map[key];
+
+
+        return {
+
+          key,
+
+          label:
+            new Date(
+              Number(year),
+              Number(month) - 1,
+              1
+            )
+            .toLocaleString(
+              'en-IN',
+              {
+                month:'short'
+              }
+            ),
+
+          hours:
+            Number(
+              item.hours
+                .toFixed(1)
+            ),
+
+          programs:
+            item.sessions.size,
+
+          coverage:
+            item.activeEmployees.size
+              ?
+                item.employees.size /
+                item.activeEmployees.size *
+                100
+              :
+                0,
+
+          assessment:
+            lndAverage(
+              item.assessment
+            )
+
+        };
+
+      }
+    );
+
+}
+
+
+/* =========================================================
+   CHARTS
+========================================================= */
+
+function renderLndCharts(rows){
+
+  Chart.defaults.font.family =
+    "'Segoe UI','Inter',sans-serif";
+
+  Chart.defaults.color =
+    '#5B6472';
+
+  Chart.defaults.font.size =
+    11;
+
+
+  const monthly =
+    getLndMonthly(rows);
+
+
+  const labels =
+    monthly.map(
+      item =>
+        item.label
+    );
+
+
+  /* HOURS + PROGRAMS */
+
+  destroyLndChart(
+    'hoursPrograms'
+  );
+
+
+  const hoursCanvas =
+    document.getElementById(
+      'lndHoursProgramsChart'
+    );
+
+
+  if(hoursCanvas){
+
+    LND_CHARTS.hoursPrograms =
+      new Chart(
+        hoursCanvas,
+        {
+
+          type:'bar',
+
+          data:{
+
+            labels,
+
+            datasets:[
+
+              {
+
+                label:
+                  'Learning Hours',
+
+                data:
+                  monthly.map(
+                    item =>
+                      item.hours
+                  ),
+
+                backgroundColor:
+                  LND_COLORS.teal,
+
+                borderRadius:4,
+
+                maxBarThickness:30,
+
+                yAxisID:'y'
+
+              },
+
+              {
+
+                label:
+                  'Programs Conducted',
+
+                type:'line',
+
+                data:
+                  monthly.map(
+                    item =>
+                      item.programs
+                  ),
+
+                borderColor:
+                  LND_COLORS.amber,
+
+                backgroundColor:
+                  LND_COLORS.amber,
+
+                tension:.35,
+
+                pointRadius:3,
+
+                yAxisID:'y1'
+
+              }
+
+            ]
+
+          },
+
+          options:{
+
+            responsive:true,
+
+            maintainAspectRatio:false,
+
+            plugins:{
+
+              legend:{
+
+                position:'bottom',
+
+                labels:{
+                  boxWidth:10,
+                  padding:14
+                }
+
+              }
+
+            },
+
+            scales:{
+
+              x:{
+                grid:{
+                  display:false
+                }
+              },
+
+              y:{
+
+                beginAtZero:true,
+
+                grid:{
+                  color:'#EEF1F4'
+                },
+
+                title:{
+                  display:true,
+                  text:'Hours'
+                }
+
+              },
+
+              y1:{
+
+                beginAtZero:true,
+
+                position:'right',
+
+                grid:{
+                  display:false
+                },
+
+                title:{
+                  display:true,
+                  text:'Programs'
+                }
+
+              }
+
+            }
+
+          }
+
+        }
+      );
+
+  }
+
+
+  /* COVERAGE */
+
+  destroyLndChart(
+    'coverage'
+  );
+
+
+  const coverageCanvas =
+    document.getElementById(
+      'lndCoverageChart'
+    );
+
+
+  if(coverageCanvas){
+
+    LND_CHARTS.coverage =
+      new Chart(
+        coverageCanvas,
+        {
+
+          type:'line',
+
+          data:{
+
+            labels,
+
+            datasets:[{
+
+              label:
+                'Coverage %',
+
+              data:
+                monthly.map(
+                  item =>
+                    Number(
+                      item.coverage
+                        .toFixed(1)
+                    )
+                ),
+
+              borderColor:
+                LND_COLORS.teal,
+
+              backgroundColor:
+                'rgba(23,97,110,.12)',
+
+              fill:true,
+
+              tension:.4,
+
+              pointRadius:3
+
+            }]
+
+          },
+
+          options:{
+
+            responsive:true,
+
+            maintainAspectRatio:false,
+
+            plugins:{
+              legend:{
+                display:false
+              }
+            },
+
+            scales:{
+
+              x:{
+                grid:{
+                  display:false
+                }
+              },
+
+              y:{
+
+                beginAtZero:true,
+
+                max:100,
+
+                grid:{
+                  color:'#EEF1F4'
+                },
+
+                ticks:{
+                  callback:
+                    value =>
+                      value + '%'
+                }
+
+              }
+
+            }
+
+          }
+
+        }
+      );
+
+  }
+
+
+  /* COMPLETION */
+
+  destroyLndChart(
+    'completion'
+  );
+
+
+  const present =
+    rows.filter(
+      lndIsPresent
+    ).length;
+
+
+  const absent =
+    rows.filter(
+      row =>
+        lndClean(
+          row.Attendance
+        ).toLowerCase()
+        ===
+        'absent'
+    ).length;
+
+
+  const total =
+    present + absent;
+
+
+  const completion =
+    total
+      ?
+        present /
+        total *
+        100
+      :
+        0;
+
+
+  const completionCanvas =
+    document.getElementById(
+      'lndCompletionChart'
+    );
+
+
+  if(completionCanvas){
+
+    LND_CHARTS.completion =
+      new Chart(
+        completionCanvas,
+        {
+
+          type:'doughnut',
+
+          data:{
+
+            labels:[
+              'Present',
+              'Absent'
+            ],
+
+            datasets:[{
+
+              data:[
+
+                completion,
+
+                100 -
+                completion
+
+              ],
+
+              backgroundColor:[
+
+                LND_COLORS.green,
+
+                '#EEF1F4'
+
+              ],
+
+              borderWidth:0
+
+            }]
+
+          },
+
+          options:{
+
+            responsive:true,
+
+            maintainAspectRatio:false,
+
+            cutout:'72%',
+
+            plugins:{
+
+              legend:{
+
+                position:'bottom',
+
+                labels:{
+                  boxWidth:10
+                }
+
+              }
+
+            }
+
+          }
+
+        }
+      );
+
+  }
+
+
+  /* RATING BY TOPIC */
+
+  destroyLndChart(
+    'rating'
+  );
+
+
+  const topicRatings = {};
+
+
+  rows.forEach(
+    row => {
+
+      const topic =
+        lndClean(
+          row[
+            'Training Topic'
+          ]
+        );
+
+
+      const rating =
+        lndNumber(
+          row[
+            'Feedback Score'
+          ]
+        );
+
+
+      if(
+        !topic ||
+        rating === null
+      ){
+        return;
+      }
+
+
+      if(!topicRatings[topic]){
+
+        topicRatings[topic] =
+          [];
+
+      }
+
+
+      topicRatings[topic]
+        .push(
+          rating
+        );
+
+    }
+  );
+
+
+  const ratingData =
+    Object
+      .entries(
+        topicRatings
+      )
+      .map(
+        ([topic,values]) => ({
+
+          topic,
+
+          rating:
+            lndAverage(
+              values
+            )
+
+        })
+      )
+      .sort(
+        (a,b) =>
+          b.rating -
+          a.rating
+      )
+      .slice(
+        0,
+        5
+      );
+
+
+  const ratingCanvas =
+    document.getElementById(
+      'lndRatingChart'
+    );
+
+
+  if(ratingCanvas){
+
+    LND_CHARTS.rating =
+      new Chart(
+        ratingCanvas,
+        {
+
+          type:'bar',
+
+          data:{
+
+            labels:
+              ratingData.map(
+                item =>
+                  item.topic
+              ),
+
+            datasets:[{
+
+              data:
+                ratingData.map(
+                  item =>
+                    Number(
+                      item.rating
+                        .toFixed(1)
+                    )
+                ),
+
+              backgroundColor:
+                LND_COLORS.amber,
+
+              borderRadius:4,
+
+              maxBarThickness:26
+
+            }]
+
+          },
+
+          options:{
+
+            indexAxis:'y',
+
+            responsive:true,
+
+            maintainAspectRatio:false,
+
+            plugins:{
+              legend:{
+                display:false
+              }
+            },
+
+            scales:{
+
+              x:{
+
+                beginAtZero:true,
+
+                max:5,
+
+                grid:{
+                  color:'#EEF1F4'
+                }
+
+              },
+
+              y:{
+                grid:{
+                  display:false
+                }
+              }
+
+            }
+
+          }
+
+        }
+      );
+
+  }
+
+
+  /* ASSESSMENT */
+
+  destroyLndChart(
+    'assessment'
+  );
+
+
+  const assessmentCanvas =
+    document.getElementById(
+      'lndAssessmentChart'
+    );
+
+
+  if(assessmentCanvas){
+
+    LND_CHARTS.assessment =
+      new Chart(
+        assessmentCanvas,
+        {
+
+          type:'line',
+
+          data:{
+
+            labels,
+
+            datasets:[{
+
+              label:
+                'Assessment %',
+
+              data:
+                monthly.map(
+                  item =>
+                    item.assessment === null
+                      ? null
+                      : Number(
+                          item.assessment
+                            .toFixed(1)
+                        )
+                ),
+
+              borderColor:
+                LND_COLORS.navy,
+
+              backgroundColor:
+                'rgba(31,56,100,.08)',
+
+              fill:true,
+
+              tension:.4,
+
+              pointRadius:3
+
+            }]
+
+          },
+
+          options:{
+
+            responsive:true,
+
+            maintainAspectRatio:false,
+
+            plugins:{
+              legend:{
+                display:false
+              }
+            },
+
+            scales:{
+
+              x:{
+                grid:{
+                  display:false
+                }
+              },
+
+              y:{
+
+                beginAtZero:true,
+
+                max:100,
+
+                grid:{
+                  color:'#EEF1F4'
+                },
+
+                ticks:{
+                  callback:
+                    value =>
+                      value + '%'
+                }
+
+              }
+
+            }
+
+          }
+
+        }
+      );
+
+  }
+
+}
+
+
+/* =========================================================
+   REGION TABLE
+========================================================= */
+
+function renderLndRegionTable(rows){
+
+  const map = {};
+
+
+  rows.forEach(
+    row => {
+
+      const region =
+        lndClean(
+          row.Region
+        ) ||
+        'Unknown';
+
+
+      if(!map[region]){
+
+        map[region] = {
+
+          employees:
+            new Set(),
+
+          hours:0,
+
+          present:0,
+
+          absent:0,
+
+          assessment:[],
+
+          feedback:[]
+
+        };
+
+      }
+
+
+      const item =
+        map[region];
+
+
+      if(
+        lndIsPresent(row)
+      ){
+
+        item.employees.add(
+          lndEmployeeKey(row)
+        );
+
+
+        item.present++;
+
+
+        item.hours +=
+
+          lndNumber(
+            row[
+              'Duration (in hours)'
+            ]
+          )
+          || 0;
+
+      }
+
+
+      if(
+        lndClean(
+          row.Attendance
+        ).toLowerCase()
+        ===
+        'absent'
+      ){
+
+        item.absent++;
+
+      }
+
+
+      const assessment =
+        lndNumber(
+          row[
+            'Assesment Score'
+          ]
+        );
+
+
+      if(
+        assessment !== null
+      ){
+
+        item.assessment.push(
+          assessment
+        );
+
+      }
+
+
+      const feedback =
+        lndNumber(
+          row[
+            'Feedback Score'
+          ]
+        );
+
+
+      if(
+        feedback !== null
+      ){
+
+        item.feedback.push(
+          feedback
+        );
+
+      }
+
+    }
+  );
+
+
+  const target =
+    document.getElementById(
+      'lndRegionTableBody'
+    );
+
+
+  if(!target){
+    return;
+  }
+
+
+  target.innerHTML =
+
+    Object
+      .entries(map)
+
+      .sort(
+        (a,b) =>
+          b[1].employees.size -
+          a[1].employees.size
+      )
+
+      .map(
+        ([region,item]) => {
+
+
+          const total =
+            item.present +
+            item.absent;
+
+
+          const attendance =
+            total
+              ?
+                item.present /
+                total *
+                100
+              :
+                0;
+
+
+          const assessment =
+            lndAverage(
+              item.assessment
+            );
+
+
+          const feedback =
+            lndAverage(
+              item.feedback
+            );
+
+
+          let status =
+            {
+              text:'On Track',
+              cls:'green'
+            };
+
+
+          if(
+            attendance <
+            75
+          ){
+
+            status = {
+              text:'At Risk',
+              cls:'red'
+            };
+
+          }else if(
+            attendance <
+            85
+          ){
+
+            status = {
+              text:'Watch',
+              cls:'amber'
+            };
+
+          }
+
+
+          return `
+
+            <tr>
+
+              <td>
+                <strong>
+                  ${lndEscape(region)}
+                </strong>
+              </td>
+
+              <td>
+                ${item.employees.size}
+              </td>
+
+              <td>
+                ${item.hours.toFixed(1)}
+              </td>
+
+              <td>
+
+                <div class="lnd-progress-cell">
+
+                  <div class="lnd-progress">
+
+                    <div
+                      class="lnd-progress-fill"
+                      style="width:${attendance}%"
+                    ></div>
+
+                  </div>
+
+                  <span>
+                    ${attendance.toFixed(0)}%
+                  </span>
+
+                </div>
+
+              </td>
+
+              <td>
+                ${
+                  assessment === null
+                    ? '-'
+                    : assessment.toFixed(1) +
+                      '%'
+                }
+              </td>
+
+              <td>
+                ${
+                  feedback === null
+                    ? '-'
+                    : feedback.toFixed(1)
+                }
+              </td>
+
+              <td>
+
+                <span
+                  class="lnd-status-tag ${status.cls}"
+                >
+                  ${status.text}
+                </span>
+
+              </td>
+
+            </tr>
+
+          `;
+
+        }
+      )
+      .join('');
+
+}
+
+
+/* =========================================================
+   REGISTER
+========================================================= */
+
+function renderLndRegister(rows){
+
+  const target =
+    document.getElementById(
+      'lndAttendanceBody'
+    );
+
+
+  const count =
+    document.getElementById(
+      'lndVisibleCount'
+    );
+
+
+  if(count){
+
+    count.textContent =
+      rows.length;
+
+  }
+
+
+  if(!target){
+    return;
+  }
+
+
+  const sorted =
+    [...rows]
+      .sort(
+        (a,b) => {
+
+          const da =
+            lndDate(
+              a.Date
+            );
+
+          const db =
+            lndDate(
+              b.Date
+            );
+
+
+          return (
+
+            (
+              db
+                ? db.getTime()
+                : 0
+            )
+
+            -
+
+            (
+              da
+                ? da.getTime()
+                : 0
+            )
+
+          );
+
+        }
+      );
+
+
+  target.innerHTML =
+
+    sorted.map(
+      row => {
+
+
+        const attendance =
+          lndClean(
+            row.Attendance
+          );
+
+
+        const tagClass =
+          attendance
+            .toLowerCase()
+            ===
+            'present'
+
+            ?
+              'green'
+
+            :
+              'red';
+
+
+        return `
+
+          <tr>
+
+            <td>
+              ${lndEscape(row.Date)}
+            </td>
+
+            <td>
+
+              <strong>
+                ${lndEscape(
+                  row.Attendees
+                )}
+              </strong>
+
+            </td>
+
+            <td>
+              ${lndEscape(
+                row.Region
+              )}
+            </td>
+
+            <td>
+              ${lndEscape(
+                row[
+                  'Branch Name'
+                ]
+              )}
+            </td>
+
+            <td>
+              ${lndEscape(
+                row[
+                  'Training Topic'
+                ]
+              )}
+            </td>
+
+            <td>
+              ${lndEscape(
+                row.Mode
+              )}
+            </td>
+
+            <td>
+              ${lndEscape(
+                row[
+                  'Duration (in hours)'
+                ]
+              )}
+            </td>
+
+            <td>
+
+              <span
+                class="lnd-status-tag ${tagClass}"
+              >
+                ${attendance}
+              </span>
+
+            </td>
+
+            <td>
+              ${
+                lndEscape(
+                  row[
+                    'Assesment Score'
+                  ]
+                ) ||
+                '-'
+              }
+            </td>
+
+            <td>
+              ${
+                lndEscape(
+                  row[
+                    'Feedback Score'
+                  ]
+                ) ||
+                '-'
+              }
+            </td>
+
+            <td>
+              ${lndEscape(
+                row.L1
+              )}
+            </td>
+
+          </tr>
+
+        `;
+
+      }
+    )
+    .join('');
+
+}
+
+
+/* =========================================================
+   MASTER RENDER
+========================================================= */
+
+function renderLndDashboard(){
+
+  const rows =
+    getFilteredLndRows();
+
+
+  renderProfessionalLndKpis(
+    rows
+  );
+
+
+  renderLndCharts(
+    rows
+  );
+
+
+  renderLndRegionTable(
+    rows
+  );
+
+
+  renderLndRegister(
+    rows
+  );
+
+}
+
+
+/* =========================================================
+   EVENTS
+========================================================= */
+
+[
+
+  'lndSearch',
+
+  'lndRegion',
+
+  'lndBranch',
+
+  'lndMode',
+
+  'lndTopic',
+
+  'lndAttendance'
+
+]
+.forEach(
+  id => {
+
+    const el =
+      document.getElementById(
+        id
+      );
+
+
+    if(!el){
+      return;
+    }
+
+
+    el.addEventListener(
+
+      id ===
+      'lndSearch'
+        ?
+          'input'
+        :
+          'change',
+
+      renderLndDashboard
+
+    );
+
+  }
+);
+
+
+loadLndLive(false);
+
+
+/* =========================
+   COMPLIANCE
+========================= */
+
+document.getElementById('complianceKpis').innerHTML = [
+
+  kpi(
+    'PF Compliance',
+    '100%',
+    'On-time filing'
+  ),
+
+  kpi(
+    'ESI Compliance',
+    '100%',
+    'On-time filing'
+  ),
+
+  kpi(
+    'POSH Cases',
+    '0',
+    'No pending cases'
+  ),
+
+  kpi(
+    'Audit Pending',
+    '1',
+    'Factories Act · Aug',
+    'warn'
+  )
+
+].join('');
+
+
+document.getElementById('complianceList').innerHTML = [
+
+  [
+    'PF Filing',
+    'Compliant',
+    'Green'
+  ],
+
+  [
+    'ESI Filing',
+    'Compliant',
+    'Green'
+  ],
+
+  [
+    'POSH Committee',
+    'Compliant',
+    'Green'
+  ],
+
+  [
+    'Factories Act Audit',
+    'Scheduled — August',
+    'Yellow'
+  ]
+
+].map(r => `
+
+  <div class="compliance-row">
+
+    <div>
+
+      <div class="health-name">
+        ${r[0]}
+      </div>
+
+      <div class="health-meta">
+        ${r[1]}
+      </div>
+
+    </div>
+
+    <span
+      class="status-pill
+      status-${r[2].toLowerCase()}"
+    >
+      ${r[2]}
+    </span>
+
+  </div>
+
+`).join('');
+
+
+/* =========================
+   ALERT CENTRE
+========================= */
+
+document.getElementById('alertTableBody').innerHTML =
+
+  HR_DATA.alerts.map(a => `
+
+    <tr>
+
+      <td>
+
+        <span
+          class="priority-pill
+          priority-${a.priority.toLowerCase()}"
+        >
+          ${a.priority}
+        </span>
+
+      </td>
+
+
+      <td>
+
+        <strong>
+          ${a.action}
+        </strong>
+
+      </td>
+
+
+      <td>
+        ${a.owner}
+      </td>
+
+
+      <td>
+        ${a.due}
+      </td>
+
+
+      <td>
+
+        <span
+          class="status-pill
+          status-${a.status
+            .toLowerCase()
+            .replaceAll(' ', '')}"
+        >
+          ${a.status}
+        </span>
+
+      </td>
+
+
+      <td>
+
+        <button class="view-btn">
+          Open
+        </button>
+
+      </td>
+
+    </tr>
+
+  `).join('');
+  /* =========================================================
+   EMPLOYEE CRM - LIVE
+========================================================= */
+
+const EMPLOYEE_CRM_API_URL =
+  'https://script.google.com/macros/s/AKfycbxWzFltc06j3OmPFG62gtuvbj_SumQe3dvbPCcc5BurhqyXeeqRTXJjutzNKStXSJl-/exec';
+
+let EMPLOYEE_CRM_DATA = null;
+let EMPLOYEE_CRM_FILTERED = [];
+let EMPLOYEE_CRM_LOADED = false;
+let EMPLOYEE_CRM_LOADING = false;
+const EMPLOYEE_CHARTS = {};
+
+function employeeGet(id) {
+  return __nativeGetElementById ? __nativeGetElementById(id) : document.getElementById(id);
+}
+
+function destroyExistingEmployeeChart(canvasId) {
+  if (typeof Chart === 'undefined') return;
+  const canvas = employeeGet(canvasId);
+  if (!canvas) return;
+
+  if (typeof Chart.getChart === 'function') {
+    const existing = Chart.getChart(canvas);
+    if (existing) existing.destroy();
+  }
+}
+
+function setEmployeeLiveStatus(text, state) {
+  const el = employeeGet('employeeLiveStatus');
+  if (!el) return;
+
+  el.textContent = state === 'success' ? '● ' + text : text;
+  el.classList.remove('green', 'amber', 'red');
+
+  if (state === 'success') el.classList.add('green');
+  else if (state === 'error') el.classList.add('red');
+  else el.classList.add('amber');
+}
+
+function loadEmployeeCrmLive(forceRefresh) {
+  if (EMPLOYEE_CRM_LOADING) return;
+
+  if (EMPLOYEE_CRM_LOADED && !forceRefresh) {
+    renderEmployeeCrmDashboard(EMPLOYEE_CRM_DATA);
+    return;
+  }
+
+  EMPLOYEE_CRM_LOADING = true;
+  setEmployeeLiveStatus('Connecting...', 'loading');
+
+  const master = employeeGet('employeeMasterBody');
+  const span = employeeGet('employeeSpanBody');
+
+  if (master) {
+    master.innerHTML = '<tr><td colspan="10">Loading live employee data...</td></tr>';
+  }
+
+  if (span) {
+    span.innerHTML = '<tr><td colspan="5">Loading live organisation data...</td></tr>';
+  }
+
+  const oldScript = employeeGet('employeeCrmJsonpScript');
+  if (oldScript && oldScript.parentNode) oldScript.parentNode.removeChild(oldScript);
+
+  /* JSONP callback must be globally accessible on GitHub Pages. */
+  window.receiveEmployeeCrmData = receiveEmployeeCrmData;
+
+  const script = document.createElement('script');
+  script.id = 'employeeCrmJsonpScript';
+  script.async = true;
+  script.src =
+    EMPLOYEE_CRM_API_URL +
+    '?module=employees' +
+    '&callback=receiveEmployeeCrmData' +
+    '&_=' + Date.now();
+
+  script.onerror = function() {
+    EMPLOYEE_CRM_LOADING = false;
+    setEmployeeLiveStatus('Connection Failed', 'error');
+
+    if (master) {
+      master.innerHTML = '<tr><td colspan="10">Unable to load employee data.</td></tr>';
+    }
+  };
+
+  document.body.appendChild(script);
+
+  setTimeout(function() {
+    if (EMPLOYEE_CRM_LOADING) {
+      EMPLOYEE_CRM_LOADING = false;
+      setEmployeeLiveStatus('Connection Timeout', 'error');
+      if (master) {
+        master.innerHTML = '<tr><td colspan="10">Employee API timeout. Please refresh once.</td></tr>';
+      }
+    }
+  }, 25000);
+}
+
+function receiveEmployeeCrmData(data) {
+  EMPLOYEE_CRM_LOADING = false;
+
+  if (!data || data.ok !== true) {
+    console.error('Employee CRM API Error:', data);
+    setEmployeeLiveStatus('Data Error', 'error');
+    return;
+  }
+
+  EMPLOYEE_CRM_DATA = data;
+  EMPLOYEE_CRM_LOADED = true;
+  setEmployeeLiveStatus('Live', 'success');
+
+  renderEmployeeCrmDashboard(data);
+  initialiseEmployeeCrmFilters(data);
+  if (typeof window.refreshExecOverview === 'function') window.refreshExecOverview();
+}
+
+function renderEmployeeCrmDashboard(data) {
+  if (!data || !data.summary) return;
+
+  renderEmployeeCrmKpis(data.summary);
+  renderEmployeeDepartmentChart(data.departments || []);
+  renderEmployeeBranchChart(data.branches || []);
+  renderEmployeeTenureChart(data.tenureBuckets || {});
+  renderEmployeeMovementChart(data.summary);
+  renderEmployeeSpanOfControl(data.managers || []);
+
+  EMPLOYEE_CRM_FILTERED = (data.employees || []).slice();
+  renderEmployeeMaster(EMPLOYEE_CRM_FILTERED);
+}
+
+function setEmployeeText(id, value) {
+  const el = employeeGet(id);
+  if (el) el.textContent = value;
+}
+
+function renderEmployeeCrmKpis(summary) {
+  setEmployeeText('empKpiTotal', summary.totalEmployees || 0);
+  setEmployeeText('empKpiActive', summary.activeEmployees || 0);
+  setEmployeeText('empKpiJoiners', summary.newJoinersMtd || 0);
+  setEmployeeText('empKpiProbation', summary.under3Months || 0);
+
+  const tenureEl = employeeGet('empKpiTenure');
+  if (tenureEl) {
+    const tenure = Number(summary.avgTenure || 0);
+    tenureEl.innerHTML = tenure.toFixed(2) + ' <span>yrs</span>';
+  }
+
+  const net = Number(summary.netChangeMtd || 0);
+  setEmployeeText('empKpiGender', net > 0 ? '+' + net : String(net));
+  setEmployeeText('employeeMasterCount', summary.totalEmployees || 0);
+}
+
+function renderEmployeeDepartmentChart(rows) {
+  const canvas = employeeGet('employeeDeptChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  destroyExistingEmployeeChart('employeeDeptChart');
+
+  const cleanRows = (rows || [])
+    .filter(row => row.department && Number(row.headcount || 0) > 0)
+    .slice(0, 20);
+
+  EMPLOYEE_CHARTS.department = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: cleanRows.map(row => row.department),
+      datasets: [{
+        label: 'Headcount',
+        data: cleanRows.map(row => Number(row.headcount || 0)),
+        backgroundColor: '#17616E',
+        borderRadius: 6,
+        borderSkipped: false
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { beginAtZero: true, ticks: { precision: 0 } },
+        y: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+function renderEmployeeBranchChart(rows) {
+  const canvas = employeeGet('employeeLocationChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  destroyExistingEmployeeChart('employeeLocationChart');
+
+  const cleanRows = (rows || [])
+    .filter(row => row.branch && Number(row.headcount || 0) > 0)
+    .slice(0, 20);
+
+  EMPLOYEE_CHARTS.branch = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: cleanRows.map(row => row.branch),
+      datasets: [{
+        label: 'Headcount',
+        data: cleanRows.map(row => Number(row.headcount || 0)),
+        backgroundColor: '#3E7DBB',
+        borderRadius: 6,
+        borderSkipped: false
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { beginAtZero: true, ticks: { precision: 0 } },
+        y: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+function renderEmployeeTenureChart(buckets) {
+  const canvas = employeeGet('employeeTenureChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  destroyExistingEmployeeChart('employeeTenureChart');
+
+  const labels = ['<1 Yr', '1-3 Yrs', '3-5 Yrs', '5-8 Yrs', '8+ Yrs'];
+
+  EMPLOYEE_CHARTS.tenure = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Employees',
+        data: labels.map(label => Number(buckets[label] || 0)),
+        backgroundColor: '#3E7DBB',
+        borderRadius: 7,
+        borderSkipped: false
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, ticks: { precision: 0 } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+function renderEmployeeMovementChart(summary) {
+  const canvas = employeeGet('employeeGenderChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  destroyExistingEmployeeChart('employeeGenderChart');
+
+  EMPLOYEE_CHARTS.movement = new Chart(canvas, {
+    type: 'doughnut',
+    data: {
+      labels: ['New Joiners MTD', 'Exits MTD'],
+      datasets: [{
+        data: [
+          Number(summary.newJoinersMtd || 0),
+          Number(summary.exitsMtd || 0)
+        ],
+        backgroundColor: ['#17616E', '#C9437A'],
+        borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '68%',
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { boxWidth: 18, padding: 16 }
+        }
+      }
+    }
+  });
+}
+
+function renderEmployeeSpanOfControl(rows) {
+  const body = employeeGet('employeeSpanBody');
+  if (!body) return;
+
+  const topManagers = (rows || [])
+    .filter(row => row.manager && row.manager !== 'Unassigned')
+    .slice(0, 25);
+
+  if (!topManagers.length) {
+    body.innerHTML = '<tr><td colspan="5">No manager data available.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = topManagers.map(row => {
+    const reports = Number(row.directReports || 0);
+    let status = 'Normal';
+    let cls = 'green';
+
+    if (reports >= 25) {
+      status = 'High';
+      cls = 'red';
+    } else if (reports >= 15) {
+      status = 'Watch';
+      cls = 'amber';
+    }
+
+    return `
+      <tr>
+        <td>${escapeEmployeeHtml(row.manager)}</td>
+        <td>${escapeEmployeeHtml(row.department || '-')}</td>
+        <td>${reports}</td>
+        <td>${Number(row.share || 0).toFixed(1)}%</td>
+        <td><span class="module-status ${cls}">${status}</span></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function renderEmployeeMaster(employees) {
+  const body = employeeGet('employeeMasterBody');
+  if (!body) return;
+
+  setEmployeeText('employeeMasterCount', employees.length);
+
+  if (!employees.length) {
+    body.innerHTML = '<tr><td colspan="10">No employees found.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = employees.map(emp => `
+    <tr>
+      <td>${escapeEmployeeHtml(emp.employeeId || '-')}</td>
+      <td>
+        <div class="employee-cell-name">${escapeEmployeeHtml(emp.name || '-')}</div>
+        <div class="employee-cell-sub">${escapeEmployeeHtml(emp.email || '')}</div>
+      </td>
+      <td>${escapeEmployeeHtml(emp.designation || '-')}</td>
+      <td>${escapeEmployeeHtml(emp.department || '-')}</td>
+      <td>${escapeEmployeeHtml(emp.manager || '-')}</td>
+      <td>${escapeEmployeeHtml(emp.branch || '-')}</td>
+      <td>${escapeEmployeeHtml(emp.doj || '-')}</td>
+      <td>${escapeEmployeeHtml(emp.tenureLabel || '-')}</td>
+      <td>
+        <span class="module-status ${emp.active ? 'green' : 'red'}">
+          ${emp.active ? 'Active' : 'Inactive'}
+        </span>
+      </td>
+      <td>
+        <button
+          class="module-action-btn"
+          type="button"
+          onclick="openEmployeeCrmProfile('${escapeEmployeeAttr(emp.employeeId || '')}')"
+        >
+          View 360°
+        </button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function initialiseEmployeeCrmFilters(data) {
+  populateEmployeeSelect(
+    'employeeDeptFilter',
+    'All Departments',
+    (data.departments || []).map(row => row.department)
+  );
+
+  populateEmployeeSelect(
+    'employeeLocationFilter',
+    'All Locations',
+    (data.branches || []).map(row => row.branch)
+  );
+
+  populateEmployeeSelect(
+    'employeeManagerFilter',
+    'All Managers',
+    (data.managers || [])
+      .map(row => row.manager)
+      .filter(name => name && name !== 'Unassigned')
+  );
+
+  const elements = [
+    employeeGet('employeeCrmSearch'),
+    employeeGet('employeeDeptFilter'),
+    employeeGet('employeeLocationFilter'),
+    employeeGet('employeeManagerFilter'),
+    employeeGet('employeeStatusFilter')
+  ];
+
+  elements.forEach(el => {
+    if (!el || el.dataset.employeeFilterBound) return;
+    el.dataset.employeeFilterBound = '1';
+    el.addEventListener(el.tagName === 'INPUT' ? 'input' : 'change', applyEmployeeCrmFilters);
+  });
+}
+
+function populateEmployeeSelect(id, firstLabel, values) {
+  const select = employeeGet(id);
+  if (!select) return;
+
+  const current = select.value;
+  const unique = Array.from(new Set((values || []).filter(Boolean)))
+    .sort((a, b) => a.localeCompare(b));
+
+  select.innerHTML =
+    `<option value="all">${escapeEmployeeHtml(firstLabel)}</option>` +
+    unique.map(value =>
+      `<option value="${escapeEmployeeAttr(value)}">${escapeEmployeeHtml(value)}</option>`
+    ).join('');
+
+  if (Array.from(select.options).some(option => option.value === current)) {
+    select.value = current;
+  }
+}
+
+function applyEmployeeCrmFilters() {
+  if (!EMPLOYEE_CRM_DATA) return;
+
+  const search = (employeeGet('employeeCrmSearch')?.value || '').trim().toLowerCase();
+  const department = employeeGet('employeeDeptFilter')?.value || 'all';
+  const branch = employeeGet('employeeLocationFilter')?.value || 'all';
+  const manager = employeeGet('employeeManagerFilter')?.value || 'all';
+  const status = employeeGet('employeeStatusFilter')?.value || 'all';
+
+  EMPLOYEE_CRM_FILTERED = (EMPLOYEE_CRM_DATA.employees || []).filter(emp => {
+    if (search) {
+      const haystack = [
+        emp.employeeId,
+        emp.name,
+        emp.email,
+        emp.designation,
+        emp.department,
+        emp.branch,
+        emp.manager
+      ].join(' ').toLowerCase();
+
+      if (!haystack.includes(search)) return false;
+    }
+
+    if (department !== 'all' && emp.department !== department) return false;
+    if (branch !== 'all' && emp.branch !== branch) return false;
+    if (manager !== 'all' && emp.manager !== manager) return false;
+    if (status === 'Active' && !emp.active) return false;
+    if (status === 'Inactive' && emp.active) return false;
+
+    return true;
+  });
+
+  renderEmployeeMaster(EMPLOYEE_CRM_FILTERED);
+}
+
+function ensureEmployeeCrmModal() {
+  if (employeeGet('employeeCrmModal')) return;
+
+  const modal = document.createElement('div');
+  modal.id = 'employeeCrmModal';
+  modal.style.cssText = [
+    'display:none',
+    'position:fixed',
+    'inset:0',
+    'z-index:99999',
+    'background:rgba(15,23,42,.50)',
+    'align-items:center',
+    'justify-content:center',
+    'padding:24px'
+  ].join(';');
+
+  modal.innerHTML = `
+    <div style="width:min(720px,96vw);max-height:88vh;overflow:auto;background:#fff;border-radius:18px;box-shadow:0 24px 60px rgba(15,23,42,.22);padding:26px;">
+      <div style="display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:20px;">
+        <div>
+          <div id="employeeCrmModalName" style="font-size:24px;font-weight:800;color:#0f3440;"></div>
+          <div id="employeeCrmModalRole" style="margin-top:5px;color:#6b7280;"></div>
+        </div>
+        <button type="button" onclick="closeEmployeeCrmProfile()" style="border:0;background:#eef3f5;border-radius:10px;padding:8px 12px;cursor:pointer;font-weight:700;">Close</button>
+      </div>
+      <div id="employeeCrmModalBody"></div>
+    </div>
+  `;
+
+  modal.addEventListener('click', function(event) {
+    if (event.target === modal) closeEmployeeCrmProfile();
+  });
+
+  document.body.appendChild(modal);
+}
+
+function openEmployeeCrmProfile(employeeId) {
+  if (!EMPLOYEE_CRM_DATA) return;
+
+  const emp = (EMPLOYEE_CRM_DATA.employees || [])
+    .find(row => row.employeeId === employeeId);
+
+  if (!emp) return;
+
+  ensureEmployeeCrmModal();
+
+  const modal = employeeGet('employeeCrmModal');
+  const name = employeeGet('employeeCrmModalName');
+  const role = employeeGet('employeeCrmModalRole');
+  const body = employeeGet('employeeCrmModalBody');
+
+  name.textContent = emp.name || '-';
+  role.textContent = `${emp.designation || '-'} · ${emp.department || '-'}`;
+
+  const cards = [
+    ['Employee ID', emp.employeeId || '-'],
+    ['Email', emp.email || '-'],
+    ['Designation', emp.designation || '-'],
+    ['Department', emp.department || '-'],
+    ['Manager', emp.manager || '-'],
+    ['Location', emp.branch || '-'],
+    ['Date of Joining', emp.doj || '-'],
+    ['Tenure', emp.tenureLabel || '-'],
+    ['Status', emp.active ? 'Active' : 'Inactive']
+  ];
+
+  body.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">
+      ${cards.map(item => `
+        <div style="border:1px solid #e5e7eb;border-radius:12px;padding:14px 15px;background:#fbfcfd;">
+          <div style="font-size:12px;color:#7b8794;margin-bottom:5px;">${escapeEmployeeHtml(item[0])}</div>
+          <div style="font-size:15px;font-weight:700;color:#183b45;word-break:break-word;">${escapeEmployeeHtml(item[1])}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  modal.style.display = 'flex';
+}
+
+function closeEmployeeCrmProfile() {
+  const modal = employeeGet('employeeCrmModal');
+  if (modal) modal.style.display = 'none';
+}
+
+function escapeEmployeeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function escapeEmployeeAttr(value) {
+  return escapeEmployeeHtml(value);
+}
+
+function initialiseEmployeeCrmLive() {
+  const page = employeeGet('employees');
+  if (page && page.classList.contains('active')) {
+    loadEmployeeCrmLive(false);
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initialiseEmployeeCrmLive);
+} else {
+  initialiseEmployeeCrmLive();
+}
+
+
+
+
+/* =========================================================
+   KEKA ATTENDANCE - LIVE DASHBOARD
+========================================================= */
+
+const ATTENDANCE_API_URL =
+  'https://script.google.com/macros/s/AKfycbxWzFltc06j3OmPFG62gtuvbj_SumQe3dvbPCcc5BurhqyXeeqRTXJjutzNKStXSJl-/exec';
+
+
+let attendancePayload = null;
+let attendanceLoaded = false;
+let attendanceRequestTimer = null;
+
+const ATTENDANCE_CHARTS = {};
+
+
+/* =========================================================
+   HELPERS
+========================================================= */
+
+function attendanceNumber(value) {
+
+  const num = Number(value);
+
+  return Number.isFinite(num)
+    ? num
+    : 0;
+
+}
+
+
+function attendanceFormatNumber(value) {
+
+  return attendanceNumber(value)
+    .toLocaleString('en-IN');
+
+}
+
+
+function attendanceEscape(value) {
+
+  return String(
+    value === undefined ||
+    value === null
+      ? ''
+      : value
+  )
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+
+}
+
+
+function setAttendanceStatus(
+  text,
+  type = ''
+) {
+
+  const el =
+    document.getElementById(
+      'attendanceLiveStatus'
+    );
+
+  if (!el) return;
+
+  el.textContent = text;
+
+  el.classList.remove(
+    'live',
+    'error'
+  );
+
+  if (type) {
+    el.classList.add(type);
+  }
+
+}
+
+
+function destroyAttendanceChart(id) {
+
+  /*
+    Destroy our stored chart
+  */
+
+  if (ATTENDANCE_CHARTS[id]) {
+
+    ATTENDANCE_CHARTS[id]
+      .destroy();
+
+    delete ATTENDANCE_CHARTS[id];
+
+  }
+
+
+  /*
+    Also destroy any old placeholder Chart.js
+    instance already attached to this canvas.
+  */
+
+  if (
+    typeof Chart !== 'undefined' &&
+    typeof Chart.getChart === 'function'
+  ) {
+
+    const existing =
+      Chart.getChart(id);
+
+    if (existing) {
+      existing.destroy();
+    }
+
+  }
+
+}
+
+
+/* =========================================================
+   LOAD LIVE DATA
+========================================================= */
+
+function loadAttendanceLive(
+  force = false
+) {
+
+  if (
+    attendanceLoaded &&
+    !force
+  ) {
+
+    renderLiveAttendanceDashboard();
+    return;
+
+  }
+
+
+  setAttendanceStatus(
+    'Connecting...'
+  );
+
+
+  const oldScript =
+    document.getElementById(
+      'attendanceJsonpScript'
+    );
+
+  if (oldScript) {
+    oldScript.remove();
+  }
+
+
+  if (attendanceRequestTimer) {
+
+    clearTimeout(
+      attendanceRequestTimer
+    );
+
+  }
+
+
+  window.receiveAttendanceData =
+    function(payload) {
+
+      if (attendanceRequestTimer) {
+
+        clearTimeout(
+          attendanceRequestTimer
+        );
+
+      }
+
+
+      try {
+
+        console.log(
+          'Attendance API response:',
+          payload
+        );
+
+
+        if (
+          !payload ||
+          payload.ok !== true
+        ) {
+
+          throw new Error(
+            payload?.error ||
+            'Invalid attendance response'
+          );
+
+        }
+
+
+        if (
+          !payload.summary ||
+          !Array.isArray(
+            payload.departments
+          ) ||
+          !Array.isArray(
+            payload.daily
+          )
+        ) {
+
+          throw new Error(
+            'Attendance response structure is incomplete'
+          );
+
+        }
+
+
+        attendancePayload =
+          payload;
+
+        attendanceLoaded =
+          true;
+
+        // Update Executive Overview from the same verified live response.
+        if (typeof window.refreshExecOverview === 'function') {
+          window.refreshExecOverview();
+        }
+
+
+        setAttendanceStatus(
+          '● Live',
+          'live'
+        );
+
+
+        initialiseAttendanceFilters();
+
+        renderLiveAttendanceDashboard();
+
+
+        console.log(
+          'Attendance dashboard loaded:',
+          payload.attendanceRecordCount,
+          'records'
+        );
+
+
+      } catch (error) {
+
+        console.error(
+          'Attendance processing error:',
+          error
+        );
+
+
+        setAttendanceStatus(
+          'Data Error',
+          'error'
+        );
+
+      }
+
+    };
+
+
+  const script =
+    document.createElement(
+      'script'
+    );
+
+
+  script.id =
+    'attendanceJsonpScript';
+
+  script.async =
+    true;
+
+
+  script.src =
+    ATTENDANCE_API_URL +
+    '?module=attendance' +
+    '&callback=receiveAttendanceData' +
+    '&_=' +
+    Date.now();
+
+
+  script.onerror =
+    function(error) {
+
+      console.error(
+        'Attendance API connection failed:',
+        error
+      );
+
+
+      setAttendanceStatus(
+        'Connection Failed',
+        'error'
+      );
+
+    };
+
+
+  document.body.appendChild(
+    script
+  );
+
+
+  attendanceRequestTimer =
+    setTimeout(
+      function() {
+
+        if (!attendanceLoaded) {
+
+          setAttendanceStatus(
+            'Connection Timeout',
+            'error'
+          );
+
+        }
+
+      },
+      20000
+    );
+
+}
+
+
+/* =========================================================
+   FILTERS
+========================================================= */
+
+function initialiseAttendanceFilters() {
+
+  if (!attendancePayload) {
+    return;
+  }
+
+
+  const deptSelect =
+    document.getElementById(
+      'attendanceDeptFilter'
+    );
+
+  const branchSelect =
+    document.getElementById(
+      'attendanceLocationFilter'
+    );
+
+
+  if (deptSelect) {
+
+    const current =
+      deptSelect.value || 'all';
+
+
+    deptSelect.innerHTML =
+      '<option value="all">All Departments</option>' +
+
+      attendancePayload.departments
+
+        .map(
+          row =>
+            row.department
+        )
+
+        .filter(Boolean)
+
+        .sort()
+
+        .map(
+          name => `
+
+            <option value="${attendanceEscape(name)}">
+              ${attendanceEscape(name)}
+            </option>
+
+          `
+        )
+
+        .join('');
+
+
+    deptSelect.value =
+      [...deptSelect.options]
+        .some(
+          option =>
+            option.value === current
+        )
+        ? current
+        : 'all';
+
+  }
+
+
+  if (branchSelect) {
+
+    const current =
+      branchSelect.value || 'all';
+
+
+    const branches =
+      Array.isArray(
+        attendancePayload.branches
+      )
+        ? attendancePayload.branches
+        : [];
+
+
+    branchSelect.innerHTML =
+      '<option value="all">All Locations / Branches</option>' +
+
+      branches
+
+        .map(
+          row =>
+            row.branch
+        )
+
+        .filter(Boolean)
+
+        .sort()
+
+        .map(
+          name => `
+
+            <option value="${attendanceEscape(name)}">
+              ${attendanceEscape(name)}
+            </option>
+
+          `
+        )
+
+        .join('');
+
+
+    branchSelect.value =
+      [...branchSelect.options]
+        .some(
+          option =>
+            option.value === current
+        )
+        ? current
+        : 'all';
+
+  }
+
+
+  /*
+    Current API is aggregated and does not yet
+    return manager-level summaries.
+
+    Keep Manager filter disabled rather than
+    showing misleading results.
+  */
+
+  const managerSelect =
+    document.getElementById(
+      'attendanceManagerFilter'
+    );
+
+  if (managerSelect) {
+
+    managerSelect.innerHTML =
+      '<option value="all">All Managers</option>';
+
+    managerSelect.disabled =
+      true;
+
+    managerSelect.title =
+      'Manager filter will be enabled when manager-level API aggregation is added.';
+
+  }
+
+
+  /*
+    Status filter is also not required because
+    the API summary already contains Present /
+    Absent / Other aggregate values.
+  */
+
+  const statusSelect =
+    document.getElementById(
+      'attendanceStatusFilter'
+    );
+
+  if (statusSelect) {
+
+    statusSelect.disabled =
+      true;
+
+    statusSelect.title =
+      'Status filtering will be enabled with record-level filtering.';
+
+  }
+
+
+  /*
+    Current API returns all available dates.
+    Period selection is therefore temporarily
+    informational only.
+  */
+
+  const periodSelect =
+    document.getElementById(
+      'attendancePeriodFilter'
+    );
+
+  if (periodSelect) {
+
+    periodSelect.disabled =
+      true;
+
+    periodSelect.title =
+      'Period filter will be enabled in the next API version.';
+
+  }
+
+
+  /*
+    Re-render department-related view
+    when filter changes.
+  */
+
+  if (
+    deptSelect &&
+    !deptSelect.dataset.liveBound
+  ) {
+
+    deptSelect.addEventListener(
+      'change',
+      renderLiveAttendanceDashboard
+    );
+
+    deptSelect.dataset.liveBound =
+      '1';
+
+  }
+
+
+  if (
+    branchSelect &&
+    !branchSelect.dataset.liveBound
+  ) {
+
+    branchSelect.addEventListener(
+      'change',
+      renderLiveAttendanceDashboard
+    );
+
+    branchSelect.dataset.liveBound =
+      '1';
+
+  }
+
+}
+
+
+/* =========================================================
+   MAIN RENDER
+========================================================= */
+
+function renderLiveAttendanceDashboard() {
+
+  if (!attendancePayload) {
+    return;
+  }
+
+
+  renderAttendanceKpis();
+
+  renderAttendanceTrendChart();
+
+  renderAttendanceMixChart();
+
+  renderAttendanceDepartmentChart();
+
+  renderAttendanceBranchChart();
+
+  renderAttendanceDepartmentTable();
+
+  renderAttendanceExceptionTable();
+
+}
+
+
+/* =========================================================
+   KPI CARDS
+========================================================= */
+
+function setAttendanceKpi(
+  id,
+  value
+) {
+
+  const el =
+    document.getElementById(id);
+
+  if (el) {
+    el.innerHTML = value;
+  }
+
+}
+
+
+function renderAttendanceKpis() {
+
+  const data =
+    attendancePayload;
+
+  const summary =
+    data.summary || {};
+
+
+  setAttendanceKpi(
+    'attKpiOverall',
+    attendanceNumber(
+      summary.attendancePercent
+    ).toFixed(1) + '%'
+  );
+
+
+  setAttendanceKpi(
+    'attKpiPresent',
+    attendanceFormatNumber(
+      summary.present
+    )
+  );
+
+
+  setAttendanceKpi(
+    'attKpiAbsent',
+    attendanceFormatNumber(
+      summary.absent
+    )
+  );
+
+
+  /*
+    Third card:
+    use API "other" records.
+  */
+
+  setAttendanceKpi(
+    'attKpiLeave',
+    attendanceFormatNumber(
+      summary.other
+    )
+  );
+
+
+  /*
+    Fourth card:
+    late attendance records.
+  */
+
+  setAttendanceKpi(
+    'attKpiLeaveRequests',
+    attendanceFormatNumber(
+      summary.lateCount
+    )
+  );
+
+
+  /*
+    Avg effective hours.
+  */
+
+  setAttendanceKpi(
+    'attKpiRegularisation',
+    attendanceNumber(
+      summary.avgEffectiveHours
+    ).toFixed(2) +
+    ' <span>hrs</span>'
+  );
+
+
+  /*
+    Employees.
+  */
+
+  setAttendanceKpi(
+    'attKpiLiability',
+    attendanceFormatNumber(
+      data.employeeCount
+    )
+  );
+
+
+  /*
+    Attendance records.
+  */
+
+  setAttendanceKpi(
+    'attKpiExceptions',
+    attendanceFormatNumber(
+      data.attendanceRecordCount
+    )
+  );
+
+}
+
+
+/* =========================================================
+   DAILY ATTENDANCE TREND
+========================================================= */
+
+function renderAttendanceTrendChart() {
+
+  const canvas =
+    document.getElementById(
+      'attendanceTrendChart'
+    );
+
+  if (
+    !canvas ||
+    typeof Chart === 'undefined'
+  ) {
+    return;
+  }
+
+
+  destroyAttendanceChart(
+    'attendanceTrendChart'
+  );
+
+
+  const rows =
+    [...attendancePayload.daily]
+      .sort(
+        (a, b) =>
+          String(a.date)
+            .localeCompare(
+              String(b.date)
+            )
+      );
+
+
+  /*
+    Keep most recent 30 dates in the chart.
+  */
+
+  const recent =
+    rows.slice(-30);
+
+
+  ATTENDANCE_CHARTS[
+    'attendanceTrendChart'
+  ] =
+    new Chart(
+      canvas,
+      {
+
+        type: 'line',
+
+        data: {
+
+          labels:
+            recent.map(
+              row => {
+
+                const d =
+                  new Date(
+                    row.date + 'T00:00:00'
+                  );
+
+                if (
+                  Number.isNaN(
+                    d.getTime()
+                  )
+                ) {
+                  return row.date;
+                }
+
+                return d.toLocaleDateString(
+                  'en-IN',
+                  {
+                    day: '2-digit',
+                    month: 'short'
+                  }
+                );
+
+              }
+            ),
+
+          datasets: [
+
+            {
+
+              label:
+                'Attendance %',
+
+              data:
+                recent.map(
+                  row =>
+                    attendanceNumber(
+                      row.attendancePercent
+                    )
+                ),
+
+              borderColor:
+                '#17616e',
+
+              backgroundColor:
+                'rgba(23,97,110,.08)',
+
+              fill: true,
+
+              tension: 0.35,
+
+              pointRadius: 2,
+
+              pointHoverRadius: 4,
+
+              borderWidth: 2.2
+
+            }
+
+          ]
+
+        },
+
+
+        options: {
+
+          responsive: true,
+
+          maintainAspectRatio:
+            false,
+
+          interaction: {
+            intersect: false,
+            mode: 'index'
+          },
+
+          plugins: {
+
+            legend: {
+              display: false
+            },
+
+            tooltip: {
+
+              callbacks: {
+
+                label:
+                  context =>
+                    context.parsed.y
+                      .toFixed(1) +
+                    '%'
+
+              }
+
+            }
+
+          },
+
+          scales: {
+
+            x: {
+
+              grid: {
+                display: false
+              }
+
+            },
+
+            y: {
+
+              beginAtZero: true,
+
+              max: 100,
+
+              ticks: {
+
+                callback:
+                  value =>
+                    value + '%'
+
+              },
+
+              grid: {
+
+                color:
+                  'rgba(15,68,78,.07)'
+
+              }
+
+            }
+
+          }
+
+        }
+
+      }
+    );
+
+}
+
+
+/* =========================================================
+   PRESENT / ABSENT / OTHER
+========================================================= */
+
+function renderAttendanceMixChart() {
+
+  const canvas =
+    document.getElementById(
+      'attendanceMixChart'
+    );
+
+  if (
+    !canvas ||
+    typeof Chart === 'undefined'
+  ) {
+    return;
+  }
+
+
+  destroyAttendanceChart(
+    'attendanceMixChart'
+  );
+
+
+  const summary =
+    attendancePayload.summary;
+
+
+  ATTENDANCE_CHARTS[
+    'attendanceMixChart'
+  ] =
+    new Chart(
+      canvas,
+      {
+
+        type: 'doughnut',
+
+        data: {
+
+          labels: [
+            'Present',
+            'Absent',
+            'Other'
+          ],
+
+          datasets: [
+
+            {
+
+              data: [
+
+                attendanceNumber(
+                  summary.present
+                ),
+
+                attendanceNumber(
+                  summary.absent
+                ),
+
+                attendanceNumber(
+                  summary.other
+                )
+
+              ],
+
+              backgroundColor: [
+                '#70ad47',
+                '#c22a4d',
+                '#899ba0'
+              ],
+
+              borderWidth: 0
+
+            }
+
+          ]
+
+        },
+
+
+        options: {
+
+          responsive: true,
+
+          maintainAspectRatio:
+            false,
+
+          cutout: '68%',
+
+          plugins: {
+
+            legend: {
+              position: 'bottom'
+            }
+
+          }
+
+        }
+
+      }
+    );
+
+}
+
+
+/* =========================================================
+   DEPARTMENT CHART
+========================================================= */
+
+function getSelectedDepartment() {
+
+  const el =
+    document.getElementById(
+      'attendanceDeptFilter'
+    );
+
+  return el
+    ? el.value
+    : 'all';
+
+}
+
+
+function renderAttendanceDepartmentChart() {
+
+  const canvas =
+    document.getElementById(
+      'attendanceDeptChart'
+    );
+
+  if (
+    !canvas ||
+    typeof Chart === 'undefined'
+  ) {
+    return;
+  }
+
+
+  destroyAttendanceChart(
+    'attendanceDeptChart'
+  );
+
+
+  let departments =
+    [...attendancePayload.departments];
+
+
+  const selected =
+    getSelectedDepartment();
+
+
+  if (selected !== 'all') {
+
+    departments =
+      departments.filter(
+        row =>
+          row.department ===
+          selected
+      );
+
+  }
+
+
+  /*
+    Sort high to low.
+  */
+
+  departments.sort(
+    (a, b) =>
+      attendanceNumber(
+        b.attendancePercent
+      )
+      -
+      attendanceNumber(
+        a.attendancePercent
+      )
+  );
+
+
+  ATTENDANCE_CHARTS[
+    'attendanceDeptChart'
+  ] =
+    new Chart(
+      canvas,
+      {
+
+        type: 'bar',
+
+        data: {
+
+          labels:
+            departments.map(
+              row =>
+                row.department
+            ),
+
+          datasets: [
+
+            {
+
+              label:
+                'Attendance %',
+
+              data:
+                departments.map(
+                  row =>
+                    attendanceNumber(
+                      row.attendancePercent
+                    )
+                ),
+
+              backgroundColor:
+                '#17616e',
+
+              borderRadius: 5,
+
+              maxBarThickness: 30
+
+            }
+
+          ]
+
+        },
+
+
+        options: {
+
+          indexAxis:
+            departments.length > 6
+              ? 'y'
+              : 'x',
+
+          responsive: true,
+
+          maintainAspectRatio:
+            false,
+
+          plugins: {
+
+            legend: {
+              display: false
+            }
+
+          },
+
+          scales: {
+
+            x: {
+
+              beginAtZero: true,
+
+              grid: {
+                display: false
+              }
+
+            },
+
+            y: {
+
+              beginAtZero: true,
+
+              grid: {
+
+                color:
+                  'rgba(15,68,78,.06)'
+
+              }
+
+            }
+
+          }
+
+        }
+
+      }
+    );
+
+}
+
+
+/* =========================================================
+   BRANCH CHART
+
+   We reuse attendanceLeaveMixChart canvas because leave data
+   is not available in the current API.
+========================================================= */
+
+function renderAttendanceBranchChart() {
+
+  const canvas =
+    document.getElementById(
+      'attendanceLeaveMixChart'
+    );
+
+  if (
+    !canvas ||
+    typeof Chart === 'undefined'
+  ) {
+    return;
+  }
+
+
+  destroyAttendanceChart(
+    'attendanceLeaveMixChart'
+  );
+
+
+  let branches =
+    Array.isArray(
+      attendancePayload.branches
+    )
+      ? [...attendancePayload.branches]
+      : [];
+
+
+  const branchFilter =
+    document.getElementById(
+      'attendanceLocationFilter'
+    );
+
+
+  if (
+    branchFilter &&
+    branchFilter.value !== 'all'
+  ) {
+
+    branches =
+      branches.filter(
+        row =>
+          row.branch ===
+          branchFilter.value
+      );
+
+  }
+
+
+  branches.sort(
+    (a, b) =>
+      attendanceNumber(
+        b.attendancePercent
+      )
+      -
+      attendanceNumber(
+        a.attendancePercent
+      )
+  );
+
+
+  ATTENDANCE_CHARTS[
+    'attendanceLeaveMixChart'
+  ] =
+    new Chart(
+      canvas,
+      {
+
+        type: 'bar',
+
+        data: {
+
+          labels:
+            branches.map(
+              row =>
+                row.branch
+            ),
+
+          datasets: [
+
+            {
+
+              label:
+                'Attendance %',
+
+              data:
+                branches.map(
+                  row =>
+                    attendanceNumber(
+                      row.attendancePercent
+                    )
+                ),
+
+              backgroundColor:
+                '#3875b7',
+
+              borderRadius: 5,
+
+              maxBarThickness: 30
+
+            }
+
+          ]
+
+        },
+
+
+        options: {
+
+          indexAxis:
+            branches.length > 6
+              ? 'y'
+              : 'x',
+
+          responsive: true,
+
+          maintainAspectRatio:
+            false,
+
+          plugins: {
+
+            legend: {
+              display: false
+            }
+
+          }
+
+        }
+
+      }
+    );
+
+}
+
+
+/* =========================================================
+   DEPARTMENT TABLE
+========================================================= */
+
+function renderAttendanceDepartmentTable() {
+
+  const tbody =
+    document.getElementById(
+      'attendanceDeptBody'
+    );
+
+  if (!tbody) {
+    return;
+  }
+
+
+  let rows =
+    [...attendancePayload.departments];
+
+
+  const selected =
+    getSelectedDepartment();
+
+
+  if (
+    selected !== 'all'
+  ) {
+
+    rows =
+      rows.filter(
+        row =>
+          row.department ===
+          selected
+      );
+
+  }
+
+
+  rows.sort(
+    (a, b) =>
+      attendanceNumber(
+        b.attendancePercent
+      )
+      -
+      attendanceNumber(
+        a.attendancePercent
+      )
+  );
+
+
+  tbody.innerHTML =
+    rows.map(
+      row => {
+
+        const pct =
+          attendanceNumber(
+            row.attendancePercent
+          );
+
+
+        let cls =
+          'green';
+
+        let status =
+          'Healthy';
+
+
+        if (pct < 80) {
+
+          cls =
+            'red';
+
+          status =
+            'Critical';
+
+        } else if (
+          pct < 90
+        ) {
+
+          cls =
+            'amber';
+
+          status =
+            'Watch';
+
+        }
+
+
+        return `
+
+          <tr>
+
+            <td>
+              ${attendanceEscape(
+                row.department
+              )}
+            </td>
+
+            <td>
+              ${attendanceFormatNumber(
+                row.total
+              )}
+            </td>
+
+            <td>
+              <strong>
+                ${pct.toFixed(1)}%
+              </strong>
+            </td>
+
+            <td>
+              ${attendanceFormatNumber(
+                row.present
+              )}
+            </td>
+
+            <td>
+              ${attendanceFormatNumber(
+                row.absent
+              )}
+            </td>
+
+            <td>
+              ${attendanceFormatNumber(
+                row.other
+              )}
+            </td>
+
+            <td>
+
+              <span
+                class="module-status ${cls}"
+              >
+                ${status}
+              </span>
+
+            </td>
+
+          </tr>
+
+        `;
+
+      }
+    )
+    .join('');
+
+}
+
+
+/* =========================================================
+   EXCEPTION TABLE
+========================================================= */
+
+function renderAttendanceExceptionTable() {
+
+  const tbody =
+    document.getElementById(
+      'attendanceExceptionBody'
+    );
+
+  if (!tbody) {
+    return;
+  }
+
+
+  let rows =
+    Array.isArray(
+      attendancePayload.exceptions
+    )
+      ? [...attendancePayload.exceptions]
+      : [];
+
+
+  const department =
+    getSelectedDepartment();
+
+
+  if (
+    department !== 'all'
+  ) {
+
+    rows =
+      rows.filter(
+        row =>
+          row.department ===
+          department
+      );
+
+  }
+
+
+  const branchFilter =
+    document.getElementById(
+      'attendanceLocationFilter'
+    );
+
+
+  if (
+    branchFilter &&
+    branchFilter.value !== 'all'
+  ) {
+
+    rows =
+      rows.filter(
+        row =>
+          row.branch ===
+          branchFilter.value
+      );
+
+  }
+
+
+  const counter =
+    document.getElementById(
+      'attendanceExceptionCount'
+    );
+
+  if (counter) {
+
+    counter.textContent =
+      attendanceFormatNumber(
+        rows.length
+      );
+
+  }
+
+
+  if (!rows.length) {
+
+    tbody.innerHTML = `
+
+      <tr>
+
+        <td
+          colspan="8"
+          style="
+            text-align:center;
+            padding:24px;
+            color:#81979d;
+          "
+        >
+          No attendance exceptions found.
+        </td>
+
+      </tr>
+
+    `;
+
+    return;
+
+  }
+
+
+  tbody.innerHTML =
+    rows
+
+      .slice(0, 100)
+
+      .map(
+        row => {
+
+          const pct =
+            attendanceNumber(
+              row.attendancePercent
+            );
+
+
+          let cls =
+            'amber';
+
+          let issue =
+            'Attendance Watch';
+
+
+          if (pct < 75) {
+
+            cls =
+              'red';
+
+            issue =
+              'Low Attendance';
+
+          }
+
+
+          return `
+
+            <tr>
+
+              <td>
+
+                <div class="employee-cell-name">
+
+                  ${attendanceEscape(
+                    row.employeeName
+                  )}
+
+                </div>
+
+                <div class="employee-cell-sub">
+
+                  ${attendanceEscape(
+                    row.employeeNumber
+                  )}
+
+                </div>
+
+              </td>
+
+
+              <td>
+                ${attendanceEscape(
+                  row.department
+                )}
+              </td>
+
+
+              <td>
+                ${attendanceEscape(
+                  row.manager || '-'
+                )}
+              </td>
+
+
+              <td>
+
+                <strong>
+                  ${pct.toFixed(1)}%
+                </strong>
+
+              </td>
+
+
+              <td>
+                ${attendanceFormatNumber(
+                  row.absent
+                )}
+              </td>
+
+
+              <td>
+                ${attendanceFormatNumber(
+                  row.other
+                )}
+              </td>
+
+
+              <td>
+
+                <span
+                  class="module-status ${cls}"
+                >
+                  ${issue}
+                </span>
+
+              </td>
+
+
+              <td>
+
+                <button
+                  type="button"
+                  class="module-action-btn"
+                  onclick="openAttendanceEmployee('${attendanceEscape(
+                    row.employeeNumber
+                  )}')"
+                >
+                  View
+                </button>
+
+              </td>
+
+            </tr>
+
+          `;
+
+        }
+      )
+
+      .join('');
+
+}
+
+
+/* =========================================================
+   TEMPORARY UNUSED CHARTS
+========================================================= */
+
+/*
+The current Keka API does not contain actual leave data.
+
+So instead of showing fake leave usage / regularisation charts,
+we show a clear placeholder.
+*/
+
+function renderAttendanceUnavailableSections() {
+
+  [
+    'leaveUsageChart',
+    'regularisationTrendChart'
+  ]
+  .forEach(
+    id => {
+
+      const canvas =
+        document.getElementById(id);
+
+      if (!canvas) {
+        return;
+      }
+
+
+      const parent =
+        canvas.parentElement;
+
+      if (!parent) {
+        return;
+      }
+
+
+      canvas.style.display =
+        'none';
+
+
+      let note =
+        parent.querySelector(
+          '.attendance-api-note'
+        );
+
+
+      if (!note) {
+
+        note =
+          document.createElement(
+            'div'
+          );
+
+        note.className =
+          'attendance-api-note';
+
+        note.style.cssText = `
+          min-height:220px;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          text-align:center;
+          color:#81979d;
+          font-size:12px;
+          padding:24px;
+        `;
+
+        note.innerHTML =
+          'Leave API data not connected yet.';
+
+        parent.appendChild(
+          note
+        );
+
+      }
+
+    }
+  );
+
+}
+
+
+/* =========================================================
+   EMPLOYEE DETAIL
+========================================================= */
+
+function openAttendanceEmployee(
+  employeeNumber
+) {
+
+  if (!attendancePayload) {
+    return;
+  }
+
+
+  const employee =
+    attendancePayload.exceptions
+      ?.find(
+        row =>
+          String(
+            row.employeeNumber
+          ) ===
+          String(
+            employeeNumber
+          )
+      );
+
+
+  if (!employee) {
+
+    alert(
+      'Employee attendance detail is not available in the current aggregate response.'
+    );
+
+    return;
+
+  }
+
+
+  alert(
+
+    employee.employeeName +
+
+    '\n\nEmployee ID: ' +
+    employee.employeeNumber +
+
+    '\nDepartment: ' +
+    (
+      employee.department ||
+      '-'
+    ) +
+
+    '\nBranch: ' +
+    (
+      employee.branch ||
+      '-'
+    ) +
+
+    '\nManager: ' +
+    (
+      employee.manager ||
+      '-'
+    ) +
+
+    '\nAttendance: ' +
+    employee.attendancePercent +
+    '%' +
+
+    '\nPresent Records: ' +
+    employee.present +
+
+    '\nAbsent Records: ' +
+    employee.absent
+
+  );
+
+}
+
+
+/* =========================================================
+   LOAD WHEN ATTENDANCE TAB IS OPEN
+========================================================= */
+
+function initialiseLiveAttendance() {
+
+  renderAttendanceUnavailableSections();
+
+
+  const attendancePage =
+    document.getElementById(
+      'attendance'
+    );
+
+
+  /*
+    If Attendance happens to be the initial page,
+    load immediately.
+  */
+
+  if (
+    attendancePage &&
+    attendancePage.classList.contains(
+      'active'
+    )
+  ) {
+
+    loadAttendanceLive(false);
+
+  }
+
+}
+
+
+if (
+  document.readyState ===
+  'loading'
+) {
+
+  document.addEventListener(
+    'DOMContentLoaded',
+    initialiseLiveAttendance
+  );
+
+} else {
+
+  initialiseLiveAttendance();
+
+}
+
+
+/* =========================================================
+   PAYROLL & COMPENSATION - LIVE FRONTEND
+========================================================= */
+
+const PAYROLL_API_URL =
+  'https://script.google.com/macros/s/AKfycbxWzFltc06j3OmPFG62gtuvbj_SumQe3dvbPCcc5BurhqyXeeqRTXJjutzNKStXSJl-/exec';
+
+let PAYROLL_DATA = null;
+let PAYROLL_LOADED = false;
+let PAYROLL_LOADING = false;
+let PAYROLL_REQUEST_TIMER = null;
+
+const PAYROLL_CHARTS = {};
+
+const PAYROLL_METRICS = {
+  payrollCost: {
+    title: 'Payroll Cost',
+    subtitle: 'Total Earn Gross with Arrear'
+  },
+  totalDeduction: {
+    title: 'Total Deduction',
+    subtitle: 'PF, ESI, tax, loan and other deductions'
+  },
+  netPayroll: {
+    title: 'Net Payroll',
+    subtitle: 'Final payable in-hand'
+  },
+  arrearIncrement: {
+    title: 'Arrear Increment',
+    subtitle: 'Increment arrears processed'
+  }
+};
+
+function payrollGet(id) {
+  return __nativeGetElementById ? __nativeGetElementById(id) : document.getElementById(id);
+}
+
+function setPayrollStatus(text, state) {
+  const el = payrollGet('payrollLiveStatus');
+  if (!el) return;
+  el.textContent = text;
+  el.classList.remove('live', 'error');
+  if (state === 'live') el.classList.add('live');
+  if (state === 'error') el.classList.add('error');
+}
+
+function loadPayrollLive(forceRefresh = false) {
+  if (PAYROLL_LOADING) return;
+
+  if (PAYROLL_LOADED && !forceRefresh) {
+    renderPayrollDashboard(PAYROLL_DATA);
+    return;
+  }
+
+  PAYROLL_LOADING = true;
+  setPayrollStatus('Connecting...', '');
+
+  const oldScript = payrollGet('payrollJsonpScript');
+  if (oldScript && oldScript.parentNode) oldScript.parentNode.removeChild(oldScript);
+  if (PAYROLL_REQUEST_TIMER) clearTimeout(PAYROLL_REQUEST_TIMER);
+
+  window.receivePayrollData = function(payload) {
+    PAYROLL_LOADING = false;
+    if (PAYROLL_REQUEST_TIMER) clearTimeout(PAYROLL_REQUEST_TIMER);
+
+    try {
+      if (!payload || payload.ok !== true) {
+        throw new Error((payload && payload.error) || 'Payroll API returned invalid data');
+      }
+      if (!Array.isArray(payload.months)) {
+        throw new Error('months[] missing from Payroll API response');
+      }
+
+      PAYROLL_DATA = payload;
+      PAYROLL_LOADED = true;
+      setPayrollStatus('● Live', 'live');
+      renderPayrollDashboard(payload);
+      document.dispatchEvent(new CustomEvent('euronics:payroll-loaded', { detail: { latestMonth: payload.latestMonth } }));
+      console.log('Payroll live loaded:', payload);
+    } catch (error) {
+      console.error('Payroll response processing failed:', error, payload);
+      setPayrollStatus('Data Error', 'error');
+    }
+  };
+
+  const script = document.createElement('script');
+  script.id = 'payrollJsonpScript';
+  script.async = true;
+  script.src =
+    PAYROLL_API_URL +
+    '?module=payroll' +
+    '&callback=receivePayrollData' +
+    '&_=' + Date.now();
+
+  script.onerror = function(event) {
+    PAYROLL_LOADING = false;
+    if (PAYROLL_REQUEST_TIMER) clearTimeout(PAYROLL_REQUEST_TIMER);
+    console.error('Unable to load Payroll API:', event, script.src);
+    setPayrollStatus('Connection Failed', 'error');
+  };
+
+  document.head.appendChild(script);
+
+  PAYROLL_REQUEST_TIMER = setTimeout(function() {
+    if (PAYROLL_LOADING) {
+      PAYROLL_LOADING = false;
+      console.error('Payroll API timeout:', script.src);
+      setPayrollStatus('Connection Timeout', 'error');
+    }
+  }, 20000);
+}
+
+function renderPayrollDashboard(data) {
+  if (!data || !data.summary) return;
+
+  const s = data.summary;
+
+  setPayrollText('payrollLatestMonth', data.latestMonth || '-');
+  setPayrollText('payrollKpiCost', formatPayrollMoney(s.payrollCost));
+  setPayrollText('payrollKpiDeduction', formatPayrollMoney(s.totalDeduction));
+  setPayrollText('payrollKpiNet', formatPayrollMoney(s.netPayroll));
+  setPayrollText('payrollKpiArrear', formatPayrollMoney(s.arrearIncrement));
+
+  setPayrollMom('payrollKpiCostMom', s.payrollCostMomPct);
+  setPayrollMom('payrollKpiDeductionMom', s.totalDeductionMomPct);
+  setPayrollMom('payrollKpiNetMom', s.netPayrollMomPct);
+  setPayrollMom('payrollKpiArrearMom', s.arrearIncrementMomPct);
+
+  setPayrollText('payrollEmployeeCount', formatPayrollNumber(s.employeeCount));
+  setPayrollText('payrollSalaryHoldCount', formatPayrollNumber(s.salaryHoldCount));
+  setPayrollText('payrollLopDays', formatPayrollNumber(s.lopDays));
+
+  renderPayrollTrendChart(data.months || []);
+  renderPayrollDepartmentChart(data.latestDepartmentBreakdown || []);
+  renderPayrollLocationChart(data.latestLocationBreakdown || []);
+}
+
+function setPayrollText(id, value) {
+  const el = payrollGet(id);
+  if (el) el.textContent = value;
+}
+
+function setPayrollMom(id, value) {
+  const el = payrollGet(id);
+  if (!el) return;
+
+  el.classList.remove('up', 'down', 'flat');
+
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) {
+    el.textContent = 'MoM: NA';
+    el.classList.add('flat');
+    return;
+  }
+
+  const number = Number(value);
+  if (number > 0) {
+    el.textContent = '▲ ' + Math.abs(number).toFixed(1) + '% vs previous month';
+    el.classList.add('up');
+  } else if (number < 0) {
+    el.textContent = '▼ ' + Math.abs(number).toFixed(1) + '% vs previous month';
+    el.classList.add('down');
+  } else {
+    el.textContent = '0.0% vs previous month';
+    el.classList.add('flat');
+  }
+}
+
+function destroyPayrollChart(key, canvasId) {
+  if (PAYROLL_CHARTS[key]) {
+    try { PAYROLL_CHARTS[key].destroy(); } catch (e) {}
+    delete PAYROLL_CHARTS[key];
+  }
+
+  if (typeof Chart !== 'undefined' && typeof Chart.getChart === 'function') {
+    const canvas = payrollGet(canvasId);
+    if (canvas) {
+      const old = Chart.getChart(canvas);
+      if (old) {
+        try { old.destroy(); } catch (e) {}
+      }
+    }
+  }
+}
+
+function renderPayrollTrendChart(months) {
+  const canvas = payrollGet('payrollTrendChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  destroyPayrollChart('trend', 'payrollTrendChart');
+
+  PAYROLL_CHARTS.trend = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: months.map(row => row.month),
+      datasets: [{
+        label: 'Payroll Cost',
+        data: months.map(row => Number(row.payrollCost || 0)),
+        borderColor: '#17616E',
+        backgroundColor: 'rgba(23,97,110,.10)',
+        tension: .32,
+        fill: true,
+        borderWidth: 3,
+        pointRadius: 4,
+        pointHoverRadius: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ' ' + formatPayrollMoney(ctx.raw)
+          }
+        }
+      },
+      scales: {
+        x: { grid: { display: false } },
+        y: {
+          beginAtZero: false,
+          grid: { color: '#EEF1F4' },
+          ticks: { callback: value => formatPayrollCompact(value) }
+        }
+      }
+    }
+  });
+}
+
+function renderPayrollDepartmentChart(rows) {
+  const canvas = payrollGet('payrollDeptChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  destroyPayrollChart('department', 'payrollDeptChart');
+
+  const clean = (rows || [])
+    .filter(row => row.department && Number(row.payrollCost || 0) > 0)
+    .sort((a,b) => Number(b.payrollCost || 0) - Number(a.payrollCost || 0))
+    .slice(0, 12);
+
+  PAYROLL_CHARTS.department = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: clean.map(row => row.department),
+      datasets: [{
+        label: 'Payroll Cost',
+        data: clean.map(row => Number(row.payrollCost || 0)),
+        backgroundColor: '#17616E',
+        borderRadius: 6,
+        borderSkipped: false
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ' ' + formatPayrollMoney(ctx.raw) } }
+      },
+      scales: {
+        x: { beginAtZero: true, grid: { color: '#EEF1F4' }, ticks: { callback: value => formatPayrollCompact(value) } },
+        y: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+function renderPayrollLocationChart(rows) {
+  const canvas = payrollGet('payrollLocationChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  destroyPayrollChart('location', 'payrollLocationChart');
+
+  const clean = (rows || [])
+    .filter(row => row.location && Number(row.payrollCost || 0) > 0)
+    .sort((a,b) => Number(b.payrollCost || 0) - Number(a.payrollCost || 0))
+    .slice(0, 12);
+
+  PAYROLL_CHARTS.location = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: clean.map(row => row.location),
+      datasets: [{
+        label: 'Payroll Cost',
+        data: clean.map(row => Number(row.payrollCost || 0)),
+        backgroundColor: '#3E7DBB',
+        borderRadius: 6,
+        borderSkipped: false
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ' ' + formatPayrollMoney(ctx.raw) } }
+      },
+      scales: {
+        x: { beginAtZero: true, grid: { color: '#EEF1F4' }, ticks: { callback: value => formatPayrollCompact(value) } },
+        y: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+function openPayrollMom(metricKey) {
+  if (!PAYROLL_DATA || !PAYROLL_METRICS[metricKey]) return;
+
+  const config = PAYROLL_METRICS[metricKey];
+  const months = PAYROLL_DATA.months || [];
+
+  const title = payrollGet('payrollMomTitle');
+  const subtitle = payrollGet('payrollMomSubtitle');
+  if (title) title.textContent = config.title + ' - Month-on-Month';
+  if (subtitle) subtitle.textContent = config.subtitle;
+
+  renderPayrollMomChart(metricKey, months, config);
+  renderPayrollMomTable(metricKey, months);
+
+  const modal = payrollGet('payrollMomModal');
+  if (modal) modal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closePayrollMom() {
+  const modal = payrollGet('payrollMomModal');
+  if (modal) modal.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function closePayrollMomOnBackdrop(event) {
+  if (event && event.target && event.target.id === 'payrollMomModal') closePayrollMom();
+}
+
+function renderPayrollMomChart(metricKey, months, config) {
+  const canvas = payrollGet('payrollMomChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  destroyPayrollChart('mom', 'payrollMomChart');
+
+  PAYROLL_CHARTS.mom = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: months.map(row => row.month),
+      datasets: [{
+        label: config.title,
+        data: months.map(row => Number(row[metricKey] || 0)),
+        borderColor: '#17616E',
+        backgroundColor: 'rgba(23,97,110,.10)',
+        tension: .32,
+        fill: true,
+        borderWidth: 3,
+        pointRadius: 5,
+        pointHoverRadius: 7
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ' ' + formatPayrollMoney(ctx.raw) } }
+      },
+      scales: {
+        x: { grid: { display: false } },
+        y: { beginAtZero: false, grid: { color: '#EEF1F4' }, ticks: { callback: value => formatPayrollCompact(value) } }
+      }
+    }
+  });
+}
+
+function renderPayrollMomTable(metricKey, months) {
+  const body = payrollGet('payrollMomTableBody');
+  if (!body) return;
+
+  if (!months.length) {
+    body.innerHTML = '<tr><td colspan="3">No payroll months available.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = months.map((row, index) => {
+    const value = Number(row[metricKey] || 0);
+    let mom = null;
+    if (index > 0) {
+      const previous = Number(months[index - 1][metricKey] || 0);
+      if (previous !== 0) mom = ((value - previous) / previous) * 100;
+    }
+    const isLatest = index === months.length - 1;
+
+    return `
+      <tr class="${isLatest ? 'payroll-latest-row' : ''}">
+        <td>${escapePayrollHtml(row.month || '-')}${isLatest ? ' <span style="font-size:11px;color:#14825a;">LATEST</span>' : ''}</td>
+        <td>${formatPayrollMoney(value)}</td>
+        <td>${formatPayrollMomCell(mom)}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function formatPayrollMoney(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return '-';
+  const abs = Math.abs(number);
+  if (abs >= 10000000) return '₹' + (number / 10000000).toFixed(2) + ' Cr';
+  if (abs >= 100000) return '₹' + (number / 100000).toFixed(2) + ' L';
+  return '₹' + new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(number);
+}
+
+function formatPayrollCompact(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return '';
+  const abs = Math.abs(number);
+  if (abs >= 10000000) return (number / 10000000).toFixed(1) + 'Cr';
+  if (abs >= 100000) return (number / 100000).toFixed(1) + 'L';
+  if (abs >= 1000) return (number / 1000).toFixed(0) + 'K';
+  return String(Math.round(number));
+}
+
+function formatPayrollNumber(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return '-';
+  return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 1 }).format(number);
+}
+
+function formatPayrollMomCell(value) {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) return 'NA';
+  const number = Number(value);
+  if (number > 0) return '<span style="color:#13895b;font-weight:800;">▲ ' + number.toFixed(1) + '%</span>';
+  if (number < 0) return '<span style="color:#d13850;font-weight:800;">▼ ' + Math.abs(number).toFixed(1) + '%</span>';
+  return '<span style="color:#71838d;font-weight:800;">0.0%</span>';
+}
+
+function escapePayrollHtml(value) {
+  return String(value === null || value === undefined ? '' : value)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#039;');
+}
+
+if (!window.__payrollEscapeBound) {
+  window.__payrollEscapeBound = true;
+  document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') closePayrollMom();
+  });
+}
+
+/* =========================================================
+   TEAM OB - LIVE FRONTEND MODULE ONLY
+   SAFE APPEND:
+   Paste this entire block at the END of your current js/app.js.
+
+   It uses only teamOb* / TEAM_OB_* names and does not replace
+   Employee CRM, Attendance, L&D or Payroll code.
+========================================================= */
+
+const TEAM_OB_API_URL =
+  'https://script.google.com/macros/s/AKfycbz8nFzY8Pz6zHROc1MfwPI13qYs-beQFndI65Av3HS3rNNJ7V_7wVntUvHT2UdHkYy4/exec';
+
+let TEAM_OB_DATA = null;
+let TEAM_OB_LOADED = false;
+let TEAM_OB_LOADING = false;
+let TEAM_OB_REQUEST_TIMER = null;
+
+const TEAM_OB_CHARTS = {};
+
+/* =========================
+   SMALL HELPERS
+========================= */
+
+function teamObEl(id){
+  return document.getElementById(id);
+}
+
+function teamObNum(value){
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function teamObText(value){
+  return String(value === null || value === undefined ? '' : value);
+}
+
+function teamObEsc(value){
+  return teamObText(value)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#039;');
+}
+
+function teamObFormatNum(value, digits){
+  const n = teamObNum(value);
+  if(n === null) return '-';
+  return new Intl.NumberFormat('en-IN',{
+    maximumFractionDigits: digits === undefined ? 1 : digits
+  }).format(n);
+}
+
+function teamObPct(value){
+  const n = teamObNum(value);
+  return n === null ? '-' : n.toFixed(1) + '%';
+}
+
+function teamObHours(value){
+  const n = teamObNum(value);
+  return n === null ? '-' : n.toFixed(2) + ' hrs';
+}
+
+function teamObMinutes(value){
+  const n = teamObNum(value);
+  return n === null ? '-' : teamObFormatNum(n,1) + ' min';
+}
+
+function teamObPrettyDate(value){
+  if(!value) return '-';
+  const d = new Date(value + 'T00:00:00');
+  if(Number.isNaN(d.getTime())) return value;
+  return d.toLocaleDateString('en-IN',{
+    day:'2-digit',
+    month:'short',
+    year:'numeric'
+  });
+}
+
+function teamObSetText(id,value){
+  const el = teamObEl(id);
+  if(el) el.textContent = value;
+}
+
+function teamObStatusClass(status){
+  const s = teamObText(status).toLowerCase();
+  if(s === 'healthy') return 'healthy';
+  if(s === 'attention') return 'attention';
+  return 'watch';
+}
+
+function teamObSetStatus(text,state){
+  const el = teamObEl('teamObLiveStatus');
+  if(!el) return;
+  el.textContent = text;
+  el.classList.remove('live','error');
+  if(state === 'live') el.classList.add('live');
+  if(state === 'error') el.classList.add('error');
+}
+
+function teamObDestroyChart(key, canvasId){
+  if(TEAM_OB_CHARTS[key]){
+    try{ TEAM_OB_CHARTS[key].destroy(); }catch(e){}
+    TEAM_OB_CHARTS[key] = null;
+  }
+
+  if(
+    typeof Chart !== 'undefined' &&
+    typeof Chart.getChart === 'function'
+  ){
+    const canvas = teamObEl(canvasId);
+    if(canvas){
+      const existing = Chart.getChart(canvas);
+      if(existing){
+        try{ existing.destroy(); }catch(e){}
+      }
+    }
+  }
+}
+
+/* =========================
+   LOAD JSONP
+========================= */
+
+function teamObLoad(forceRefresh){
+
+  if(TEAM_OB_LOADING) return;
+
+  if(TEAM_OB_LOADED && !forceRefresh){
+    teamObRenderAll();
+    return;
+  }
+
+  TEAM_OB_LOADING = true;
+  teamObSetStatus('Connecting...','loading');
+
+  const old = teamObEl('teamObJsonpScript');
+  if(old && old.parentNode) old.parentNode.removeChild(old);
+
+  if(TEAM_OB_REQUEST_TIMER){
+    clearTimeout(TEAM_OB_REQUEST_TIMER);
+  }
+
+  const daysEl = teamObEl('teamObDaysFilter');
+  const days = daysEl ? Number(daysEl.value || 30) : 30;
+
+  const script = document.createElement('script');
+  script.id = 'teamObJsonpScript';
+  script.src =
+    TEAM_OB_API_URL +
+    '?module=teamob' +
+    '&days=' + encodeURIComponent(days) +
+    '&callback=receiveTeamObData' +
+    '&_=' + Date.now();
+
+  script.onerror = function(){
+    TEAM_OB_LOADING = false;
+    teamObSetStatus('Connection Failed','error');
+    console.error('Team OB API failed to load.');
+  };
+
+  TEAM_OB_REQUEST_TIMER = setTimeout(function(){
+    if(TEAM_OB_LOADING){
+      TEAM_OB_LOADING = false;
+      teamObSetStatus('Timeout','error');
+      console.error('Team OB API timeout.');
+    }
+  },45000);
+
+  document.body.appendChild(script);
+}
+
+window.receiveTeamObData = function(data){
+
+  if(TEAM_OB_REQUEST_TIMER){
+    clearTimeout(TEAM_OB_REQUEST_TIMER);
+    TEAM_OB_REQUEST_TIMER = null;
+  }
+
+  TEAM_OB_LOADING = false;
+
+  if(
+    !data ||
+    data.ok !== true ||
+    !Array.isArray(data.employees)
+  ){
+    console.error('Invalid Team OB payload:',data);
+    teamObSetStatus('Data Error','error');
+    return;
+  }
+
+  TEAM_OB_DATA = data;
+  TEAM_OB_LOADED = true;
+  teamObSetStatus('● Live','live');
+
+  teamObPopulateFilters();
+  teamObRenderFreshness();
+  teamObRenderAll();
+};
+
+function teamObReloadPeriod(){
+  TEAM_OB_LOADED = false;
+  TEAM_OB_DATA = null;
+  teamObLoad(true);
+}
+
+/* =========================
+   FILTERS
+========================= */
+
+function teamObPopulateFilters(){
+
+  if(!TEAM_OB_DATA) return;
+
+  const rows = TEAM_OB_DATA.employees || [];
+
+  const departments = [...new Set(
+    rows.map(r => r.department).filter(Boolean)
+  )].sort((a,b)=>String(a).localeCompare(String(b)));
+
+  const managers = [...new Set(
+    rows.map(r => r.manager).filter(Boolean)
+  )].sort((a,b)=>String(a).localeCompare(String(b)));
+
+  const dept = teamObEl('teamObDepartmentFilter');
+  const mgr = teamObEl('teamObManagerFilter');
+
+  if(dept){
+    const selected = dept.value || 'all';
+    dept.innerHTML =
+      '<option value="all">All Departments</option>' +
+      departments.map(v =>
+        '<option value="'+teamObEsc(v)+'">'+teamObEsc(v)+'</option>'
+      ).join('');
+    if(departments.includes(selected)) dept.value = selected;
+  }
+
+  if(mgr){
+    const selected = mgr.value || 'all';
+    mgr.innerHTML =
+      '<option value="all">All Managers</option>' +
+      managers.map(v =>
+        '<option value="'+teamObEsc(v)+'">'+teamObEsc(v)+'</option>'
+      ).join('');
+    if(managers.includes(selected)) mgr.value = selected;
+  }
+}
+
+function teamObFilteredEmployees(){
+
+  if(!TEAM_OB_DATA) return [];
+
+  const dept = teamObEl('teamObDepartmentFilter')?.value || 'all';
+  const manager = teamObEl('teamObManagerFilter')?.value || 'all';
+  const status = teamObEl('teamObStatusFilter')?.value || 'all';
+  const search = (teamObEl('teamObSearch')?.value || '').trim().toLowerCase();
+
+  return (TEAM_OB_DATA.employees || []).filter(row => {
+
+    if(dept !== 'all' && row.department !== dept) return false;
+    if(manager !== 'all' && row.manager !== manager) return false;
+    if(status !== 'all' && row.status !== status) return false;
+
+    if(search){
+      const haystack = [
+        row.employeeCode,
+        row.name,
+        row.department,
+        row.manager,
+        row.jobTitle
+      ].join(' ').toLowerCase();
+
+      if(!haystack.includes(search)) return false;
+    }
+
+    return true;
+  });
+}
+
+/* =========================
+   FRESHNESS
+========================= */
+
+function teamObRenderFreshness(){
+
+  if(!TEAM_OB_DATA) return;
+
+  const p = TEAM_OB_DATA.sourcePeriods || {};
+
+  function fill(key, valueId, rangeId){
+    const item = p[key] || {};
+    teamObSetText(
+      valueId,
+      item.latestDataDate
+        ? '● ' + teamObPrettyDate(item.latestDataDate)
+        : 'No data'
+    );
+    teamObSetText(
+      rangeId,
+      item.from && item.to
+        ? teamObPrettyDate(item.from) + ' → ' + teamObPrettyDate(item.to)
+        : '-'
+    );
+  }
+
+  fill('system','teamObFreshSystem','teamObFreshSystemRange');
+  fill('email','teamObFreshEmail','teamObFreshEmailRange');
+  fill('callsNever','teamObFreshCall','teamObFreshCallRange');
+  fill('callsTalkTime','teamObFreshTalk','teamObFreshTalkRange');
+}
+
+/* =========================
+   RENDER ALL
+========================= */
+
+function teamObRenderAll(){
+
+  if(!TEAM_OB_DATA) return;
+
+  const rows = teamObFilteredEmployees();
+
+  teamObSetText(
+    'teamObVisibleCount',
+    teamObFormatNum(rows.length,0) + ' employees in current filter'
+  );
+
+  teamObRenderKpis(rows);
+  teamObRenderThresholdChart(rows);
+  teamObRenderHoursChart(rows);
+  teamObRenderDailyChart();
+  teamObRenderEmailChart(rows);
+  teamObRenderCallChart(rows);
+  teamObRenderManagerTable(rows);
+  teamObRenderDepartmentTable(rows);
+  teamObRenderExceptions(rows);
+  teamObRenderEmployeeTable(rows);
+}
+
+/* =========================
+   KPI CALCULATIONS
+========================= */
+
+function teamObAverage(rows,key){
+  const vals = rows
+    .map(r => teamObNum(r[key]))
+    .filter(v => v !== null);
+
+  if(!vals.length) return null;
+  return vals.reduce((a,b)=>a+b,0) / vals.length;
+}
+
+function teamObSum(rows,key){
+  return rows.reduce((sum,r)=>{
+    const n = teamObNum(r[key]);
+    return sum + (n === null ? 0 : n);
+  },0);
+}
+
+function teamObRenderKpis(rows){
+
+  const activeRows = rows.filter(r => teamObNum(r.systemDays) > 0);
+
+  teamObSetText('teamObKpiEmployees', teamObFormatNum(rows.length,0));
+  teamObSetText('teamObKpiActive', teamObHours(teamObAverage(activeRows,'avgActiveHours')));
+  teamObSetText('teamObKpiWork', teamObHours(teamObAverage(activeRows,'avgWorkHours')));
+  teamObSetText('teamObKpiProductivity', teamObPct(teamObAverage(activeRows,'productivityPct')));
+  teamObSetText('teamObKpiIdle', teamObHours(teamObAverage(activeRows,'avgIdleHours')));
+  teamObSetText('teamObKpiEmail', teamObPct(teamObAverage(rows,'emailResponsePct')));
+  teamObSetText('teamObKpiMissed', teamObFormatNum(teamObSum(rows,'missedOrRejectedCalls'),0));
+  teamObSetText('teamObKpiTalk', teamObMinutes(teamObSum(rows,'talkTimeMinutes')));
+}
+
+/* =========================
+   CHARTS
+========================= */
+
+function teamObRenderThresholdChart(rows){
+
+  const canvas = teamObEl('teamObThresholdChart');
+  if(!canvas || typeof Chart === 'undefined') return;
+
+  teamObDestroyChart('threshold','teamObThresholdChart');
+
+  const clean = rows
+    .filter(r =>
+      teamObNum(r.avgActiveHours) !== null &&
+      teamObNum(r.threshold) !== null
+    )
+    .sort((a,b)=>
+      (teamObNum(a.productivityPct) ?? 9999) -
+      (teamObNum(b.productivityPct) ?? 9999)
+    )
+    .slice(0,18);
+
+  TEAM_OB_CHARTS.threshold = new Chart(canvas,{
+    type:'bar',
+    data:{
+      labels: clean.map(r => r.name || r.employeeCode),
+      datasets:[
+        {
+          label:'Avg Active Hours',
+          data:clean.map(r => Number(r.avgActiveHours || 0)),
+          backgroundColor:'#17616e',
+          borderRadius:5
+        },
+        {
+          label:'Threshold',
+          data:clean.map(r => Number(r.threshold || 0)),
+          backgroundColor:'#efb815',
+          borderRadius:5
+        }
+      ]
+    },
+    options:{
+      indexAxis:'y',
+      responsive:true,
+      maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom'}},
+      scales:{
+        x:{beginAtZero:true,grid:{color:'#eef2f3'}},
+        y:{grid:{display:false}}
+      }
+    }
+  });
+}
+
+function teamObRenderHoursChart(rows){
+
+  const canvas = teamObEl('teamObHoursChart');
+  if(!canvas || typeof Chart === 'undefined') return;
+
+  teamObDestroyChart('hours','teamObHoursChart');
+
+  const active = rows.filter(r => teamObNum(r.systemDays) > 0);
+
+  TEAM_OB_CHARTS.hours = new Chart(canvas,{
+    type:'bar',
+    data:{
+      labels:['Work Hours','Active Hours','Idle Hours'],
+      datasets:[{
+        label:'Average Hours',
+        data:[
+          teamObAverage(active,'avgWorkHours') || 0,
+          teamObAverage(active,'avgActiveHours') || 0,
+          teamObAverage(active,'avgIdleHours') || 0
+        ],
+        backgroundColor:['#3977b8','#17616e','#efb815'],
+        borderRadius:7
+      }]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{y:{beginAtZero:true,grid:{color:'#eef2f3'}},x:{grid:{display:false}}}
+    }
+  });
+}
+
+function teamObRenderDailyChart(){
+
+  const canvas = teamObEl('teamObDailyChart');
+  if(!canvas || typeof Chart === 'undefined' || !TEAM_OB_DATA) return;
+
+  teamObDestroyChart('daily','teamObDailyChart');
+
+  const rows = TEAM_OB_DATA.daily || [];
+
+  TEAM_OB_CHARTS.daily = new Chart(canvas,{
+    type:'line',
+    data:{
+      labels:rows.map(r => teamObPrettyDate(r.date)),
+      datasets:[
+        {
+          label:'Avg Active Hours',
+          data:rows.map(r => Number(r.avgActiveHours || 0)),
+          borderColor:'#17616e',
+          backgroundColor:'rgba(23,97,110,.10)',
+          tension:.35,
+          fill:false,
+          borderWidth:3
+        },
+        {
+          label:'Avg Threshold',
+          data:rows.map(r => Number(r.avgThreshold || 0)),
+          borderColor:'#efb815',
+          tension:.35,
+          fill:false,
+          borderWidth:2
+        }
+      ]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{legend:{position:'bottom'}},
+      scales:{x:{grid:{display:false}},y:{beginAtZero:true,grid:{color:'#eef2f3'}}}
+    }
+  });
+}
+
+function teamObRenderEmailChart(rows){
+
+  const canvas = teamObEl('teamObEmailChart');
+  if(!canvas || typeof Chart === 'undefined') return;
+
+  teamObDestroyChart('email','teamObEmailChart');
+
+  const external = teamObSum(rows,'externalNotReplied');
+  const internal = teamObSum(rows,'internalNotReplied');
+
+  TEAM_OB_CHARTS.email = new Chart(canvas,{
+    type:'doughnut',
+    data:{
+      labels:['External Not Replied','Internal Not Replied'],
+      datasets:[{
+        data:[external,internal],
+        backgroundColor:['#cc3454','#7957b7'],
+        borderWidth:0
+      }]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      cutout:'67%',
+      plugins:{legend:{position:'bottom'}}
+    }
+  });
+}
+
+function teamObRenderCallChart(rows){
+
+  const canvas = teamObEl('teamObCallChart');
+  if(!canvas || typeof Chart === 'undefined') return;
+
+  teamObDestroyChart('calls','teamObCallChart');
+
+  TEAM_OB_CHARTS.calls = new Chart(canvas,{
+    type:'bar',
+    data:{
+      labels:['Outgoing Calls','Missed / Rejected'],
+      datasets:[{
+        data:[
+          teamObSum(rows,'outgoingCalls'),
+          teamObSum(rows,'missedOrRejectedCalls')
+        ],
+        backgroundColor:['#67aa53','#cc3454'],
+        borderRadius:7
+      }]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{y:{beginAtZero:true,grid:{color:'#eef2f3'}},x:{grid:{display:false}}}
+    }
+  });
+}
+
+/* =========================
+   GROUP TABLE BUILDERS
+========================= */
+
+function teamObBuildGroupRows(rows,keyName){
+
+  const map = {};
+
+  rows.forEach(r => {
+    const key = r[keyName] || (keyName === 'manager' ? 'Unassigned' : 'Unknown');
+    if(!map[key]) map[key] = [];
+    map[key].push(r);
+  });
+
+  return Object.keys(map).map(key => {
+    const list = map[key];
+    return {
+      key,
+      teamSize:list.length,
+      avgProductivityPct:teamObAverage(list,'productivityPct'),
+      avgActiveHours:teamObAverage(list,'avgActiveHours'),
+      avgIdleHours:teamObAverage(list,'avgIdleHours'),
+      emailResponsePct:teamObAverage(list,'emailResponsePct'),
+      missedOrRejectedCalls:teamObSum(list,'missedOrRejectedCalls'),
+      belowThreshold:list.filter(x =>
+        teamObNum(x.productivityPct) !== null &&
+        Number(x.productivityPct) < 100
+      ).length,
+      attentionCount:list.filter(x => x.status !== 'Healthy').length
+    };
+  }).sort((a,b)=>b.teamSize-a.teamSize);
+}
+
+function teamObRenderManagerTable(rows){
+
+  const tbody = teamObEl('teamObManagerBody');
+  if(!tbody) return;
+
+  const groups = teamObBuildGroupRows(rows,'manager');
+
+  if(!groups.length){
+    tbody.innerHTML='<tr><td colspan="7" class="teamob-empty">No manager data for current filter.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = groups.slice(0,100).map(r => `
+    <tr>
+      <td class="teamob-name">${teamObEsc(r.key)}</td>
+      <td>${teamObFormatNum(r.teamSize,0)}</td>
+      <td>${teamObPct(r.avgProductivityPct)}</td>
+      <td>${teamObHours(r.avgActiveHours)}</td>
+      <td>${teamObFormatNum(r.belowThreshold,0)}</td>
+      <td>${teamObFormatNum(r.attentionCount,0)}</td>
+      <td>${teamObFormatNum(r.missedOrRejectedCalls,0)}</td>
+    </tr>
+  `).join('');
+}
+
+function teamObRenderDepartmentTable(rows){
+
+  const tbody = teamObEl('teamObDepartmentBody');
+  if(!tbody) return;
+
+  const groups = teamObBuildGroupRows(rows,'department');
+
+  if(!groups.length){
+    tbody.innerHTML='<tr><td colspan="7" class="teamob-empty">No department data for current filter.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = groups.slice(0,100).map(r => `
+    <tr>
+      <td class="teamob-name">${teamObEsc(r.key)}</td>
+      <td>${teamObFormatNum(r.teamSize,0)}</td>
+      <td>${teamObPct(r.avgProductivityPct)}</td>
+      <td>${teamObHours(r.avgActiveHours)}</td>
+      <td>${teamObHours(r.avgIdleHours)}</td>
+      <td>${teamObPct(r.emailResponsePct)}</td>
+      <td>${teamObFormatNum(r.attentionCount,0)}</td>
+    </tr>
+  `).join('');
+}
+
+/* =========================
+   EXCEPTIONS
+========================= */
+
+function teamObIssuesForEmployee(emp){
+
+  const issues = [];
+
+  if(teamObNum(emp.productivityPct) !== null && Number(emp.productivityPct) < 100){
+    issues.push('Below threshold');
+  }
+
+  if(teamObNum(emp.idlePct) !== null && Number(emp.idlePct) > 25){
+    issues.push('High idle time');
+  }
+
+  if(teamObNum(emp.avgGateLoginGapMin) !== null && Number(emp.avgGateLoginGapMin) > 30){
+    issues.push('Gate-login gap');
+  }
+
+  if(Number(emp.externalNotReplied || 0) + Number(emp.internalNotReplied || 0) > 0){
+    issues.push('Emails not replied');
+  }
+
+  if(Number(emp.missedOrRejectedCalls || 0) > 0){
+    issues.push('Missed / rejected calls');
+  }
+
+  return issues;
+}
+
+function teamObRenderExceptions(rows){
+
+  const tbody = teamObEl('teamObExceptionBody');
+  if(!tbody) return;
+
+  const exceptions = rows
+    .map(emp => ({emp,issues:teamObIssuesForEmployee(emp)}))
+    .filter(x => x.issues.length)
+    .sort((a,b)=>b.issues.length-a.issues.length);
+
+  teamObSetText(
+    'teamObExceptionCount',
+    teamObFormatNum(exceptions.length,0) + ' employees'
+  );
+
+  if(!exceptions.length){
+    tbody.innerHTML='<tr><td colspan="6" class="teamob-empty">No exceptions in current filter.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = exceptions.slice(0,150).map(x => `
+    <tr>
+      <td>
+        <div class="teamob-name">${teamObEsc(x.emp.name || '-')}</div>
+        <div class="teamob-sub">${teamObEsc(x.emp.employeeCode || '')}</div>
+      </td>
+      <td>${teamObEsc(x.emp.department || '-')}</td>
+      <td>${teamObEsc(x.emp.manager || '-')}</td>
+      <td>${x.issues.map(v=>'<span class="teamob-pill watch" style="margin:2px">'+teamObEsc(v)+'</span>').join('')}</td>
+      <td><span class="teamob-pill ${teamObStatusClass(x.emp.status)}">${teamObEsc(x.emp.status || 'Watch')}</span></td>
+      <td><button class="teamob-action" onclick="teamObOpenEmployee('${teamObEsc(x.emp.employeeCode)}')">View</button></td>
+    </tr>
+  `).join('');
+}
+
+/* =========================
+   EMPLOYEE REGISTER
+========================= */
+
+function teamObRenderEmployeeTable(rows){
+
+  const tbody = teamObEl('teamObEmployeeBody');
+  if(!tbody) return;
+
+  if(!rows.length){
+    tbody.innerHTML='<tr><td colspan="11" class="teamob-empty">No employees match current filter.</td></tr>';
+    return;
+  }
+
+  const sorted = [...rows].sort((a,b)=>{
+    const ap = teamObNum(a.productivityPct);
+    const bp = teamObNum(b.productivityPct);
+    if(ap === null && bp === null) return String(a.name).localeCompare(String(b.name));
+    if(ap === null) return 1;
+    if(bp === null) return -1;
+    return ap-bp;
+  });
+
+  tbody.innerHTML = sorted.slice(0,250).map(emp => `
+    <tr>
+      <td>
+        <div class="teamob-name">${teamObEsc(emp.name || '-')}</div>
+        <div class="teamob-sub">${teamObEsc(emp.employeeCode || '')}</div>
+      </td>
+      <td>${teamObEsc(emp.department || '-')}</td>
+      <td>${teamObEsc(emp.manager || '-')}</td>
+      <td>${teamObHours(emp.avgActiveHours)}</td>
+      <td>${teamObHours(emp.threshold)}</td>
+      <td><strong>${teamObPct(emp.productivityPct)}</strong></td>
+      <td>${teamObHours(emp.avgIdleHours)}</td>
+      <td>${teamObPct(emp.emailResponsePct)}</td>
+      <td>${teamObFormatNum(emp.missedOrRejectedCalls,0)}</td>
+      <td><span class="teamob-pill ${teamObStatusClass(emp.status)}">${teamObEsc(emp.status || '-')}</span></td>
+      <td><button class="teamob-action" onclick="teamObOpenEmployee('${teamObEsc(emp.employeeCode)}')">View 360°</button></td>
+    </tr>
+  `).join('');
+}
+
+/* =========================
+   EMPLOYEE 360 POPUP
+========================= */
+
+function teamObOpenEmployee(employeeCode){
+
+  if(!TEAM_OB_DATA) return;
+
+  const emp = (TEAM_OB_DATA.employees || []).find(r =>
+    String(r.employeeCode) === String(employeeCode)
+  );
+
+  if(!emp) return;
+
+  teamObSetText('teamObModalTitle', emp.name || 'Employee 360°');
+  teamObSetText(
+    'teamObModalSub',
+    [
+      emp.employeeCode,
+      emp.department,
+      emp.manager ? 'Manager: ' + emp.manager : ''
+    ].filter(Boolean).join(' • ')
+  );
+
+  const grid = teamObEl('teamObDetailGrid');
+  if(grid){
+    grid.innerHTML = [
+      ['Status', emp.status || '-'],
+      ['Productivity', teamObPct(emp.productivityPct)],
+      ['Avg Active Hrs', teamObHours(emp.avgActiveHours)],
+      ['Avg Work Hrs', teamObHours(emp.avgWorkHours)],
+      ['Avg Idle Hrs', teamObHours(emp.avgIdleHours)],
+      ['Threshold', teamObHours(emp.threshold)],
+      ['Email Response', teamObPct(emp.emailResponsePct)],
+      ['Missed / Rejected', teamObFormatNum(emp.missedOrRejectedCalls,0)]
+    ].map(item => `
+      <div class="teamob-detail">
+        <div class="teamob-detail-label">${teamObEsc(item[0])}</div>
+        <div class="teamob-detail-value">${teamObEsc(item[1])}</div>
+      </div>
+    `).join('');
+  }
+
+  const system = teamObEl('teamObSystemDetail');
+  if(system){
+    system.innerHTML = `
+      <table class="teamob-table" style="min-width:0">
+        <tbody>
+          <tr><td>System Days</td><td><strong>${teamObFormatNum(emp.systemDays,0)}</strong></td></tr>
+          <tr><td>Below Threshold Days</td><td><strong>${teamObFormatNum(emp.belowThresholdDays,0)}</strong></td></tr>
+          <tr><td>Idle %</td><td><strong>${teamObPct(emp.idlePct)}</strong></td></tr>
+          <tr><td>Gate → Login Gap</td><td><strong>${teamObMinutes(emp.avgGateLoginGapMin)}</strong></td></tr>
+          <tr><td>Days Gap >30 min</td><td><strong>${teamObFormatNum(emp.gateGapOver30Days,0)}</strong></td></tr>
+          <tr><td>Location</td><td><strong>${teamObEsc(emp.location || '-')}</strong></td></tr>
+          <tr><td>Job Title</td><td><strong>${teamObEsc(emp.jobTitle || '-')}</strong></td></tr>
+        </tbody>
+      </table>
+    `;
+  }
+
+  const comm = teamObEl('teamObCommunicationDetail');
+  if(comm){
+    comm.innerHTML = `
+      <table class="teamob-table" style="min-width:0">
+        <tbody>
+          <tr><td>Email Received</td><td><strong>${teamObFormatNum(emp.emailReceived,0)}</strong></td></tr>
+          <tr><td>Email Sent</td><td><strong>${teamObFormatNum(emp.emailSent,0)}</strong></td></tr>
+          <tr><td>External Not Replied</td><td><strong>${teamObFormatNum(emp.externalNotReplied,0)}</strong></td></tr>
+          <tr><td>Internal Not Replied</td><td><strong>${teamObFormatNum(emp.internalNotReplied,0)}</strong></td></tr>
+          <tr><td>Avg Email TAT</td><td><strong>${teamObMinutes(emp.avgTatMins)}</strong></td></tr>
+          <tr><td>Outgoing Calls</td><td><strong>${teamObFormatNum(emp.outgoingCalls,0)}</strong></td></tr>
+          <tr><td>Talk Time</td><td><strong>${teamObMinutes(emp.talkTimeMinutes)}</strong></td></tr>
+        </tbody>
+      </table>
+    `;
+  }
+
+  const modal = teamObEl('teamObEmployeeModal');
+  if(modal) modal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function teamObCloseEmployee(){
+  const modal = teamObEl('teamObEmployeeModal');
+  if(modal) modal.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function teamObCloseModalOnBackdrop(event){
+  if(event && event.target && event.target.id === 'teamObEmployeeModal'){
+    teamObCloseEmployee();
+  }
+}
+
+if(!window.__teamObEscapeBound){
+  window.__teamObEscapeBound = true;
+  document.addEventListener('keydown',function(event){
+    if(event.key === 'Escape') teamObCloseEmployee();
+  });
+}
+
+/* =========================
+   INITIAL LOAD IF ACTIVE
+========================= */
+
+function teamObInitialise(){
+  const page = teamObEl('teamob');
+  if(page && page.classList.contains('active')){
+    teamObLoad(false);
+  }
+}
+
+if(document.readyState === 'loading'){
+  document.addEventListener('DOMContentLoaded',teamObInitialise);
+}else{
+  teamObInitialise();
+}
+
+
+
+/* =====================================================
+   TEAM OB - CLICKABLE KPI MONTHLY TRENDS (SAFE ADD-ON)
+   Does not modify existing Team OB loading / other modules.
+   Historical data contract: TEAM_OB_DATA.monthlyTrends = [
+     {month:'2026-07', employees:123, avgActiveHours:5.2,
+      avgWorkHours:7.3, productivityPct:89, avgIdleHours:1.1,
+      emailResponsePct:65, missedOrRejectedCalls:20, talkTimeMinutes:2000}
+   ]
+   Also accepts TEAM_OB_DATA.monthlyHistory or TEAM_OB_DATA.monthly.
+   Missing history is shown as unavailable, never fabricated.
+===================================================== */
+const TEAM_OB_MOM_METRICS = {
+  teamObKpiEmployees: {title:'Employees Analysed', key:'employees', aliases:['employeeCount','totalEmployees'],unit:'count'},
+  teamObKpiActive: {title:'Avg Active Hours',key:'avgActiveHours',unit:'hrs'},
+  teamObKpiWork: {title:'Avg Work Hours',key:'avgWorkHours',unit:'hrs'},
+  teamObKpiProductivity: {title:'Productivity vs Threshold',key:'productivityPct',unit:'%'},
+  teamObKpiIdle: {title:'Avg Idle Time',key:'avgIdleHours',unit:'hrs'},
+  teamObKpiEmail: {title:'Email Response',key:'emailResponsePct',unit:'%'},
+  teamObKpiMissed: {title:'Missed / Rejected Calls',key:'missedOrRejectedCalls',unit:'count'},
+  teamObKpiTalk: {title:'Talk Time',key:'talkTimeMinutes',unit:'min'}
+};
+let TEAM_OB_MOM_CHART = null;
+let TEAM_OB_MOM_LAST_FOCUS = null;
+function teamObMonthlySeries(metric){
+  const data=typeof TEAM_OB_DATA!=='undefined'?TEAM_OB_DATA:null;
+  if(!data)return [];
+  const candidates=[data.monthlyTrends,data.monthlyHistory,data.monthly];
+  let input=candidates.find(Array.isArray);
+  if(!input){
+    const source=metric.key==='emailResponsePct'?'email':metric.key==='missedOrRejectedCalls'?'never':metric.key==='talkTimeMinutes'?'talk':'system';
+    const grouped=data.monthlyTrends?.[source]||data.monthlyHistory?.[source]||data.monthly?.[source];
+    input=Array.isArray(grouped)?grouped:Array.isArray(grouped?.points)?grouped.points:[];
+  }
+  const monthKey=r=>{
+    const raw=String(r.month||r.monthKey||r.period||r.yearMonth||r.date||r.monthStart||'').trim();
+    const iso=raw.match(/^(\d{4})[-/](\d{1,2})/);
+    if(iso)return iso[1]+'-'+iso[2].padStart(2,'0');
+    const d=new Date(raw);
+    return !Number.isNaN(d.getTime())?d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'):null;
+  };
+  return input.map(r=>({...r,__month:monthKey(r)})).filter(r=>r.__month && r.__month >= '2026-04').sort((a,b)=>a.__month.localeCompare(b.__month));
+}
+function teamObMonthLabel(month){
+  const parts=String(month).split('-');
+  return new Date(Number(parts[0]),Number(parts[1])-1,1).toLocaleDateString('en-IN',{month:'short',year:'numeric'});
+}
+function teamObMomFormat(n,unit){
+  if(n===null || !Number.isFinite(n))return '-';
+  const value=new Intl.NumberFormat('en-IN',{maximumFractionDigits:unit==='count'?0:2}).format(n);
+  return unit==='%'?value+'%':unit==='hrs'?value+' hrs':unit==='min'?value+' min':value;
+}
+function teamObCloseMom(){
+  const modal=document.getElementById('teamObMomModal');
+  if(modal)modal.classList.remove('open');
+  if(TEAM_OB_MOM_CHART){TEAM_OB_MOM_CHART.destroy();TEAM_OB_MOM_CHART=null;}
+  document.body.style.overflow='';
+  if(TEAM_OB_MOM_LAST_FOCUS && typeof TEAM_OB_MOM_LAST_FOCUS.focus==='function') TEAM_OB_MOM_LAST_FOCUS.focus();
+}
+function teamObOpenMom(id){
+  const metric=TEAM_OB_MOM_METRICS[id];
+  const modal=document.getElementById('teamObMomModal');
+  if(!metric||!modal)return;
+  TEAM_OB_MOM_LAST_FOCUS=document.activeElement;
+  document.getElementById('teamObMomTitle').textContent=metric.title+' — Month-on-Month';
+  document.getElementById('teamObMomSubtitle').textContent='Monthly performance and month-on-month comparison';
+  const history=teamObMonthlySeries(metric);
+  const current=document.getElementById(id)?.textContent?.trim()||'-';
+  const rows=history.map(r=>{
+    const keys=[metric.key,...(metric.aliases||[])];
+    const found=keys.map(k=>r[k]).find(v=>v!==undefined&&v!==null&&v!=='');
+    const num=found===undefined?null:Number(found);
+    return {month:r.__month,value:Number.isFinite(num)?num:null};
+  });
+  const valid=rows.filter(r=>r.value!==null);
+  const summary=document.getElementById('teamObMomSummary');
+  summary.innerHTML='<div class="teamob-detail"><div class="teamob-detail-label">Current Filtered KPI</div><div class="teamob-detail-value"></div></div><div class="teamob-detail"><div class="teamob-detail-label">Historical Months Available</div><div class="teamob-detail-value"></div></div>';
+  summary.querySelectorAll('.teamob-detail-value')[0].textContent=current;
+  summary.querySelectorAll('.teamob-detail-value')[1].textContent=valid.length;
+  const note=document.getElementById('teamObMomNote');
+  const chartWrap=document.getElementById('teamObMomChartWrap');
+  const tbody=document.getElementById('teamObMomTable');
+  const header=document.querySelector('#teamObMomModal .teamob-mom-table thead');
+  if(header)header.innerHTML='<tr><th>Month</th><th>Value</th><th>MoM Change</th></tr>';
+  if(TEAM_OB_MOM_CHART){TEAM_OB_MOM_CHART.destroy();TEAM_OB_MOM_CHART=null;}
+  note.style.display='block';
+  if(!valid.length){
+    note.textContent='Monthly history is not available for this KPI in the current Team OB API response. The backend must return monthlyTrends with actual dated monthly values.';
+    chartWrap.style.display='none';
+    tbody.innerHTML='<tr><td colspan="3" class="teamob-empty">No monthly history available.</td></tr>';
+  }else{
+    note.textContent='Actual monthly history from the Team OB API. Missing metrics are shown as gaps, not zeroes. MoM compares with the immediately preceding month when both values are available.';
+    chartWrap.style.display='block';tbody.innerHTML='';
+    rows.forEach((r,i)=>{
+      const prev=i>0?rows[i-1].value:null;
+      const previousMonth=i>0?rows[i-1].month:null;
+      const isConsecutive=previousMonth && ((Number(r.month.slice(0,4))*12+Number(r.month.slice(5))) -(Number(previousMonth.slice(0,4))*12+Number(previousMonth.slice(5)))===1);
+      const change=isConsecutive&&r.value!==null&&prev!==null&&prev!==0?((r.value-prev)/Math.abs(prev))*100:null;
+      const tr=document.createElement('tr');
+      [teamObMonthLabel(r.month),teamObMomFormat(r.value,metric.unit),change===null?'—':(change>0?'+':'')+change.toFixed(1)+'%'].forEach(t=>{
+        const td=document.createElement('td');td.textContent=t;tr.appendChild(td);
+      });tbody.appendChild(tr);
+    });
+    const canvas=document.getElementById('teamObMomChart');
+    if(typeof Chart!=='undefined'&&canvas){
+      TEAM_OB_MOM_CHART=new Chart(canvas,{type:'line',data:{labels:rows.map(r=>teamObMonthLabel(r.month)),datasets:[{label:metric.title,data:rows.map(r=>r.value),borderColor:'#17616e',backgroundColor:'rgba(23,97,110,.10)',fill:true,tension:.28,pointRadius:4,spanGaps:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:false}}}});
+    }
+  }
+  modal.classList.add('open');document.body.style.overflow='hidden';
+  modal.querySelector('.teamob-modal-close')?.focus();
+}
+function teamObBindMomCards(){
+  const section=document.getElementById('teamob');
+  if(!section)return;
+  Object.keys(TEAM_OB_MOM_METRICS).forEach(id=>{
+    const value=document.getElementById(id);
+    const card=value?.closest('.teamob-kpi');
+    if(!card || card.dataset.momBound==='1')return;
+    card.dataset.momBound='1';
+    card.setAttribute('role','button');card.setAttribute('tabindex','0');
+    card.setAttribute('aria-label',TEAM_OB_MOM_METRICS[id].title+' month-on-month trend');
+    card.addEventListener('click',()=>teamObOpenMom(id));
+    card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();teamObOpenMom(id);}});
+  });
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',teamObBindMomCards);
+else teamObBindMomCards();
+document.addEventListener('keydown',e=>{if(e.key==='Escape' && document.getElementById('teamObMomModal')?.classList.contains('open'))teamObCloseMom();});
+
+// Overview loads from the existing Employee CRM JSONP endpoint; no API keys exposed.
+document.addEventListener('DOMContentLoaded', function () {
+  if (typeof loadEmployeeCrmLive === 'function' && !EMPLOYEE_CRM_LOADED && !EMPLOYEE_CRM_LOADING) {
+    loadEmployeeCrmLive(false);
+  }
+});
+
+function updateOpenPositionsKPI() {
+  const requisitions =
+    typeof HR_DATA !== 'undefined' &&
+    Array.isArray(HR_DATA.requisitions)
+      ? HR_DATA.requisitions
+      : [];
+
+  const closedStages = new Set([
+    'joined', 'closed', 'cancelled',
+    'canceled', 'filled', 'withdrawn'
+  ]);
+
+  const openPositions = requisitions.filter(req => {
+    const stage = String(req.stage || '')
+      .trim()
+      .toLowerCase();
+
+    return stage && !closedStages.has(stage);
+  }).length;
+
+  const cards = document.querySelectorAll(
+    '#overviewKpis .kpi-card'
+  );
+
+  const card = cards[3];
+
+  if (!card) return;
+
+  const value = card.querySelector('.value');
+  const subtitle = card.querySelector('.sub');
+
+  if (value) value.textContent = openPositions;
+
+  if (subtitle) {
+    subtitle.textContent =
+      'Open recruitment requisitions';
+  }
+}
+
+window.addEventListener('load', updateOpenPositionsKPI);
