@@ -4703,28 +4703,21 @@ function renderAttendanceTrendChart() {
 
             },
 
-            y: {
+            
+y: {
+  min: 5,
+  max: 10,
+  ticks: {
+    stepSize: 1,
+    callback: function(value) {
+      return value.toFixed(0) + ' hrs';
+    }
+  },
+  grid: {
+    color: 'rgba(15,95,109,0.08)'
+  }
+}
 
-              beginAtZero: true,
-
-              max: 100,
-
-              ticks: {
-
-                callback:
-                  value =>
-                    value + '%'
-
-              },
-
-              grid: {
-
-                color:
-                  'rgba(15,68,78,.07)'
-
-              }
-
-            }
 
           }
 
