@@ -6364,13 +6364,17 @@ function teamObLoad(forceRefresh){
     console.error('Team OB API failed to load.');
   };
 
-  TEAM_OB_REQUEST_TIMER = setTimeout(function(){
-    if(TEAM_OB_LOADING){
-      TEAM_OB_LOADING = false;
-      teamObSetStatus('Timeout','error');
-      console.error('Team OB API timeout.');
-    }
-  },45000);
+  
+TEAM_OB_REQUEST_TIMER = setTimeout(function(){
+  if (TEAM_OB_LOADING) {
+    TEAM_OB_LOADING = false;
+    teamObSetStatus('API response timed out', 'error');
+    console.error(
+      'Team OB API did not respond within 180 seconds.'
+    );
+  }
+}, 180000);
+
 
   document.body.appendChild(script);
 }
