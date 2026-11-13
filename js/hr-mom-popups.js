@@ -28,6 +28,10 @@
     if (!s) return null;
     let m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
     if(m) return checked(+m[1],+m[2],+m[3]);
+    // L&D Attendance Sheet uses MM-DD-YY (e.g. 05-15-26 = 15 May 2026).
+    m=s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2})$/);
+    if(m) return checked(2000 + +m[3], +m[1], +m[2]);
+    // Retain existing DD-MM-YYYY handling for other dashboard modules.
     m=s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})$/);
     if(m) return checked(+m[3],+m[2],+m[1]);
     m=s.match(/^(\d{1,2})[\s-]+([a-z]+)[\s,-]+(\d{4})$/i);
@@ -216,7 +220,7 @@
     const rows=typeof fn==='function'?fn():all;
     const grouped=new Map();
     for(const r of rows) {
-      const d=dateOf(r.Date);
+      const d=dateOf(r.Date ?? r.date ?? r['Date (MM-DD-YY)']);
       if(!d || d>new Date()) continue;
       const k=key(d);
       if(!grouped.has(k)) grouped.set(k,[]);
@@ -244,7 +248,7 @@
       else if(/Programs Conducted/i.test(label)) v=programs;
       else if(/Completion Rate/i.test(label)) v=present.length+absent.length?100*present.length/(present.length+absent.length):null;
       else if(/Training Rating/i.test(label)) v=avg('Feedback Score');
-      else if(/Assessment Score/i.test(label)) v=avg('Assesment Score');
+      else if(/Assessment Score/i.test(label)) v=avg('Assessment Score') ?? avg('Assesment Score');
       if(v!==null) values.set(k,v);
     }
     return {values,note:'Derived from dated L&D records using the existing L&D filters. Total Employees means employees represented in that month’s training records, not verified company headcount.'};
