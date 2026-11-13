@@ -7052,7 +7052,7 @@ function teamObOpenMom(id){
     });
     const canvas=document.getElementById('teamObMomChart');
     if(typeof Chart!=='undefined'&&canvas){
-      TEAM_OB_MOM_CHART=new Chart(canvas,{type:'line',data:{labels:rows.map(r=>teamObMonthLabel(r.month)),datasets:[{label:metric.title,data:rows.map(r=>r.value),borderColor:'#17616e',backgroundColor:'rgba(23,97,110,.10)',fill:true,tension:.28,pointRadius:4,spanGaps:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:metric.key==='employees'?{beginAtZero:false,ticks:{stepSize:10,precision:0}}:metric.key==='avgWorkHours'?{min:1,suggestedMax:7,ticks:{stepSize:1,callback:(value)=>Number.isInteger(value)?value:''}}:{beginAtZero:false}}}});
+      TEAM_OB_MOM_CHART=new Chart(canvas,{type:'line',data:{labels:rows.map(r=>teamObMonthLabel(r.month)),datasets:[{label:metric.title,data:rows.map(r=>r.value),borderColor:'#17616e',backgroundColor:'rgba(23,97,110,.10)',fill:true,tension:.28,pointRadius:4,spanGaps:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:metric.key==='employees'?{min:Math.floor(Math.min(...valid.map(r=>r.value))/10)*10,max:Math.ceil(Math.max(...valid.map(r=>r.value))/10)*10+((Math.max(...valid.map(r=>r.value))%10===0)?10:0),ticks:{stepSize:10,precision:0}}:metric.key==='avgWorkHours'?{min:1,suggestedMax:7,ticks:{stepSize:1,callback:(value)=>Number.isInteger(value)?value:''}}:{beginAtZero:false}}}});
     }
   }
   modal.classList.add('open');document.body.style.overflow='hidden';
