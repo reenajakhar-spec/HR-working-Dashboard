@@ -454,6 +454,45 @@ function parseDate(value) {
     }
   }
 
+  // eNPS is populated by the authenticated Firestore listener in enps-store.js.
+  function enpsTrend() {
+    const records = window.EURONICS_ENPS_RECORDS;
+    if (!Array.isArray(records)) return { data: [], warning: window.EURONICS_ENPS_ERROR || 'Connect Firebase to load shared eNPS data.' };
+    const now = new Date(); now.setHours(23,59,59,999);
+    const start = new Date(2026,3,1);
+    const buckets = new Map();
+    records.forEach(r => {
+      const d = parseDate(r.date);
+      if (!d || d < start || d > now || (state.segment !== 'all' && r.segment !== state.segment)) return;
+      const p = Number(r.promoters), a = Number(r.passives), t = Number(r.detractors);
+      if (![p,a,t].every(n => Number.isSafeInteger(n) && n >= 0) || p+a+t <= 0) return;
+      const end = state.period === 'month' ? new Date(d.getFullYear(),d.getMonth()+1,0) : new Date(d);
+      if (state.period === 'week') end.setDate(end.getDate()+(7-end.getDay())%7);
+      const key = dateKey(end), b = buckets.get(key) || {date:end,p:0,a:0,t:0};
+      b.p += p; b.a += a; b.t += t; buckets.set(key,b);
+    });
+    const data = [...buckets.values()].sort((a,b)=>a.date-b.date).map(b=>({date:b.date>now?now:b.date,value:100*(b.p-b.t)/(b.p+b.a+b.t)}));
+    return {data,warning:data.length?'Shared survey responses · eNPS = (promoters − detractors) / total × 100.':'No eNPS survey entries for this category and period.'};
+  }
+
+  function refreshEnpsCard() {
+    const records = window.EURONICS_ENPS_RECORDS;
+    if (!Array.isArray(records)) {
+      setCard(4,'—',window.EURONICS_ENPS_ERROR || 'Connecting shared eNPS database…'); return;
+    }
+    const today = new Date(); today.setHours(23,59,59,999);
+    const valid = records.filter(r=> { const d=parseDate(r.date); return d && d<=today && d>=new Date(2026,3,1); });
+    if (!valid.length) { setCard(4,'—','No surveys yet · Open card to add data'); return; }
+    const latestMonth = valid.map(r=>String(r.date).slice(0,7)).sort().at(-1);
+    const subset = valid.filter(r=>String(r.date).slice(0,7)===latestMonth);
+    const p=subset.reduce((n,r)=>n+Number(r.promoters),0), a=subset.reduce((n,r)=>n+Number(r.passives),0), t=subset.reduce((n,r)=>n+Number(r.detractors),0);
+    if (p+a+t) setCard(4,String(Math.round(100*(p-t)/(p+a+t))),latestMonth+' · '+(p+a+t)+' responses · Shared eNPS');
+  }
+  window.addEventListener('euronics:enps-updated',()=>{
+    refreshEnpsCard();
+    if(state.key==='enps' && overlay.classList.contains('open')) renderTrend();
+  });
+
   function getConnectedHistory() {
     return (
       window.EXEC_OVERVIEW_HISTORY ||
@@ -566,15 +605,12 @@ function parseDate(value) {
     } else if (!Array.isArray(history.attrition) || !history.attrition.length) {
       setCard(2, '—', 'Exit history or headcount data unavailable');
     }
-    if (!Array.isArray(history.enps) || !history.enps.length) {
-      setCard(4, '—', 'Employee eNPS survey data not connected');
-    }
+    refreshEnpsCard();
 
     refreshTaCard();
 
     const mappings = [
-      ['attrition', 2, '%'],
-      ['enps', 4, '']
+      ['attrition', 2, '%']
     ];
 
     mappings.forEach(([key, index, unit]) => {
@@ -1019,7 +1055,9 @@ function parseDate(value) {
           ? getAttritionTrend()
           : state.key === 'positions'
             ? getPositionsTrend()
-            : getSourceHistory();
+            : state.key === 'enps'
+              ? enpsTrend()
+              : getSourceHistory();
 
     const data = result.data;
 
@@ -1213,6 +1251,7 @@ if (state.key === 'headcount') {
     state.segment = 'all';
 
     overlay.classList.add('open');
+    window.dispatchEvent(new CustomEvent('euronics:trend-open',{detail:{key:state.key}}));
     renderTrend();
   }
 
