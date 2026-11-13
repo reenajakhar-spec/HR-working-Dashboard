@@ -992,7 +992,8 @@ function loadLndLive(force = false) {
       }
 
       lndRows = payload.rows;
-      lndLoaded = true;
+window.lndRows = lndRows;
+lndLoaded = true;
 
       if (recordCount) {
         recordCount.textContent = payload.rowCount ?? lndRows.length;
