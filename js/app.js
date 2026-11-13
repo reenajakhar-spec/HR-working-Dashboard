@@ -7192,43 +7192,4 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 });
 
-function updateOpenPositionsKPI() {
-  const requisitions =
-    typeof HR_DATA !== 'undefined' &&
-    Array.isArray(HR_DATA.requisitions)
-      ? HR_DATA.requisitions
-      : [];
-
-  const closedStages = new Set([
-    'joined', 'closed', 'cancelled',
-    'canceled', 'filled', 'withdrawn'
-  ]);
-
-  const openPositions = requisitions.filter(req => {
-    const stage = String(req.stage || '')
-      .trim()
-      .toLowerCase();
-
-    return stage && !closedStages.has(stage);
-  }).length;
-
-  const cards = document.querySelectorAll(
-    '#overviewKpis .kpi-card'
-  );
-
-  const card = cards[3];
-
-  if (!card) return;
-
-  const value = card.querySelector('.value');
-  const subtitle = card.querySelector('.sub');
-
-  if (value) value.textContent = openPositions;
-
-  if (subtitle) {
-    subtitle.textContent =
-      'Open recruitment requisitions';
-  }
-}
-
-window.addEventListener('load', updateOpenPositionsKPI);
+// Open Positions is managed by js/overview-trends.js using the live TA JSONP API.
