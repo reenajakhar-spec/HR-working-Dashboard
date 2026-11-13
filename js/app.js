@@ -6615,82 +6615,6 @@ function teamObRenderThresholdChart(rows){
   });
 }
 
-function teamObRenderHoursChart(rows){
-
-  const canvas = teamObEl('teamObHoursChart');
-  if(!canvas || typeof Chart === 'undefined') return;
-
-  teamObDestroyChart('hours','teamObHoursChart');
-
-  const active = rows.filter(r => teamObNum(r.systemDays) > 0);
-
-  TEAM_OB_CHARTS.hours = new Chart(canvas,{
-    type:'bar',
-    data:{
-      labels:['Work Hours','Active Hours','Idle Hours'],
-      datasets:[{
-        label:'Average Hours',
-        data:[
-          teamObAverage(active,'avgWorkHours') || 0,
-          teamObAverage(active,'avgActiveHours') || 0,
-          teamObAverage(active,'avgIdleHours') || 0
-        ],
-        backgroundColor:['#3977b8','#17616e','#efb815'],
-        borderRadius:7
-      }]
-    },
-    options:{
-      responsive:true,
-      maintainAspectRatio:false,
-      plugins:{legend:{display:false}},
-      scales:{y:{beginAtZero:true,grid:{color:'#eef2f3'}},x:{grid:{display:false}}}
-    }
-  });
-}
-
-function teamObRenderDailyChart(){
-
-  const canvas = teamObEl('teamObDailyChart');
-  if(!canvas || typeof Chart === 'undefined' || !TEAM_OB_DATA) return;
-
-  teamObDestroyChart('daily','teamObDailyChart');
-
-  const rows = TEAM_OB_DATA.daily || [];
-
-  TEAM_OB_CHARTS.daily = new Chart(canvas,{
-    type:'line',
-    data:{
-      labels:rows.map(r => teamObPrettyDate(r.date)),
-      datasets:[
-        {
-          label:'Avg Active Hours',
-          data:rows.map(r => Number(r.avgActiveHours || 0)),
-          borderColor:'#17616e',
-          backgroundColor:'rgba(23,97,110,.10)',
-          tension:.35,
-          fill:false,
-          borderWidth:3
-        },
-        {
-          label:'Avg Threshold',
-          data:rows.map(r => Number(r.avgThreshold || 0)),
-          borderColor:'#efb815',
-          tension:.35,
-          fill:false,
-          borderWidth:2
-        }
-      ]
-    },
-    options:{
-      responsive:true,
-      maintainAspectRatio:false,
-      interaction:{mode:'index',intersect:false},
-      plugins:{legend:{position:'bottom'}},
-      scales:{x:{grid:{display:false}},y:{beginAtZero:true,grid:{color:'#eef2f3'}}}
-    }
-  });
-}
-
 function teamObRenderEmailChart(rows){
 
   const canvas = teamObEl('teamObEmailChart');
@@ -6719,39 +6643,6 @@ function teamObRenderEmailChart(rows){
     }
   });
 }
-
-function teamObRenderCallChart(rows){
-
-  const canvas = teamObEl('teamObCallChart');
-  if(!canvas || typeof Chart === 'undefined') return;
-
-  teamObDestroyChart('calls','teamObCallChart');
-
-  TEAM_OB_CHARTS.calls = new Chart(canvas,{
-    type:'bar',
-    data:{
-      labels:['Outgoing Calls','Missed / Rejected'],
-      datasets:[{
-        data:[
-          teamObSum(rows,'outgoingCalls'),
-          teamObSum(rows,'missedOrRejectedCalls')
-        ],
-        backgroundColor:['#67aa53','#cc3454'],
-        borderRadius:7
-      }]
-    },
-    options:{
-      responsive:true,
-      maintainAspectRatio:false,
-      plugins:{legend:{display:false}},
-      scales:{y:{beginAtZero:true,grid:{color:'#eef2f3'}},x:{grid:{display:false}}}
-    }
-  });
-}
-
-/* =========================
-   GROUP TABLE BUILDERS
-========================= */
 
 function teamObBuildGroupRows(rows,keyName){
 
