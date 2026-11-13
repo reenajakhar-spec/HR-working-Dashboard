@@ -466,7 +466,8 @@ function parseDate(value) {
   // extend this rate into months without a confirmed headcount snapshot.
   const FY_ATTRITION_START = new Date(2026, 3, 1);
   const FY_HEADCOUNT_THROUGH = new Date(2026, 9, 31, 23, 59, 59, 999);
-  const FY_AVERAGE_HEADCOUNT_APR_OCT = 442.86;
+  const FY_MONTHLY_HEADCOUNTS = [446, 450, 443, 442, 443, 438, 438];
+  const FY_AVERAGE_HEADCOUNT_APR_OCT = FY_MONTHLY_HEADCOUNTS.reduce((a,b) => a+b, 0) / FY_MONTHLY_HEADCOUNTS.length;
 
   function getFyAttrition() {
     const payload = getEmployeePayload();
@@ -478,7 +479,7 @@ function parseDate(value) {
     const exits = [];
     let invalidDates = 0, duplicates = 0, outsideWindow = 0;
     payload.exits.forEach((row, index) => {
-      const date = parseDate(get(row, 'lastWorkingDay', 'Last working Day', 'dateOfExit', 'Date of Exit'));
+      const date = parseDate(get(row, 'lastWorkingDay', 'Last Working Day', 'Last working Day', 'dateOfExit', 'Date of Exit', 'exitDate', 'Exit Date', 'LWD'));
       if (!date) { invalidDates++; return; }
       if (date < FY_ATTRITION_START || date > cutoff) { outsideWindow++; return; }
       const id = norm(get(row, 'employeeId', 'employeeCode', 'Employee ID'));
@@ -552,8 +553,8 @@ function parseDate(value) {
     if (attrition) {
       setCard(2, attrition.rate.toFixed(1) + '%',
         'Apr–Oct 2026 · ' + attrition.exits + ' exits · avg headcount ' + attrition.averageHeadcount.toFixed(2));
-    } else if (!Array.isArray(history.attrition) || !history.attrition.length) {
-      setCard(2, '—', 'Exit history or headcount data unavailable');
+    } else {
+      setCard(2, '—', 'Apr–Oct 2026 · waiting for Exit Employee Data Sheet');
     }
     if (!Array.isArray(history.enps) || !history.enps.length) {
       setCard(4, '—', 'Employee eNPS survey data not connected');
@@ -848,7 +849,7 @@ function parseDate(value) {
     if (!result) return {data: [], warning: 'FY attrition data unavailable.'};
     const seen = new Set(), exits = [];
     payload.exits.forEach((row, index) => {
-      const date = parseDate(get(row, 'lastWorkingDay', 'Last working Day', 'dateOfExit', 'Date of Exit'));
+      const date = parseDate(get(row, 'lastWorkingDay', 'Last Working Day', 'Last working Day', 'dateOfExit', 'Date of Exit', 'exitDate', 'Exit Date', 'LWD'));
       if (!date || date < FY_ATTRITION_START || date > result.through) return;
       const id = norm(get(row, 'employeeId', 'employeeCode', 'Employee ID'));
       const name = norm(get(row, 'employeeName', 'Employee Name'));
