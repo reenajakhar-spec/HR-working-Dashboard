@@ -32,6 +32,11 @@
     m=s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2})$/);
     if(m) return checked(2000 + +m[3], +m[1], +m[2]);
     // Retain existing DD-MM-YYYY handling for other dashboard modules.
+     // Google Sheet date format: MM-DD-YY
+m = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2})$/);
+if (m) {
+  return checked(2000 + Number(m[3]), Number(m[1]), Number(m[2]));
+}
     m=s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})$/);
     if(m) return checked(+m[3],+m[2],+m[1]);
     m=s.match(/^(\d{1,2})[\s-]+([a-z]+)[\s,-]+(\d{4})$/i);
@@ -191,7 +196,9 @@
     };
     const grouped=new Map();
     for(const r of p.daily) {
-      const d=dateOf(r.date);
+      const d=dateOf(
+  r['Date (MM-DD-YY)'] ?? r.Date ?? r.date
+);
       if(!d || d>new Date()) continue;
       const k=key(d);
       if(!grouped.has(k)) grouped.set(k,[]);
@@ -220,7 +227,13 @@
     const rows=typeof fn==='function'?fn():all;
     const grouped=new Map();
     for(const r of rows) {
-      const d=dateOf(r.Date ?? r.date ?? r['Date (MM-DD-YY)']);
+      const programs = new Set(
+  present.map(r => [
+    r['Training Topic'],
+    r['Date (MM-DD-YY)'] ?? r.Date,
+    r['Branch Name']
+  ].join('|'))
+).size;
       if(!d || d>new Date()) continue;
       const k=key(d);
       if(!grouped.has(k)) grouped.set(k,[]);
