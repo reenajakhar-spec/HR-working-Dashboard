@@ -35,7 +35,7 @@
   const names = [
     'Total Headcount',
     'Attendance Rate',
-    'Attrition (Rolling 12M)',
+    'Attrition (FY 2026–27)',
     'Open Positions',
     'eNPS Score'
   ];
@@ -454,127 +454,6 @@ function parseDate(value) {
     }
   }
 
-   
-const ENPS_API_URL =
-  'https://script.google.com/a/macros/euronics.co.in/s/AKfycbxvH_URd9YvwydrZe3mauz3a5cg7XcmCCwuhF3Du1HYIjii7winAqDvwWnAdvkXNr84mA/exec';
-
-let enpsLoading = false;
-
-function loadEnpsFromGoogleSheet() {
-  if (enpsLoading) return;
-
-  enpsLoading = true;
-
-  const callback =
-    '__euronicsEnps_' + Date.now();
-
-  const script = document.createElement('script');
-  let completed = false;
-
-  const timeout = setTimeout(() => {
-    finish('eNPS API request timed out.');
-  }, 45000);
-
-  function finish(error, payload) {
-    if (completed) return;
-    completed = true;
-
-    clearTimeout(timeout);
-    script.remove();
-    delete window[callback];
-    enpsLoading = false;
-
-    if (
-      error ||
-      !payload ||
-      payload.success !== true ||
-      !Array.isArray(payload.data)
-    ) {
-      window.EURONICS_ENPS_ERROR =
-        error || payload?.error || 'Unable to load eNPS data.';
-      window.dispatchEvent(
-        new Event('euronics:enps-updated')
-      );
-      return;
-    }
-
-    window.EURONICS_ENPS_RECORDS =
-      payload.data.map(row => ({
-        id: row.id,
-        date: row.date,
-        segment: ({
-          'Sales': 'sales',
-          'Non-Sales': 'nonsales',
-          'Blue Collar': 'blue'
-        })[row.category] || 'unknown',
-        promoters: Number(row.promoters),
-        passives: Number(row.passives),
-        detractors: Number(row.detractors)
-      }));
-
-    window.EURONICS_ENPS_ERROR = '';
-
-    window.dispatchEvent(
-      new Event('euronics:enps-updated')
-    );
-  }
-
-  window[callback] = payload => finish(null, payload);
-
-  script.onerror = () =>
-    finish('Unable to reach eNPS API.');
-
-  script.src =
-    ENPS_API_URL +
-    '?api=enps&callback=' +
-    encodeURIComponent(callback);
-
-  document.head.appendChild(script);
-}
-
-window.refreshEnpsFromGoogleSheet =
-  loadEnpsFromGoogleSheet;
-
-
-  // eNPS is populated by the authenticated Firestore listener in enps-store.js.
-  function enpsTrend() {
-    const records = window.EURONICS_ENPS_RECORDS;
-    if (!Array.isArray(records)) return { data: [], warning: window.EURONICS_ENPS_ERROR || 'Connect Firebase to load shared eNPS data.' };
-    const now = new Date(); now.setHours(23,59,59,999);
-    const start = new Date(2026,3,1);
-    const buckets = new Map();
-    records.forEach(r => {
-      const d = parseDate(r.date);
-      if (!d || d < start || d > now || (state.segment !== 'all' && r.segment !== state.segment)) return;
-      const p = Number(r.promoters), a = Number(r.passives), t = Number(r.detractors);
-      if (![p,a,t].every(n => Number.isSafeInteger(n) && n >= 0) || p+a+t <= 0) return;
-      const end = state.period === 'month' ? new Date(d.getFullYear(),d.getMonth()+1,0) : new Date(d);
-      if (state.period === 'week') end.setDate(end.getDate()+(7-end.getDay())%7);
-      const key = dateKey(end), b = buckets.get(key) || {date:end,p:0,a:0,t:0};
-      b.p += p; b.a += a; b.t += t; buckets.set(key,b);
-    });
-    const data = [...buckets.values()].sort((a,b)=>a.date-b.date).map(b=>({date:b.date>now?now:b.date,value:100*(b.p-b.t)/(b.p+b.a+b.t)}));
-    return {data,warning:data.length?'Shared survey responses · eNPS = (promoters − detractors) / total × 100.':'No eNPS survey entries for this category and period.'};
-  }
-
-  function refreshEnpsCard() {
-    const records = window.EURONICS_ENPS_RECORDS;
-    if (!Array.isArray(records)) {
-      setCard(4,'—',window.EURONICS_ENPS_ERROR || 'Connecting shared eNPS database…'); return;
-    }
-    const today = new Date(); today.setHours(23,59,59,999);
-    const valid = records.filter(r=> { const d=parseDate(r.date); return d && d<=today && d>=new Date(2026,3,1); });
-    if (!valid.length) { setCard(4,'—','No surveys yet · Open card to add data'); return; }
-    const latestMonth = valid.map(r=>String(r.date).slice(0,7)).sort().at(-1);
-    const subset = valid.filter(r=>String(r.date).slice(0,7)===latestMonth);
-    const p=subset.reduce((n,r)=>n+Number(r.promoters),0), a=subset.reduce((n,r)=>n+Number(r.passives),0), t=subset.reduce((n,r)=>n+Number(r.detractors),0);
-    if (p+a+t) setCard(4,String(Math.round(100*(p-t)/(p+a+t))),latestMonth+' · '+(p+a+t)+' responses · Shared eNPS');
-  }
-  window.addEventListener('euronics:enps-updated',()=>{
-    refreshEnpsCard();
-    if(state.key==='enps' && overlay.classList.contains('open')) renderTrend();
-  });
-
   function getConnectedHistory() {
     return (
       window.EXEC_OVERVIEW_HISTORY ||
@@ -583,54 +462,43 @@ window.refreshEnpsFromGoogleSheet =
     );
   }
 
-  // Rolling-12-month estimate based solely on Last Working Day.
-  // No Final Status filtering. Historical headcount remains estimated.
-  function getRollingAttritionEstimate() {
+  // Verified denominator supplied for Apr-Oct 2026 only. Do not silently
+  // extend this rate into months without a confirmed headcount snapshot.
+  const FY_ATTRITION_START = new Date(2026, 3, 1);
+  const FY_HEADCOUNT_THROUGH = new Date(2026, 9, 31, 23, 59, 59, 999);
+  const FY_AVERAGE_HEADCOUNT_APR_OCT = 442.86;
+
+  function getFyAttrition() {
     const payload = getEmployeePayload();
-    if (!payload || !Array.isArray(payload.employees) || !Array.isArray(payload.exits)) return null;
-
+    if (!payload || !Array.isArray(payload.exits)) return null;
     const today = new Date();
-    today.setHours(23, 59, 59, 999);
-    const start = new Date(today);
-    start.setFullYear(start.getFullYear() - 1);
-
+    const cutoff = new Date(Math.min(today.getTime(), FY_HEADCOUNT_THROUGH.getTime()));
+    if (cutoff < FY_ATTRITION_START) return null;
     const seen = new Set();
-    let exits = 0;
-    let invalidDates = 0;
-    let futureDated = 0;
-    let outsideWindow = 0;
-    let duplicates = 0;
-
+    const exits = [];
+    let invalidDates = 0, duplicates = 0, outsideWindow = 0;
     payload.exits.forEach((row, index) => {
-      const rawDate = get(row, 'lastWorkingDay', 'Last working Day', 'dateOfExit');
-      const d = parseDate(rawDate);
-      if (!d) { invalidDates++; return; }
-      if (d > today) { futureDated++; return; }
-      if (d <= start) { outsideWindow++; return; }
-
+      const date = parseDate(get(row, 'lastWorkingDay', 'Last working Day', 'dateOfExit', 'Date of Exit'));
+      if (!date) { invalidDates++; return; }
+      if (date < FY_ATTRITION_START || date > cutoff) { outsideWindow++; return; }
       const id = norm(get(row, 'employeeId', 'employeeCode', 'Employee ID'));
       const name = norm(get(row, 'employeeName', 'Employee Name'));
-      const key = id || (name ? name + ':' + dateKey(d) : 'row:' + index);
-      if (seen.has(key)) { duplicates++; return; }
-      seen.add(key);
-      exits++;
+      const unique = id || (name ? name + ':' + dateKey(date) : 'row:' + index);
+      if (seen.has(unique)) { duplicates++; return; }
+      seen.add(unique);
+      exits.push({row, date});
     });
-
-    const current = getHeadcount();
-    if (!current || !current.all) return null;
-    const joiners = payload.employees.filter(emp => {
-      const d = parseDate(get(emp, 'doj', 'dateOfJoining', 'Date of Joining'));
-      return d && d > start && d <= today && isActive(emp);
-    }).length;
-    const estimatedStart = current.all - joiners + exits;
-    const average = (estimatedStart + current.all) / 2;
-    if (estimatedStart < 0 || average <= 0) return null;
-    return { rate: (exits / average) * 100, exits, invalidDates, futureDated, outsideWindow, duplicates, estimatedAverageHeadcount: average };
+    return {
+      rate: exits.length / FY_AVERAGE_HEADCOUNT_APR_OCT * 100,
+      exits: exits.length, averageHeadcount: FY_AVERAGE_HEADCOUNT_APR_OCT,
+      through: cutoff, invalidDates, duplicates, outsideWindow,
+      note: 'Apr–Oct 2026 only; awaiting Nov onward monthly headcount.'
+    };
   }
 
   window.checkHrAttritionData = function () {
-    const result = getRollingAttritionEstimate();
-    console.log('HR ATTRITION DIAGNOSTIC', result);
+    const result = getFyAttrition();
+    console.log('HR FY ATTRITION DIAGNOSTIC', result);
     return result;
   };
 
@@ -680,19 +548,22 @@ window.refreshEnpsFromGoogleSheet =
     }
 
     const history = getConnectedHistory();
-    const attrition = getRollingAttritionEstimate();
+    const attrition = getFyAttrition();
     if (attrition) {
       setCard(2, attrition.rate.toFixed(1) + '%',
-        'Provisional · ' + attrition.exits + ' exits by Last Working Day · estimated headcount');
+        'Apr–Oct 2026 · ' + attrition.exits + ' exits · avg headcount ' + attrition.averageHeadcount.toFixed(2));
     } else if (!Array.isArray(history.attrition) || !history.attrition.length) {
       setCard(2, '—', 'Exit history or headcount data unavailable');
     }
-    refreshEnpsCard();
+    if (!Array.isArray(history.enps) || !history.enps.length) {
+      setCard(4, '—', 'Employee eNPS survey data not connected');
+    }
 
     refreshTaCard();
 
     const mappings = [
-      ['attrition', 2, '%']
+      ['attrition', 2, '%'],
+      ['enps', 4, '']
     ];
 
     mappings.forEach(([key, index, unit]) => {
@@ -963,59 +834,37 @@ window.refreshEnpsFromGoogleSheet =
     return { data, warning: data.length ? 'Live Attendance Sheet · Present / (Present + Absent), weighted by records. Only dates available from the API are shown.' : 'No dated attendance records found from 01 Apr 2026.' };
   }
 
-  // Use Last Working Day only. Historical headcount is reconstructed approximately
-  // from CURRENT active employee master + dated joiners and exit records.
+  // FY-to-date cumulative attrition, limited to months with supplied headcount.
+  // Segmented rates are withheld until segmented monthly denominators are supplied.
   function getAttritionTrend() {
     const payload = getEmployeePayload();
-    const employees = getEmployeeRows();
-    if (!payload || !employees || !Array.isArray(payload.exits)) {
-      return { data: [], warning: 'Employee master or Exit Employee Data Sheet has not loaded.' };
+    if (!payload || !Array.isArray(payload.exits)) {
+      return {data: [], warning: 'Exit Employee Data Sheet has not loaded.'};
     }
-    const today = new Date(); today.setHours(23,59,59,999);
-    const first = new Date(2026,3,1);
-    const byId = new Map(), byName = new Map();
-    employees.forEach(e => {
-      const id = norm(get(e,'employeeId','employeeCode','Employee ID'));
-      const name = norm(get(e,'employeeName','displayName','name','Employee Name'));
-      if (id) byId.set(id,e);
-      if (name && !byName.has(name)) byName.set(name,e);
-    });
+    if (state.segment !== 'all') {
+      return {data: [], warning: 'Segment-specific FY attrition requires verified monthly headcount for this segment.'};
+    }
+    const result = getFyAttrition();
+    if (!result) return {data: [], warning: 'FY attrition data unavailable.'};
     const seen = new Set(), exits = [];
-    let unmatched = 0;
-    payload.exits.forEach((e,i) => {
-      const d = parseDate(get(e,'lastWorkingDay','Last working Day','dateOfExit'));
-      if (!d || d > today) return;
-      const id = norm(get(e,'employeeId','employeeCode','Employee ID'));
-      const name = norm(get(e,'employeeName','Employee Name'));
-      const unique = id || (name ? name + ':' + dateKey(d) : 'row:' + i);
+    payload.exits.forEach((row, index) => {
+      const date = parseDate(get(row, 'lastWorkingDay', 'Last working Day', 'dateOfExit', 'Date of Exit'));
+      if (!date || date < FY_ATTRITION_START || date > result.through) return;
+      const id = norm(get(row, 'employeeId', 'employeeCode', 'Employee ID'));
+      const name = norm(get(row, 'employeeName', 'Employee Name'));
+      const unique = id || (name ? name + ':' + dateKey(date) : 'row:' + index);
       if (seen.has(unique)) return;
       seen.add(unique);
-      const employee = (id && byId.get(id)) || (name && byName.get(name));
-      if (!employee) unmatched++;
-      exits.push({ date: d, employee });
+      exits.push(date);
     });
-    if (state.segment !== 'all' && unmatched) {
-      // Unmatched exits are not assigned to any segment; make limitation explicit.
+    const data = [];
+    for (let month = 3; month <= 9; month++) {
+      const end = new Date(2026, month + 1, 0, 23, 59, 59, 999);
+      if (end > result.through) break;
+      const count = exits.filter(d => d <= end).length;
+      data.push({date: end, value: count / FY_AVERAGE_HEADCOUNT_APR_OCT * 100});
     }
-    const selected = employees.filter(e => state.segment === 'all' || classify(e) === state.segment);
-    const current = selected.filter(isActive).length;
-    if (!current) return { data: [], warning: 'No employee headcount available for this segment.' };
-    const relevantExits = exits.filter(e => state.segment === 'all' || (e.employee && classify(e.employee) === state.segment));
-    const joinDates = selected.filter(isActive).map(e => parseDate(get(e,'doj','dateOfJoining','Date of Joining'))).filter(Boolean);
-    const endpoints = getPeriodEndpoints();
-    const data = endpoints.filter(d => d >= first).map(end => {
-      const windowStart = new Date(end); windowStart.setFullYear(windowStart.getFullYear()-1);
-      const countExits = relevantExits.filter(e => e.date > windowStart && e.date <= end).length;
-      // Reconstruct approximate workforce at each historical point from current active count.
-      const futureJoins = joinDates.filter(d => d > end && d <= today).length;
-      const futureExits = relevantExits.filter(e => e.date > end && e.date <= today).length;
-      const endHeadcount = current - futureJoins + futureExits;
-      const windowJoins = joinDates.filter(d => d > windowStart && d <= end).length;
-      const startHeadcount = endHeadcount - windowJoins + countExits;
-      const avg = (startHeadcount + endHeadcount)/2;
-      return { date: end > today ? today : end, value: avg > 0 && startHeadcount >= 0 ? 100 * countExits / avg : null };
-    }).filter(p => p.value !== null && Number.isFinite(p.value));
-    return { data, warning: 'Provisional rolling-12-month attrition · Exit Sheet Last Working Day only; estimated historical average headcount.' + (state.segment !== 'all' ? ' Unmatched exit records cannot be categorized.' : '') + ' Historical Keka headcount snapshots are needed for verified rates.' };
+    return {data, warning: 'Cumulative FY exits divided by supplied Apr–Oct average headcount (442.86). Monthly points use the same period-average denominator; Nov onward and segment-specific rates await headcount figures.'};
   }
 
   function getPositionsTrend() {
@@ -1137,9 +986,7 @@ window.refreshEnpsFromGoogleSheet =
           ? getAttritionTrend()
           : state.key === 'positions'
             ? getPositionsTrend()
-            : state.key === 'enps'
-              ? enpsTrend()
-              : getSourceHistory();
+            : getSourceHistory();
 
     const data = result.data;
 
@@ -1333,7 +1180,6 @@ if (state.key === 'headcount') {
     state.segment = 'all';
 
     overlay.classList.add('open');
-    window.dispatchEvent(new CustomEvent('euronics:trend-open',{detail:{key:state.key}}));
     renderTrend();
   }
 
@@ -1473,7 +1319,6 @@ if (state.key === 'headcount') {
 
   refreshOverview();
   loadTaRecruitment();
-   loadEnpsFromGoogleSheet();
    
   // Automatically refresh Executive Overview after
   // employee and attendance API data has loaded.
