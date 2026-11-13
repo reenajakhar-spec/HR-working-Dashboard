@@ -1,0 +1,5 @@
+window.EURONICS_ENPS_FIREBASE_CONFIG = {
+  apiKey: 'REPLACE_ME', authDomain: 'REPLACE_ME.firebaseapp.com',
+  projectId: 'REPLACE_ME', appId: 'REPLACE_ME'
+};
+window.EURONICS_ENPS_ADMINS = ['REPLACE_ADMIN_EMAIL@euronics.co.in'];
