@@ -454,6 +454,88 @@ function parseDate(value) {
     }
   }
 
+   
+const ENPS_API_URL =
+  'https://script.google.com/a/macros/euronics.co.in/s/AKfycbxvH_URd9YvwydrZe3mauz3a5cg7XcmCCwuhF3Du1HYIjii7winAqDvwWnAdvkXNr84mA/exec';
+
+let enpsLoading = false;
+
+function loadEnpsFromGoogleSheet() {
+  if (enpsLoading) return;
+
+  enpsLoading = true;
+
+  const callback =
+    '__euronicsEnps_' + Date.now();
+
+  const script = document.createElement('script');
+  let completed = false;
+
+  const timeout = setTimeout(() => {
+    finish('eNPS API request timed out.');
+  }, 45000);
+
+  function finish(error, payload) {
+    if (completed) return;
+    completed = true;
+
+    clearTimeout(timeout);
+    script.remove();
+    delete window[callback];
+    enpsLoading = false;
+
+    if (
+      error ||
+      !payload ||
+      payload.success !== true ||
+      !Array.isArray(payload.data)
+    ) {
+      window.EURONICS_ENPS_ERROR =
+        error || payload?.error || 'Unable to load eNPS data.';
+      window.dispatchEvent(
+        new Event('euronics:enps-updated')
+      );
+      return;
+    }
+
+    window.EURONICS_ENPS_RECORDS =
+      payload.data.map(row => ({
+        id: row.id,
+        date: row.date,
+        segment: ({
+          'Sales': 'sales',
+          'Non-Sales': 'nonsales',
+          'Blue Collar': 'blue'
+        })[row.category] || 'unknown',
+        promoters: Number(row.promoters),
+        passives: Number(row.passives),
+        detractors: Number(row.detractors)
+      }));
+
+    window.EURONICS_ENPS_ERROR = '';
+
+    window.dispatchEvent(
+      new Event('euronics:enps-updated')
+    );
+  }
+
+  window[callback] = payload => finish(null, payload);
+
+  script.onerror = () =>
+    finish('Unable to reach eNPS API.');
+
+  script.src =
+    ENPS_API_URL +
+    '?api=enps&callback=' +
+    encodeURIComponent(callback);
+
+  document.head.appendChild(script);
+}
+
+window.refreshEnpsFromGoogleSheet =
+  loadEnpsFromGoogleSheet;
+
+
   // eNPS is populated by the authenticated Firestore listener in enps-store.js.
   function enpsTrend() {
     const records = window.EURONICS_ENPS_RECORDS;
@@ -1391,6 +1473,7 @@ if (state.key === 'headcount') {
 
   refreshOverview();
   loadTaRecruitment();
+   loadEnpsFromGoogleSheet();
    
   // Automatically refresh Executive Overview after
   // employee and attendance API data has loaded.
