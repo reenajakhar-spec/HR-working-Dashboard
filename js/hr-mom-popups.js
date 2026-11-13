@@ -196,9 +196,7 @@ if (m) {
     };
     const grouped=new Map();
     for(const r of p.daily) {
-      const d=dateOf(
-  r['Date (MM-DD-YY)'] ?? r.Date ?? r.date
-);
+      const d=dateOf(r.date);
       if(!d || d>new Date()) continue;
       const k=key(d);
       if(!grouped.has(k)) grouped.set(k,[]);
@@ -227,13 +225,7 @@ if (m) {
     const rows=typeof fn==='function'?fn():all;
     const grouped=new Map();
     for(const r of rows) {
-      const programs = new Set(
-  present.map(r => [
-    r['Training Topic'],
-    r['Date (MM-DD-YY)'] ?? r.Date,
-    r['Branch Name']
-  ].join('|'))
-).size;
+      const d=dateOf(r['Date (MM-DD-YY)'] ?? r.Date ?? r.date);
       if(!d || d>new Date()) continue;
       const k=key(d);
       if(!grouped.has(k)) grouped.set(k,[]);
@@ -247,7 +239,7 @@ if (m) {
       const trained=ids(present).size;
       const active=ids(rs.filter(r=>normalized(r.Status)!=='not active')).size;
       const hours=present.reduce((a,r)=>a+(number(r['Duration (in hours)'])||0),0);
-      const programs=new Set(present.map(r=>[r['Training Topic'],r.Date,r['Branch Name']].join('|'))).size;
+      const programs=new Set(present.map(r=>[r['Training Topic'],r['Date (MM-DD-YY)'] ?? r.Date ?? r.date,r['Branch Name']].join('|'))).size;
       const avg=field=>{
         const nums=rs.map(r=>number(r[field])).filter(x=>x!==null);
         return nums.length?nums.reduce((a,b)=>a+b,0)/nums.length:null;
