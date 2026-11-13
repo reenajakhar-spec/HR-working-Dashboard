@@ -2323,7 +2323,7 @@
 
 
 <script
-  src="./js/app.js?v=20261113-enps-deploy-verified-v3">
+  src="./js/app.js?v=20261113-enps-alerts-inline-v4">
 </script>
 
 
@@ -2340,10 +2340,93 @@
  </div>
 </div>
 <script src="./js/drilldown.js?v=20261027-1"></script>
-<script src="js/overview-trends.js?v=20261113-enps-deploy-verified-v3"></script>
-<script src="js/enps-live-api.js?v=20261113-enps-deploy-verified-v3"></script>
+<script src="js/overview-trends.js?v=20261113-enps-alerts-inline-v4"></script>
+<script id="enps-live-inline">
+/* EURONICS eNPS Google Sheets Web App read-only connector. */
+(function () {
+  'use strict';
+  const API = 'https://script.google.com/macros/s/AKfycbxvH_URd9YvwydrZe3mauz3a5cg7XcmCCwuhF3Du1HYIjii7winAqDvwWnAdvkXNr84mA/exec';
+  let pending = false;
+  let lastSuccess = 0;
+  function score(p, d, n) { return n ? Math.round((p - d) / n * 10000) / 100 : null; }
+  function refresh() {
+    window.dispatchEvent(new Event('euronics:enps-updated'));
+    if (typeof window.refreshExecOverview === 'function') window.refreshExecOverview();
+  }
+  function apply(payload) {
+    if (!payload || payload.success !== true || !Array.isArray(payload.data)) {
+      window.EURONICS_ENPS_ERROR = (payload && payload.error) || 'eNPS API returned no accessible data';
+      refresh(); return;
+    }
+    const records = payload.data.filter(r => /^\d{4}-\d{2}-\d{2}$/.test(String(r.date || '')));
+    const periods = new Map();
+    for (const r of records) {
+      const date = String(r.date);
+      const key = date.slice(0, 7);
+      if (!periods.has(key)) periods.set(key, { date: key + '-01', promoters: 0, detractors: 0, total: 0 });
+      const v = periods.get(key);
+      const p = Number(r.promoters), d = Number(r.detractors), a = Number(r.passives);
+      if (![p,d,a].every(n => Number.isSafeInteger(n) && n >= 0)) continue;
+      v.promoters += p; v.detractors += d; v.total += p + d + a;
+    }
+    window.EURONICS_ENPS_HISTORY = [...periods.values()].sort((a,b) => a.date.localeCompare(b.date)).map(r => ({ date:r.date, segment:'all', value:score(r.promoters,r.detractors,r.total) })).filter(r => r.value !== null);
+    window.EURONICS_ENPS_LIVE = payload;
+    window.EURONICS_ENPS_ERROR = '';
+    lastSuccess = Date.now();
+    refresh();
+  }
+  window.refreshENPSLive = function () {
+    if (pending) return;
+    pending = true;
+    const callback = '__euronicsEnpsCallback_' + Date.now();
+    const script = document.createElement('script');
+    let done = false;
+    const timer = setTimeout(() => finish('eNPS API timed out. Check Workspace sign-in and deployment access.'), 15000);
+    function finish(error, data) {
+      if (done) return;
+      done = true; pending = false; clearTimeout(timer);
+      delete window[callback]; script.remove();
+      if (error) { window.EURONICS_ENPS_ERROR = error; refresh(); }
+      else apply(data);
+    }
+    window[callback] = data => finish(null, data);
+    script.onerror = () => finish('eNPS API unavailable. Confirm Web App permissions and signed-in Workspace access.');
+    script.src = API + '?api=enps&callback=' + encodeURIComponent(callback) + '&_=' + Date.now();
+    document.head.appendChild(script);
+  };
+  window.refreshENPSLive();
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && Date.now() - lastSuccess > 5 * 60 * 1000) window.refreshENPSLive();
+  });
+})();
+
+</script>
 <script src="./js/hr-mom-popups.js?v=20261113-ldclick2"></script>
-<script src="./js/alerts-live.js?v=20261113-actions-v1"></script>
+<script id="alerts-live-inline">
+/* EURONICS HR - evidence-based live alerts and action drilldown */
+(function(){'use strict';
+const modules=[['employees','Employee CRM'],['recruitment','Recruitment'],['attendance','Attendance'],['performance','Performance'],['teamob','Team OB'],['payroll','Payroll'],['learning','L&D / EuroVersity'],['engagement','Engagement'],['compliance','Compliance']];
+const root=document.getElementById('alerts');if(!root)return;
+root.innerHTML=`<div class="ha-head"><div><h2>Alerts & Insights</h2><p>Live action items with the reason, evidence and relevant module. No sample alerts are shown.</p></div><button type="button" id="haRefresh">Refresh insights</button></div><div class="ha-summary" id="haSummary"></div><div class="ha-filters"><label>Module <select id="haModule"><option value="all">All live modules</option>${modules.map(x=>`<option value="${x[0]}">${x[1]}</option>`).join('')}</select></label><label>Status <select id="haStatus"><option value="all">All</option><option value="open">Open</option><option value="resolved">Resolved</option></select></label></div><div id="haItems" class="ha-items"></div><div id="haModal" class="ha-modal" hidden><div class="ha-dialog" role="dialog" aria-modal="true" aria-labelledby="haTitle"><button id="haClose" class="ha-close" aria-label="Close">×</button><div id="haDetail"></div></div></div>`;
+const style=document.createElement('style');style.textContent=`.ha-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px;flex-wrap:wrap}.ha-head h2{margin:0 0 6px}.ha-head p{color:#617988;margin:0}.ha-head button,.ha-action{background:#12697a;color:white;border:0;border-radius:9px;padding:11px 16px;cursor:pointer}.ha-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:18px}.ha-stat,.ha-item{background:#fff;border:1px solid #dde8ed;border-radius:14px;padding:18px}.ha-stat strong{display:block;font-size:27px;margin-top:5px;color:#123e4a}.ha-filters{display:flex;gap:14px;margin:18px 0;flex-wrap:wrap}.ha-filters label{font-weight:600;color:#355665}.ha-filters select{display:block;margin-top:6px;padding:9px;border:1px solid #d5e2e8;border-radius:8px;background:white}.ha-items{display:grid;gap:12px}.ha-item{display:flex;justify-content:space-between;align-items:center;gap:15px}.ha-item h3{font-size:16px;margin:0 0 7px}.ha-item p{margin:0;color:#5e7480;font-size:13px}.ha-pill{display:inline-block;font-size:11px;padding:4px 8px;border-radius:7px;background:#eaf4f6;color:#12697a;font-weight:700;margin-bottom:8px}.ha-modal[hidden]{display:none}.ha-modal{position:fixed;inset:0;background:#001b2599;z-index:99999;display:grid;place-items:center;padding:18px}.ha-dialog{position:relative;background:white;border-radius:17px;padding:28px;width:min(690px,100%);max-height:88vh;overflow:auto;box-shadow:0 15px 70px #0003}.ha-close{position:absolute;right:16px;top:12px;background:none;border:0;font-size:28px;cursor:pointer}.ha-dialog h2{margin-right:32px}.ha-detail-row{margin:15px 0}.ha-detail-row strong{display:block;margin-bottom:5px;color:#365b6b}.ha-detail-row p{margin:0;white-space:pre-wrap}.ha-empty{padding:25px;background:white;border:1px solid #dce7eb;border-radius:12px;color:#54717c}@media(max-width:650px){.ha-summary{grid-template-columns:1fr}.ha-item{align-items:stretch;flex-direction:column}}`;document.head.appendChild(style);
+let items=[];const acknowledged=new Set();const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function add(id,module,title,reason,evidence,action,priority='Review'){items.push({id,module,title,reason,evidence,action,priority});}
+function scan(){items=[];
+// Only flag a disconnected module when the actual rendered live status explicitly indicates a failure.
+const statuses=[['employees','employeeLiveStatus'],['attendance','attendanceLiveStatus'],['teamob','teamObLiveStatus'],['payroll','payrollLiveStatus'],['learning','lndLiveStatus']];
+statuses.forEach(([module,id])=>{const el=document.getElementById(id);if(!el||el.id.startsWith('__missing__'))return;const msg=(el.textContent||'').trim();if(/(failed|error|access denied|not connected|unavailable|unable to load)/i.test(msg)){add('connection-'+module,module,'Live data connection needs attention','The module is reporting a data-load or access issue.',msg,'Open the module, check its live-data status, then refresh or verify the API access.','High');}});
+// eNPS is an Overview KPI. Show an issue only if the card explicitly reports a missing connection.
+const kpis=document.getElementById('overviewKpis');if(kpis){const cards=Array.from(kpis.children);const enps=cards.find(c=>/eNPS Score/i.test(c.textContent||''));if(enps&&/not connected|access denied|failed|error/i.test(enps.textContent||'')){add('enps-connection','engagement','eNPS survey data is not available in Overview','The eNPS KPI reports that the survey connection has not returned usable data.',(enps.textContent||'').trim().replace(/\s+/g,' ').slice(0,300),'Verify the Google Apps Script eNPS endpoint and Workspace sign-in, then reload Overview.','High');}}
+// External modules may publish verified, record-level issues here (no invented counts).
+const extra=window.EURONICS_HR_LIVE_ALERTS;if(Array.isArray(extra)){extra.forEach((a,i)=>{if(!a||!a.title||!a.reason||!a.module)return;add(String(a.id||'external-'+i),String(a.module),String(a.title),String(a.reason),String(a.evidence||'Reported by live module'),String(a.action||'Open source module and review.'),String(a.priority||'Review'));});}
+render();}
+function render(){const m=document.getElementById('haModule').value,s=document.getElementById('haStatus').value;const open=items.filter(a=>!acknowledged.has(a.id));document.getElementById('haSummary').innerHTML=`<div class="ha-stat">Open action items<strong>${open.length}</strong></div><div class="ha-stat">High priority<strong>${open.filter(a=>a.priority==='High').length}</strong></div><div class="ha-stat">Modules monitored<strong>${modules.length}</strong></div>`;const filtered=items.filter(a=>(m==='all'||a.module===m)&&(s==='all'||(s==='open'?!acknowledged.has(a.id):acknowledged.has(a.id))));document.getElementById('haItems').innerHTML=filtered.length?filtered.map(a=>`<div class="ha-item"><div><span class="ha-pill">${esc(modules.find(x=>x[0]===a.module)?.[1]||a.module)} · ${esc(a.priority)} · ${acknowledged.has(a.id)?'Acknowledged':'Open'}</span><h3>${esc(a.title)}</h3><p>${esc(a.reason)}</p></div><button class="ha-action" data-detail="${esc(a.id)}">View reason & action</button></div>`).join(''):'<div class="ha-empty">No verified action items for this filter. Modules without a live issue feed are not assumed to be clear.</div>';}
+function detail(id){const a=items.find(x=>x.id===id);if(!a)return;document.getElementById('haDetail').innerHTML=`<span class="ha-pill">${esc(a.priority)} · ${esc(a.module)}</span><h2 id="haTitle">${esc(a.title)}</h2><div class="ha-detail-row"><strong>Why this alert appeared</strong><p>${esc(a.reason)}</p></div><div class="ha-detail-row"><strong>Live evidence</strong><p>${esc(a.evidence)}</p></div><div class="ha-detail-row"><strong>Recommended action</strong><p>${esc(a.action)}</p></div><p style="color:#637c88;font-size:12px">Acknowledging hides the item from the Open filter on this device until the page is reloaded; it does not change source records.</p><button class="ha-action" id="haGo">Open ${esc(modules.find(x=>x[0]===a.module)?.[1]||'source module')}</button> <button class="ha-action" id="haAck" style="background:#e9f1f3;color:#124d5a">Acknowledge</button>`;document.getElementById('haModal').hidden=false;document.getElementById('haGo').onclick=()=>{document.getElementById('haModal').hidden=true;window.navigate?.(a.module);};document.getElementById('haAck').onclick=()=>{acknowledged.add(id);document.getElementById('haModal').hidden=true;render();};}
+root.addEventListener('click',e=>{const b=e.target.closest('[data-detail]');if(b)detail(b.dataset.detail);});document.getElementById('haClose').onclick=()=>document.getElementById('haModal').hidden=true;document.getElementById('haModal').onclick=e=>{if(e.target.id==='haModal')e.currentTarget.hidden=true;};document.getElementById('haRefresh').onclick=scan;document.getElementById('haModule').onchange=render;document.getElementById('haStatus').onchange=render;document.addEventListener('keydown',e=>{if(e.key==='Escape')document.getElementById('haModal').hidden=true;});
+const nav=document.querySelector('.nav-item[data-page="alerts"]');nav?.addEventListener('click',()=>setTimeout(scan,100));window.addEventListener('euronics:hr-alerts-updated',scan);setTimeout(scan,1200);
+})();
+
+</script>
 </body>
 
 </html>
