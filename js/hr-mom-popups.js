@@ -563,6 +563,27 @@ scales: {
     if (card) { e.preventDefault(); card.click(); }
   });
 
+  // Direct delegated L&D card handling. Capture phase makes the popup
+  // independent of other dashboard click handlers and dynamically rendered cards.
+  document.addEventListener('click', e => {
+    if (!(e.target instanceof Element) || e.target.closest('#hrMomOverlay')) return;
+    const card = e.target.closest('#learningKpis .lnd-kpi-card');
+    if (!card) return;
+    try {
+      open('learning', card);
+    } catch (error) {
+      console.error('[L&D MoM] Could not open popup:', error);
+      const overlay = document.getElementById('hrMomOverlay');
+      if (overlay) {
+        document.getElementById('hrMomTitle').textContent = 'L&D · Month-on-Month';
+        document.getElementById('hrMomNote').textContent = 'Unable to calculate monthly data. Check the browser console for the exact error.';
+        document.getElementById('hrMomRows').innerHTML = '<tr><td colspan="3">Monthly data could not be calculated.</td></tr>';
+        overlay.classList.add('open');
+      }
+    }
+    e.stopPropagation();
+  }, true);
+
   document.addEventListener('click', e => {
     if (!(e.target instanceof Element) || e.target.closest('#hrMomOverlay')) return;
     for (const [module, selector] of Object.entries(MODULES)) {
