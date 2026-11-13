@@ -1332,7 +1332,7 @@
     .teamob-filters select,.teamob-filters input{height:44px;border:1px solid #d8e3e7;border-radius:12px;background:#fff;padding:0 14px;color:#264d58;font-size:13px;outline:none}
     .teamob-filters input{min-width:230px}
 
-    .teamob-freshness{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:22px}
+    .teamob-freshness{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:22px}
     .teamob-fresh-card{background:#fff;border:1px solid #dfe9ec;border-radius:14px;padding:13px 15px}
     .teamob-fresh-label{font-size:11px;font-weight:900;color:#78909a;text-transform:uppercase;letter-spacing:.05em}
     .teamob-fresh-value{margin-top:4px;color:#104a56;font-weight:900;font-size:14px}
@@ -1342,7 +1342,7 @@
     .teamob-section-head h3{margin:0 0 4px;color:#0d3c49;font-size:21px}
     .teamob-section-head p{margin:0;color:#879aa3;font-size:13px}
 
-    .teamob-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:15px}
+    .teamob-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px}
     .teamob-kpi{background:#fff;border:1px solid #dde7ea;border-radius:18px;padding:18px 20px;min-height:125px;box-shadow:0 8px 24px rgba(18,62,72,.055)}
     .teamob-kpi.teal{border-top:4px solid #17616e}
     .teamob-kpi.green{border-top:4px solid #67aa53}
@@ -1470,22 +1470,12 @@
       <div id="teamObFreshEmail" class="teamob-fresh-value">-</div>
       <div id="teamObFreshEmailRange" class="teamob-fresh-range">-</div>
     </div>
-    <div class="teamob-fresh-card">
-      <div class="teamob-fresh-label">Missed / Rejected Calls</div>
-      <div id="teamObFreshCall" class="teamob-fresh-value">-</div>
-      <div id="teamObFreshCallRange" class="teamob-fresh-range">-</div>
-    </div>
-    <div class="teamob-fresh-card">
-      <div class="teamob-fresh-label">Talk Time Data</div>
-      <div id="teamObFreshTalk" class="teamob-fresh-value">-</div>
-      <div id="teamObFreshTalkRange" class="teamob-fresh-range">-</div>
-    </div>
   </div>
 
   <div class="teamob-section-head">
     <div>
       <h3>Team Overview</h3>
-      <p>Filtered live view across system, email and calls</p>
+      <p>Filtered live view across system and email</p>
     </div>
     <div id="teamObVisibleCount" style="font-size:12px;color:#84979f">-</div>
   </div>
@@ -1493,7 +1483,6 @@
   <div class="teamob-kpis">
     <div class="teamob-kpi teal" role="button" tabindex="0" aria-haspopup="dialog"><div class="teamob-kpi-label">Employees Analysed</div><div id="teamObKpiEmployees" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Combined Team OB population</div></div>
     <div class="teamob-kpi blue" role="button" tabindex="0" aria-haspopup="dialog"><div class="teamob-kpi-label">Avg Work Hours</div><div id="teamObKpiWork" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">System work hours</div></div>
-    <div class="teamob-kpi violet" role="button" tabindex="0" aria-haspopup="dialog"><div class="teamob-kpi-label">Productivity vs Threshold</div><div id="teamObKpiProductivity" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Active time vs employee threshold</div></div>
     <div class="teamob-kpi red" role="button" tabindex="0" aria-haspopup="dialog"><div class="teamob-kpi-label">Email Response</div><div id="teamObKpiEmail" class="teamob-kpi-value">-</div><div class="teamob-kpi-sub">Response compliance</div></div>
   </div>
 
