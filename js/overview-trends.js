@@ -135,6 +135,78 @@
   }
 
   /* =========================
+     LIVE TA RECRUITMENT API (JSONP)
+     Counts OPEN requisitions, not sum of headcount.
+     TA history is not available from the current API.
+  ========================= */
+  const TA_API_URL = 'https://script.google.com/a/macros/euronics.co.in/s/AKfycbxA8vc8YBnpl1u3lbi8L-K_jHOKVXJPc3j1h1Ggs7c_M2MhpUFxFSGZFDyy88zMLTPg/exec';
+  let taPayload = null;
+  let taError = '';
+  let taLoading = false;
+  let taRequestId = 0;
+
+  function taSegment(row) {
+    const explicit = norm(get(row, 'employeeCategory', 'category', 'collarType', 'workerType'));
+    const department = norm(get(row, 'department', 'dept'));
+    const positionType = norm(get(row, 'positionType'));
+    if (explicit === 'bluecollar' || explicit === 'blue' || positionType === 'bluecollar') return 'blue';
+    if (department === 'sales' || department === 'salesmarketing' || department === 'salesandmarketing') return 'sales';
+    if (department) return 'nonsales';
+    return 'unknown';
+  }
+
+  function openRequisitions() {
+    if (!taPayload || !Array.isArray(taPayload.data)) return null;
+    return taPayload.data.filter(row => norm(get(row, 'status')) === 'open');
+  }
+
+  function refreshTaCard() {
+    const open = openRequisitions();
+    if (!open) {
+      setCard(3, '—', taError || (taLoading ? 'Loading live TA API…' : 'TA data unavailable'));
+      return;
+    }
+    const counts = {sales: 0, nonsales: 0, blue: 0, unknown: 0};
+    open.forEach(row => { counts[taSegment(row)]++; });
+    const detail = ['Sales ' + counts.sales, 'Non-Sales ' + counts.nonsales, 'Blue ' + counts.blue];
+    if (counts.unknown) detail.push('Unclassified ' + counts.unknown);
+    setCard(3, open.length.toLocaleString('en-IN'), detail.join(' · ') + ' · Live TA');
+  }
+
+  function loadTaRecruitment() {
+    if (taLoading) return;
+    taLoading = true;
+    taError = '';
+    refreshTaCard();
+    const requestId = ++taRequestId;
+    const callback = '__euronicsTaCallback_' + requestId;
+    const script = document.createElement('script');
+    const timeout = setTimeout(() => finish(new Error('TA API timed out. Check Workspace access or deployment permissions.')), 45000);
+    let finished = false;
+    function finish(error, payload) {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timeout);
+      delete window[callback];
+      script.remove();
+      taLoading = false;
+      if (error || !payload || payload.success !== true || !Array.isArray(payload.data)) {
+        taError = error ? error.message : 'Invalid TA API response';
+      } else {
+        taPayload = payload;
+        taError = '';
+      }
+      refreshTaCard();
+      if (state.key === 'positions' && overlay.classList.contains('open')) renderTrend();
+    }
+    window[callback] = payload => finish(null, payload);
+    script.onerror = () => finish(new Error('TA API could not load (JSONP).'));
+    script.src = TA_API_URL + '?api=recruitment&callback=' + encodeURIComponent(callback) + '&_=' + Date.now();
+    document.head.appendChild(script);
+  }
+  window.refreshTaRecruitment = loadTaRecruitment;
+
+  /* =========================
      EMPLOYEE CLASSIFICATION
   ========================= */
 
@@ -498,9 +570,10 @@ function parseDate(value) {
       setCard(4, '—', 'Employee eNPS survey data not connected');
     }
 
+    refreshTaCard();
+
     const mappings = [
       ['attrition', 2, '%'],
-      ['positions', 3, ''],
       ['enps', 4, '']
     ];
 
@@ -827,6 +900,17 @@ function parseDate(value) {
     return { data, warning: 'Provisional rolling-12-month attrition · Exit Sheet Last Working Day only; estimated historical average headcount.' + (state.segment !== 'all' ? ' Unmatched exit records cannot be categorized.' : '') + ' Historical Keka headcount snapshots are needed for verified rates.' };
   }
 
+  function getPositionsTrend() {
+    const open = openRequisitions();
+    if (!open) return { data: [], warning: taError || 'Waiting for the live TA API.' };
+    const count = open.filter(row => state.segment === 'all' || taSegment(row) === state.segment).length;
+    // The API exposes CURRENT status only. Do not invent historical status.
+    return {
+      data: [{date: new Date(), value: count}],
+      warning: 'Live current open requisitions only. Accurate month/week history requires dated TA status changes or server-side snapshots. The API does not supply past open-position counts.'
+    };
+  }
+
   function getSourceHistory() {
     const history = getConnectedHistory();
     const rows = history[state.key];
@@ -933,7 +1017,9 @@ function parseDate(value) {
         ? getAttendanceTrend()
         : state.key === 'attrition'
           ? getAttritionTrend()
-          : getSourceHistory();
+          : state.key === 'positions'
+            ? getPositionsTrend()
+            : getSourceHistory();
 
     const data = result.data;
 
@@ -1265,6 +1351,7 @@ if (state.key === 'headcount') {
   ========================= */
 
   refreshOverview();
+  loadTaRecruitment();
    
   // Automatically refresh Executive Overview after
   // employee and attendance API data has loaded.
