@@ -1459,12 +1459,21 @@
     >
   </div>
 
-  <div class="teamob-freshness">
-    <div class="teamob-fresh-card">
-      <div class="teamob-fresh-label">System Data</div>
-      <div id="teamObFreshSystem" class="teamob-fresh-value">-</div>
-      <div id="teamObFreshSystemRange" class="teamob-fresh-range">-</div>
-    </div>
+  
+<div class="teamob-freshness">
+  <div class="teamob-fresh-card">
+    <div class="teamob-fresh-label">System Data</div>
+    <div id="teamObFreshSystem" class="teamob-fresh-value">-</div>
+    <div id="teamObFreshSystemRange" class="teamob-fresh-range">-</div>
+  </div>
+
+  <div class="teamob-fresh-card">
+    <div class="teamob-fresh-label">Email Data</div>
+    <div id="teamObFreshEmail" class="teamob-fresh-value">-</div>
+    <div id="teamObFreshEmailRange" class="teamob-fresh-range">-</div>
+  </div>
+</div>
+
     <div class="teamob-fresh-card">
       <div class="teamob-fresh-label">Email Data</div>
       <div id="teamObFreshEmail" class="teamob-fresh-value">-</div>
@@ -1699,7 +1708,17 @@
     .payroll-modal-body{padding:24px 26px 28px}.payroll-modal-chart{height:300px;margin-bottom:22px}.payroll-mom-table-wrap{overflow:auto;border:1px solid #e1e9ec;border-radius:14px}.payroll-mom-table{width:100%;border-collapse:collapse;min-width:650px}.payroll-mom-table th,.payroll-mom-table td{padding:13px 15px;border-bottom:1px solid #e8eef0;text-align:left;font-size:13px}.payroll-mom-table th{background:#f3f0fc;color:#355761;text-transform:uppercase;letter-spacing:.02em}.payroll-mom-table tr:last-child td{border-bottom:0}.payroll-latest-row{background:#eef9f4;font-weight:800}
     @media(max-width:1100px){.payroll-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.payroll-secondary-grid,.payroll-two-col{grid-template-columns:repeat(2,minmax(0,1fr))}}
     @media(max-width:700px){.payroll-live-page{padding:18px 14px 30px}.payroll-hero{padding:22px 18px;align-items:flex-start;flex-direction:column}.payroll-kpi-grid,.payroll-secondary-grid,.payroll-two-col{grid-template-columns:1fr}.payroll-kpi-value{font-size:31px}}
-  </style>
+  
+@media (min-width: 761px) {
+  .teamob-freshness {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .teamob-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+</style>
 
   <div class="payroll-hero">
     <div>
