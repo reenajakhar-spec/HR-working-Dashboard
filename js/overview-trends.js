@@ -556,8 +556,12 @@ function parseDate(value) {
     } else {
       setCard(2, '—', 'Apr–Oct 2026 · waiting for Exit Employee Data Sheet');
     }
-    if (!Array.isArray(history.enps) || !history.enps.length) {
-      setCard(4, '—', 'Employee eNPS survey data not connected');
+    const enpsLive = window.EURONICS_ENPS_LIVE;
+    if (enpsLive && enpsLive.success && enpsLive.summary && enpsLive.summary.score !== null) {
+      setCard(4, Number(enpsLive.summary.score).toFixed(1),
+        enpsLive.summary.total + ' survey responses · Google Sheets live API');
+    } else {
+      setCard(4, '—', window.EURONICS_ENPS_ERROR || 'Waiting for eNPS survey data');
     }
 
     refreshTaCard();
@@ -602,7 +606,7 @@ function parseDate(value) {
 
       const latest = valid[valid.length - 1];
 
-      if (latest && key !== 'attrition') {
+      if (latest && key !== 'attrition' && key !== 'enps') {
         setCard(
           index,
           String(latest.value) + unit,
@@ -613,6 +617,7 @@ function parseDate(value) {
   }
 
   window.refreshExecOverview = refreshOverview;
+  window.addEventListener('euronics:enps-updated', refreshOverview);
 
   /* =========================
      TREND PERIOD ENDPOINTS
@@ -881,7 +886,7 @@ function parseDate(value) {
 
   function getSourceHistory() {
     const history = getConnectedHistory();
-    const rows = history[state.key];
+    const rows = state.key === 'enps' ? (window.EURONICS_ENPS_HISTORY || []) : history[state.key];
 
     if (!Array.isArray(rows)) {
       return {
