@@ -4694,24 +4694,32 @@ function renderAttendanceTrendChart() {
           },
 
           scales: {
-  y: {
-    beginAtZero: false,
-    min: 1,
-    suggestedMax: 7,
-    ticks: {
-      stepSize: 1,
-      callback: value => Number.isInteger(value) ? value : ''
-    },
-    grid: {
-      color: '#eef2f3'
+
+            x: {
+
+              grid: {
+                display: false
+              }
+
+            },
+
+            
+y: {
+  min: 5,
+  max: 10,
+  ticks: {
+    stepSize: 1,
+    callback: function(value) {
+      return value.toFixed(0) + ' hrs';
     }
   },
-  x: {
-    grid: {
-      display: false
-    }
+  grid: {
+    color: 'rgba(15,95,109,0.08)'
   }
 }
+
+
+          }
 
         }
 
@@ -7044,7 +7052,7 @@ function teamObOpenMom(id){
     });
     const canvas=document.getElementById('teamObMomChart');
     if(typeof Chart!=='undefined'&&canvas){
-      TEAM_OB_MOM_CHART=new Chart(canvas,{type:'line',data:{labels:rows.map(r=>teamObMonthLabel(r.month)),datasets:[{label:metric.title,data:rows.map(r=>r.value),borderColor:'#17616e',backgroundColor:'rgba(23,97,110,.10)',fill:true,tension:.28,pointRadius:4,spanGaps:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:false}}}});
+      TEAM_OB_MOM_CHART=new Chart(canvas,{type:'line',data:{labels:rows.map(r=>teamObMonthLabel(r.month)),datasets:[{label:metric.title,data:rows.map(r=>r.value),borderColor:'#17616e',backgroundColor:'rgba(23,97,110,.10)',fill:true,tension:.28,pointRadius:4,spanGaps:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:metric.key==='avgWorkHours'?{min:1,suggestedMax:7,ticks:{stepSize:1,callback:(value)=>Number.isInteger(value)?value:''}}:{beginAtZero:false}}}});
     }
   }
   modal.classList.add('open');document.body.style.overflow='hidden';
