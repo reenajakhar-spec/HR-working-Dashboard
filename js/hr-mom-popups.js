@@ -210,7 +210,7 @@
       : 'Monthly totals from available dated daily attendance records. Incomplete months may not be comparable.'};
   }
   function learningSeries(label) {
-    const all=getGlobal('lndRows');
+    const all=window.lndRows || getGlobal('lndRows');
     if(!Array.isArray(all)) return null;
     const fn=getGlobal('getFilteredLndRows');
     const rows=typeof fn==='function'?fn():all;
