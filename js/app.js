@@ -6967,7 +6967,6 @@ if(document.readyState === 'loading'){
 const TEAM_OB_MOM_METRICS = {
   teamObKpiEmployees: {title:'Employees Analysed', key:'employees', aliases:['employeeCount','totalEmployees'],unit:'count'},
   teamObKpiWork: {title:'Avg Work Hours',key:'avgWorkHours',unit:'hrs'},
-  teamObKpiProductivity: {title:'Productivity vs Threshold',key:'productivityPct',unit:'%'},
   teamObKpiEmail: {title:'Email Response',key:'emailResponsePct',unit:'%'},
 };
 let TEAM_OB_MOM_CHART = null;
