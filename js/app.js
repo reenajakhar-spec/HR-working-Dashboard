@@ -145,7 +145,7 @@ function kpi(label, value, sub = '', cls = '') {
 document.getElementById('overviewKpis').innerHTML = [
   kpi('Total Headcount', '—', 'Loading employee master...'),
   kpi('Attendance Rate', '—', 'Waiting for attendance records'),
-  kpi('Attrition (Rolling 12M)', '—', 'Waiting for exit history'),
+  kpi('Attrition (FY 2026–27)', '—', 'Waiting for exit history'),
   kpi('Open Positions', '—', 'Recruitment source not linked to overview', 'warn'),
   kpi('eNPS Score', '—', 'Survey history not connected', 'highlight')
 ].join('');
