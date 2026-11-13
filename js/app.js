@@ -4694,32 +4694,24 @@ function renderAttendanceTrendChart() {
           },
 
           scales: {
-
-            x: {
-
-              grid: {
-                display: false
-              }
-
-            },
-
-            
-y: {
-  min: 5,
-  max: 10,
-  ticks: {
-    stepSize: 1,
-    callback: function(value) {
-      return value.toFixed(0) + ' hrs';
+  y: {
+    beginAtZero: false,
+    min: 1,
+    suggestedMax: 7,
+    ticks: {
+      stepSize: 1,
+      callback: value => Number.isInteger(value) ? value : ''
+    },
+    grid: {
+      color: '#eef2f3'
     }
   },
-  grid: {
-    color: 'rgba(15,95,109,0.08)'
+  x: {
+    grid: {
+      display: false
+    }
   }
 }
-
-
-          }
 
         }
 
